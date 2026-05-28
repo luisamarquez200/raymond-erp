@@ -1276,7 +1276,7 @@ export class SalidasService {
                     estado: { not: 'Retirado' }
                 },
                 include: {
-                    rel_equipo: { select: { id_equipos: true } }
+                    equipos: { select: { id_equipos: true } }
                 }
             });
 
@@ -1300,7 +1300,7 @@ export class SalidasService {
                 await tx.salida_detalle.create({
                     data: {
                         id_detalle, id_salida,
-                        id_equipo: equipoUbicacion.id_equipos || equipoUbicacion.rel_equipo?.id_equipos || null,
+                        id_equipo: equipoUbicacion.id_equipos || equipoUbicacion.equipos?.id_equipos || null,
                         id_equipo_ubicacion: equipoUbicacion.id_equipo_ubicacion,
                         serial_equipos: data.numero_serie,
                         id_ubicacion: equipoUbicacion.id_ubicacion,
