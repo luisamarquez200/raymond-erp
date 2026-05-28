@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { evaluacionesApi } from '@/services/taller-r1/evaluaciones.service';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import axios from 'axios';
 
@@ -266,10 +267,9 @@ export function EvaluacionModal({
                 }
             }
         } catch (error: any) {
-            // Ignore 404 errors as it just means no evaluation exists yet
             if (error?.response?.status !== 404) {
-                console.error('Error loading evaluation:', error);
-                toast.error('Error al cargar la evaluación existente.');
+                console.error('Error loading evaluation:', getErrorMessage(error));
+                toast.error(getErrorMessage(error, 'Error al cargar la evaluación existente.'));
             }
         } finally {
             setLoading(false);
@@ -341,7 +341,7 @@ export function EvaluacionModal({
                         });
                     }
                 } catch (e) {
-                    console.error("Error sending evaluation email", e);
+                    console.error("Error sending evaluation email", getErrorMessage(e));
                 }
             } else {
                 await evaluacionesApi.saveAccesorioEvaluation({
@@ -362,8 +362,8 @@ export function EvaluacionModal({
             onSuccess?.();
             onClose();
         } catch (error) {
-            console.error('Error saving evaluation:', error);
-            toast.error('Error al guardar la calificación.');
+            console.error('Error saving evaluation:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar la calificación.'));
         } finally {
             setSaving(false);
         }

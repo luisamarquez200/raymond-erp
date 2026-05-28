@@ -9,7 +9,7 @@ import {
 import renovadosService, { RenovadoSolicitud, RenovadoFase } from '@/services/taller-r1/renovados.service';
 import { equipoUbicacionApi } from '@/services/taller-r1/equipo-ubicacion.service';
 import { useTallerTecnicos, useCreateTallerTecnico } from '@/hooks/taller-r1/useTallerTecnicos';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Scanner } from '@yudiel/react-qr-scanner';
@@ -102,7 +102,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                 } catch (_) { /* silent */ }
             }
         } catch (error) {
-            toast.error('Error al cargar el detalle de la solicitud');
+            toast.error(getErrorMessage(error, 'Error al cargar el detalle de la solicitud'));
         } finally {
             setLoading(false);
         }
@@ -115,7 +115,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             loadDetalle();
             setShowScanner(false);
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Error al iniciar la fase');
+            toast.error(getErrorMessage(error, 'Error al iniciar la fase'));
         }
     };
 
@@ -131,7 +131,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             setShowNextPhaseSelector(null);
             loadDetalle();
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Error al completar la fase');
+            toast.error(getErrorMessage(error, 'Error al completar la fase'));
         }
     };
 
@@ -238,7 +238,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             loadDetalle();
         } catch (error: any) {
             console.error('Error detallado:', error.response?.data || error.message);
-            toast.error('Error al agregar refacción');
+            toast.error(getErrorMessage(error, 'Error al agregar refacción'));
         }
     };
 
@@ -344,7 +344,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             setNewIncidencia({ tipo: 'SIN INCIDENCIAS', comentarios: '' });
             loadDetalle();
         } catch (error) {
-            toast.error('Error al registrar incidencia');
+            toast.error(getErrorMessage(error, 'Error al registrar incidencia'));
         }
     };
 
@@ -354,7 +354,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             toast.success('Incidencia cerrada');
             loadDetalle();
         } catch (error) {
-            toast.error('Error al cerrar incidencia');
+            toast.error(getErrorMessage(error, 'Error al cerrar incidencia'));
         }
     };
 
@@ -391,7 +391,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             onSuccess();
             onClose();
         } catch (error) {
-            toast.error('Error al finalizar el proceso');
+            toast.error(getErrorMessage(error, 'Error al finalizar el proceso'));
         }
     };
 

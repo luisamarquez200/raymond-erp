@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { getErrorMessage } from '@/lib/utils';
 
 interface HistoryViewProps {
     item: {
@@ -52,7 +53,7 @@ export default function HistoryView({ item, onViewEvaluation, refreshTrigger }: 
                     setHistory(Array.isArray(data) ? data : []);
                 }
             } catch (error: any) {
-                console.error('HistoryView: error loading history', error);
+                console.error('HistoryView: error loading history', getErrorMessage(error));
                 if (!cancelled) {
                     setHistory([]);
                 }

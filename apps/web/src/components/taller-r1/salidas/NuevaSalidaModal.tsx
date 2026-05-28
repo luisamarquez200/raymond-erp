@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner';
 import { salidasApi, CreateSalidaDto, CreateDetalleDto, CreateAccesorioDto } from '@/services/taller-r1/salidas.service';
 import { clientesApi, Cliente } from '@/services/taller-r1/clientes.service';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { useAuthStore } from '@/store/auth.store';
@@ -292,8 +292,8 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
             console.log('[NuevaSalidaModal] Total items to set:', items.length);
             setSelectedItems(items);            
         } catch (error) {
-            console.error('Error loading salida for edit:', error);
-            toast.error('Error al cargar datos para edición');
+            console.error('Error loading salida for edit:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al cargar datos para edición'));
         } finally {
             setLoading(false);
         }
@@ -344,8 +344,8 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
             setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' });
             setShowQuickAddClient(false);
         } catch (error) {
-            console.error('Error saving quick client:', error);
-            toast.error('Error al guardar el cliente');
+            console.error('Error saving quick client:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar el cliente'));
         } finally {
             setIsSavingQuickAdd(false);
         }
@@ -572,8 +572,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
             onSuccess();
             onClose();
         } catch (error) {
-            toast.error(editingSalidaId ? 'Error al actualizar la salida' : 'Error al registrar la salida');
-            console.error(error);
+            toast.error(getErrorMessage(error, editingSalidaId ? 'Error al actualizar la salida' : 'Error al registrar la salida'));
         } finally {
             setLoading(false);
         }

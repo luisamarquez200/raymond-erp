@@ -86,3 +86,21 @@ export function debounce<T extends (...args: any[]) => any>(
         timeout = setTimeout(later, wait)
     }
 }
+
+export function getErrorMessage(error: unknown, fallback?: string): string {
+    if (typeof error === 'string') return error;
+
+    if (error && typeof error === 'object') {
+        const err = error as any;
+
+        if (err.response?.data?.message) {
+            const msg = err.response.data.message;
+            return Array.isArray(msg) ? msg.join(', ') : String(msg);
+        }
+
+        if (err.response?.data?.error) return String(err.response.data.error);
+        if (err.message) return String(err.message);
+    }
+
+    return fallback || 'Error inesperado. Intenta de nuevo.';
+}

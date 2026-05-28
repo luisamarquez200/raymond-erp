@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/equipo-ubicacion';
 
@@ -53,7 +54,7 @@ export const equipoUbicacionApi = {
             }
             return [];
         } catch (error) {
-            console.error('[EquipoUbicacionService] getAll failed:', error);
+            console.error('[EquipoUbicacionService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },

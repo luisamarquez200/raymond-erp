@@ -43,4 +43,17 @@ tallerApi.interceptors.request.use(config => {
     return config;
 });
 
+tallerApi.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const url = error.config?.url || 'unknown';
+        const status = error.response?.status;
+        const serverMsg = error.response?.data?.message || error.response?.data?.error;
+
+        console.error(`[api-taller] ${status} on ${url}:`, serverMsg || error.message);
+
+        return Promise.reject(error);
+    }
+);
+
 export default tallerApi;

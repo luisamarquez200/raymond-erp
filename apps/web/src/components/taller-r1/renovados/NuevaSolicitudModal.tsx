@@ -7,7 +7,7 @@ import { clientesApi } from '@/services/taller-r1/clientes.service';
 import { adcApi } from '@/services/taller-r1/adc.service';
 import { toast } from 'sonner';
 import { X, Calendar, User, Search, Package, CheckCircle2, ChevronDown, Layout, Plus, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useTallerUsuarios } from '@/hooks/taller-r1/useTallerUsuarios';
 import api from '@/lib/api-taller';
 import { QrScannerButton } from '@/components/ui/qr-scanner-button';
@@ -83,7 +83,7 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
             setAdcs((allAdcs || []).sort((a: any, b: any) => a.nombre?.localeCompare(b.nombre)));
             setEstaciones(allEstaciones || []);
         } catch (error) {
-            toast.error('Error al cargar datos para la solicitud');
+            toast.error(getErrorMessage(error, 'Error al cargar datos para la solicitud'));
         }
     };
 
@@ -147,7 +147,7 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
                 comentarios: ''
             });
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Error al crear la solicitud');
+            toast.error(getErrorMessage(error, 'Error al crear la solicitud'));
         } finally {
             setLoading(false);
         }

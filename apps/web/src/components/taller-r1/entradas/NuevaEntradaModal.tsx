@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, FileText, CheckCircle2, ChevronRight, User, Hash, FileCheck, MessageSquare, Image, Calendar, Plus, Trash2, Pencil, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/utils';
 import { entradasApi, CreateEntradaDto } from '@/services/taller-r1/entradas.service';
 import { modelosApi, Modelo } from '@/services/taller-r1/modelos.service';
 import { accesoriosApi } from '@/services/taller-r1/accesorios.service';
@@ -182,9 +183,9 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                 toast.warning('No se pudieron cargar los clientes. Verifica la conexión con el servidor.');
             }
         } catch (error) {
-            console.error('Error loading initial data:', error);
-            toast.error('Error al cargar datos iniciales');
-            setClientes([]); // Ensure clientes is always an array
+            console.error('Error loading initial data:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al cargar datos iniciales'));
+            setClientes([]);
         } finally {
             setLoading(false);
         }
@@ -332,14 +333,13 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
             onSuccess(createdEntrada);
             onClose();
         } catch (error) {
-            console.error('Error saving entry:', error);
-            const message = (error as any).response?.data?.message || 'Error al guardar la entrada y sus registros';
-            toast.error(message);
+            console.error('Error saving entry:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar la entrada y sus registros'));
         } finally {
             setLoading(false);
         }
     };
-
+    
     const resetForm = () => {
         setFormData({
             folio: '',
@@ -640,8 +640,8 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                 toast.success('Texto extraído (Revisar)');
             }
         } catch (error: any) {
-            console.error('OCR Error:', error);
-            toast.error(`No se pudo procesar la tarjeta: ${error.message || 'Error desconocido'}`);
+            console.error('OCR Error:', getErrorMessage(error));
+            toast.error(`No se pudo procesar la tarjeta: ${getErrorMessage(error)}`);
         } finally {
             setOcrLoading(false);
         }
@@ -661,8 +661,8 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                 await handleOCR(rotatedBase64, true);
             }
         } catch (error) {
-            console.error('Error al rotar manualmente:', error);
-            toast.error('Error al girar la imagen');
+            console.error('Error al rotar manualmente:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al girar la imagen'));
             setOcrLoading(false);
         }
     };
@@ -810,8 +810,8 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
             setQuickAddValue('');
             setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' });
         } catch (error) {
-            console.error('Error saving quick client:', error);
-            toast.error('Error al guardar el cliente');
+            console.error('Error saving quick client:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar el cliente'));
         } finally {
             setIsSavingQuickAdd(false);
         }
@@ -828,8 +828,8 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
             setShowQuickAddAdc(false);
             setQuickAddValue('');
         } catch (error) {
-            console.error('Error saving quick ADC:', error);
-            toast.error('Error al guardar el ADC');
+            console.error('Error saving quick ADC:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar el ADC'));
         } finally {
             setIsSavingQuickAdd(false);
         }
@@ -857,8 +857,8 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
             setQuickAddModeloValue('');
             setQuickAddModeloClase('');
         } catch (error) {
-            console.error('Error saving quick modelo:', error);
-            toast.error('Error al guardar el modelo');
+            console.error('Error saving quick modelo:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar el modelo'));
         } finally {
             setIsSavingQuickAdd(false);
         }

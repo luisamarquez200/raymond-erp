@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/ubicaciones';
 
@@ -23,7 +24,7 @@ export const ubicacionesApi = {
             }
             return [];
         } catch (error) {
-            console.error('[UbicacionesService] getAll failed:', error);
+            console.error('[UbicacionesService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },

@@ -10,7 +10,7 @@ import {
     Search, Clock, CheckCircle2, AlertCircle,
     Wrench, ArrowRight, Package, Calendar, Play, LayoutGrid, LayoutDashboard, Plus
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { QrScannerButton } from '@/components/ui/qr-scanner-button';
@@ -56,7 +56,7 @@ export const RenovadosDashboard = ({ forceView }: { forceView?: 'estaciones' | '
             );
             setEstaciones(sortedStations);
         } catch (error) {
-            toast.error('Error al cargar datos');
+            toast.error(getErrorMessage(error, 'Error al cargar datos'));
         } finally {
             setLoading(false);
         }

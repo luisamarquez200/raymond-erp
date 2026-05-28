@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -31,8 +32,8 @@ export default function MantenimientoList() {
             const data = await mantenimientoApi.getAlertas();
             setAlertas(data?.data || data || []);
         } catch (error) {
-            console.error('Error loading maintenance alerts:', error);
-            toast.error('Error al cargar alertas de mantenimiento');
+            console.error('Error loading maintenance alerts:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al cargar alertas de mantenimiento'));
         } finally {
             setLoading(false);
         }
@@ -45,8 +46,8 @@ export default function MantenimientoList() {
             toast.success('Carga registrada correctamente. Próxima carga en 30 días.');
             await loadAlertas();
         } catch (error) {
-            console.error('Error registering charge:', error);
-            toast.error('Error al registrar la carga');
+            console.error('Error registering charge:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al registrar la carga'));
         } finally {
             setRegistering(null);
         }
