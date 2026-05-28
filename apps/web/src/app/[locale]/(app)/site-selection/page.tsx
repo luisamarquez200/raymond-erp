@@ -4,7 +4,7 @@ import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Building2, Factory, Warehouse, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { Building2, Factory, Warehouse, ChevronRight, FileSpreadsheet, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SiteSelectionPage() {
@@ -44,6 +44,18 @@ export default function SiteSelectionPage() {
             bgLight: 'bg-emerald-50',
         },
         {
+            id: 'r4',
+            code: 'R4',
+            name: 'R4 - Centro de Control',
+            description: 'Raymond Comercial — Centro de control empresarial.',
+            icon: LayoutDashboard,
+            color: 'from-violet-600 to-violet-800',
+            borderColor: 'border-violet-100',
+            bgLight: 'bg-violet-50',
+            path: '/es/comercial/dashboard',
+            restrictedEmail: 'it@runsolutions.com',
+        },
+        {
             id: 'admin-comercial',
             code: 'ADMIN_COMERCIAL',
             name: 'Administración Comercial (Próximamente)',
@@ -66,9 +78,12 @@ export default function SiteSelectionPage() {
     const availableOptions = siteOptions.filter(opt => {
         if (opt.requiresAdmin && !isAdmin) return false;
         if (opt.code === 'ADMIN_COMERCIAL') return true;
-        
+
         // Restriction: R2 only for it@runsolutions.com
         if (opt.id === 'r2' && user?.email !== 'it@runsolutions.com') return false;
+
+        if (opt.restrictedEmail && user?.email !== opt.restrictedEmail) return false;
+        if (opt.restrictedEmail) return true;
 
         return userSites.includes(opt.code);
     });
@@ -86,6 +101,9 @@ export default function SiteSelectionPage() {
             return;
         }
         if (site.path) {
+            if (site.id === 'r4') {
+                setSelectedSite('r4');
+            }
             router.push(site.path);
             return;
         }

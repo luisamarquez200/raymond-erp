@@ -1,0 +1,10 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../../node_modules/@prisma/client-comercial"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("COMERCIAL_R4_DATABASE_URL")
+  relationMode = "prisma"
+}
