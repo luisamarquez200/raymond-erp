@@ -251,7 +251,7 @@ export function EntradaDetailsSheet({ entradaId, open, onClose }: EntradaDetails
                                                                         tipo: 'equipo',
                                                                         clase: detalle.clase,
                                                                         distribuidor: entrada.distribuidor,
-                                                                        cliente_origen: entrada.cliente_origen
+                                                                        cliente_origen: entrada.rel_cliente?.nombre_cliente || entrada.cliente_origen
                                                                     });
                                                                     setSelectedEvalId(undefined);
                                                                     setEvalModalOpen(true);
@@ -280,7 +280,7 @@ export function EntradaDetailsSheet({ entradaId, open, onClose }: EntradaDetails
                                                                     tipo: 'equipo',
                                                                     clase: detalle.clase,
                                                                     distribuidor: entrada.distribuidor,
-                                                                    cliente_origen: entrada.cliente_origen
+                                                                    cliente_origen: entrada.rel_cliente?.nombre_cliente || entrada.cliente_origen
                                                                 });
                                                                 setSelectedEvalId(evalId);
                                                                 setEvalModalOpen(true);

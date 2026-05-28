@@ -61,7 +61,7 @@ model cliente {
   nombre_cliente   String?    @db.VarChar(255)
   rfc              String?    @db.VarChar(100)
   persona_contacto String?    @db.VarChar(100)
-  telefono         Int?
+  telefono         String?    @db.VarChar(100)
   razon_social     String?    @db.VarChar(100)
   calle            String?    @db.VarChar(100)
   numero_calle     String?    @db.VarChar(100)
@@ -600,3 +600,12 @@ model costos_refacciones {
   @@index([id_equipo_ubicacion])
   @@index([id_refaccion])
 }
+
+model tecnicos {
+  id_tecnico          String   @id @default(cuid()) @db.VarChar(50)
+  nombre              String   @db.VarChar(100)
+  nivel_certificacion String   @db.VarChar(50)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+}
+

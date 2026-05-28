@@ -1258,6 +1258,163 @@ export class SalidasService {
     }
 
     // Eliminar una salida completa
+    async createRapida(data: any) {
+        console.log('[SalidasService] createRapida called with', data);
+        return this.db.$transaction(async (tx) => {
+            const id_salida = uuidv4();
+            const folio = data.folio || await this.generateFolio();
+            const dateStr = new Date().toLocaleString('sv-SE', { timeZone: 'America/Mexico_City' }).replace('T', ' ').substring(0, 19);
+
+            if (!data.numero_serie) {
+                throw new BadRequestException('El número de serie es requerido.');
+            }
+
+            // 1. Try equipment first
+            const equipoUbicacion = await tx.equipo_ubicacion.findFirst({
+                where: {
+                    serial_equipo: data.numero_serie,
+                    estado: { not: 'Retirado' }
+                },
+                include: {
+                    rel_equipo: { select: { id_equipos: true } }
+                }
+            });
+
+            if (equipoUbicacion) {
+                // ---- EQUIPO PATH ----
+                await tx.salidas.create({
+                    data: {
+                        id_salida, folio,
+                        fecha_transporte: data.fecha ? new Date(data.fecha) : new Date(),
+                        fecha_creacion: new Date(),
+                        estado: 'Entregado',
+                        cliente: data.cliente || null,
+                        destino: data.destino || null,
+                        remision: data.remision || null,
+                        elemento: 'Equipos',
+                        usuario_asignado: this.prisma.currentUser?.substring(0, 100) || 'Sistema',
+                    }
+                });
+
+                const id_detalle = uuidv4();
+                await tx.salida_detalle.create({
+                    data: {
+                        id_detalle, id_salida,
+                        id_equipo: equipoUbicacion.id_equipos || equipoUbicacion.rel_equipo?.id_equipos || null,
+                        id_equipo_ubicacion: equipoUbicacion.id_equipo_ubicacion,
+                        serial_equipos: data.numero_serie,
+                        id_ubicacion: equipoUbicacion.id_ubicacion,
+                        id_sub_ubicacion: equipoUbicacion.id_sub_ubicacion || 'N/A',
+                        tipo_salida: 'Venta',
+                        cantidad_salida: 1,
+                    }
+                });
+
+                if (equipoUbicacion.id_sub_ubicacion) {
+                    await tx.sub_ubicaciones.update({
+                        where: { id_sub_ubicacion: equipoUbicacion.id_sub_ubicacion },
+                        data: { ubicacion_ocupada: false }
+                    });
+                }
+
+                await tx.equipo_ubicacion.update({
+                    where: { id_equipo_ubicacion: equipoUbicacion.id_equipo_ubicacion },
+                    data: {
+                        estado: 'Retirado',
+                        fecha_salida: dateStr,
+                        usuario_salida: this.prisma.currentUser?.substring(0, 20) || 'Sistema',
+                    }
+                });
+
+                if (this.prisma.currentSite === 'r1') {
+                    await tx.entrada_detalle.updateMany({
+                        where: { serial_equipo: data.numero_serie },
+                        data: { estado: 'Retirado' }
+                    });
+                }
+
+                await tx.logs_salida_movimientos.create({
+                    data: {
+                        id_equipo: equipoUbicacion.id_equipos || '',
+                        serial: data.numero_serie, folio,
+                        usuario: this.prisma.currentUser?.substring(0, 100) || 'Sistema',
+                        accion: 'CREAR_RAPIDA',
+                    }
+                });
+
+                return { success: true, id_salida, folio, tipo: 'equipo' };
+            }
+
+            // 2. Try accessory
+            const accesorio = await tx.entrada_accesorios.findFirst({
+                where: {
+                    serial: data.numero_serie,
+                    estado: { not: 'Retirado' }
+                }
+            });
+
+            if (!accesorio) {
+                throw new BadRequestException(
+                    `No se encontró equipo ni accesorio con serial "${data.numero_serie}" en estado disponible.`
+                );
+            }
+
+            // ---- ACCESORIO PATH ----
+            await tx.salidas.create({
+                data: {
+                    id_salida, folio,
+                    fecha_transporte: data.fecha ? new Date(data.fecha) : new Date(),
+                    fecha_creacion: new Date(),
+                    estado: 'Entregado',
+                    cliente: data.cliente || null,
+                    destino: data.destino || null,
+                    remision: data.remision || null,
+                    elemento: 'Accesorios',
+                    usuario_asignado: this.prisma.currentUser?.substring(0, 100) || 'Sistema',
+                }
+            });
+
+            const id_detalle = uuidv4();
+            await tx.salida_detalle.create({
+                data: {
+                    id_detalle, id_salida,
+                    cantidad_salida: 0,
+                    id_sub_ubicacion: accesorio.sub_ubicacion || 'N/A',
+                }
+            });
+
+            await tx.salida_accesorios.create({
+                data: {
+                    id_accesorio: uuidv4(),
+                    accesorio_id: accesorio.id_accesorio,
+                    id_detalle,
+                    modelo: accesorio.modelo,
+                    serial: data.numero_serie,
+                }
+            });
+
+            if (accesorio.sub_ubicacion) {
+                await tx.sub_ubicaciones.update({
+                    where: { id_sub_ubicacion: accesorio.sub_ubicacion },
+                    data: { ubicacion_ocupada: false }
+                });
+            }
+
+            const accUpdateData: any = {
+                estado: 'Retirado',
+            };
+            if (this.prisma.currentSite === 'r1') {
+                accUpdateData.estado_acc = 'Retirado';
+            }
+            await tx.entrada_accesorios.update({
+                where: { id_accesorio: accesorio.id_accesorio },
+                data: accUpdateData,
+            });
+
+            return { success: true, id_salida, folio, tipo: 'accesorio' };
+        });
+    }
+
     async remove(id: string) {
         // First delete related detalles and accesorios
         const detalles = await this.db.salida_detalle.findMany({

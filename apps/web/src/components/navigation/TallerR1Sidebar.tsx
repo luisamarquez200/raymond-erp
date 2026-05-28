@@ -25,7 +25,8 @@ import {
   UserCheck,
   ShieldCheck,
   LayoutGrid,
-  Settings
+  Settings,
+  Zap
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
@@ -63,9 +64,19 @@ const menuItems = [
     path: 'entradas',
   },
   {
+    label: 'Entradas Rápidas',
+    icon: Zap,
+    path: 'entradas/rapida',
+  },
+  {
     label: 'Salidas',
     icon: ArrowUpFromLine,
     path: 'salidas',
+  },
+  {
+    label: 'Salidas Rápidas',
+    icon: Zap,
+    path: 'salidas/rapida',
   },
   {
     label: 'Clientes',
@@ -91,6 +102,11 @@ const menuItems = [
     label: 'Usuarios',
     icon: User,
     path: 'usuarios',
+  },
+  {
+    label: 'Técnicos',
+    icon: Users,
+    path: 'tecnicos',
   },
   {
     label: 'Solicitudes',
@@ -226,7 +242,7 @@ export default function TallerR1Sidebar({ isCollapsed: externalIsCollapsed, onTo
                 return roleName && ['Superadmin', 'Admin', 'Administrador'].includes(roleName);
               })();
 
-            if (['usuarios', 'solicitudes'].includes(item.path) && !isAdmin) {
+            if (['usuarios', 'solicitudes', 'tecnicos'].includes(item.path) && !isAdmin) {
               return null;
             }
 

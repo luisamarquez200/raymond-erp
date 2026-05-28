@@ -43,6 +43,11 @@ export class EntradasController {
         return this.entradasService.getAccesorios(id);
     }
 
+    @Post('rapida')
+    async createRapida(@Body() data: any) {
+        return this.entradasService.createRapida(data);
+    }
+
     @Post()
     async create(@Body() createEntradaDto: CreateEntradaDto) {
         return this.entradasService.create(createEntradaDto);

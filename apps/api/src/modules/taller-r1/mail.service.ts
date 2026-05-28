@@ -115,46 +115,143 @@ export class TallerR1MailService {
         solicitud_id: string,
         tecnico: string,
         fecha: Date,
-        cliente?: string
+        cliente?: string,
+        refacciones?: { area: string, descripcion: string, cantidad: number, precio_unitario: number }[],
+        costos_externos?: { descripcion: string, precio: number, observaciones?: string }[],
+        total_horas?: number,
     }) {
         const subject = `Renovado Finalizado - Equipo ${data.serial}`;
+        const fechaStr = data.fecha.toLocaleDateString('es-MX', {
+            day: '2-digit', month: 'long', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        const totalRefacciones = data.refacciones?.reduce((s, r) => s + r.precio_unitario * r.cantidad, 0) || 0;
+        const totalExternos = data.costos_externos?.reduce((s, c) => s + c.precio, 0) || 0;
+
+        const refaccionesHtml = data.refacciones && data.refacciones.length > 0
+            ? `<table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:13px;">
+                  <thead>
+                    <tr style="background:#e11d48;color:white;">
+                      <th style="padding:10px 12px;text-align:left;font-size:11px;">Área</th>
+                      <th style="padding:10px 12px;text-align:left;font-size:11px;">Refacción</th>
+                      <th style="padding:10px 12px;text-align:center;font-size:11px;">Cant.</th>
+                      <th style="padding:10px 12px;text-align:right;font-size:11px;">Precio Unit.</th>
+                      <th style="padding:10px 12px;text-align:right;font-size:11px;">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${data.refacciones.map(r => `
+                      <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:8px 12px;font-weight:bold;">${r.area}</td>
+                        <td style="padding:8px 12px;">${r.descripcion}</td>
+                        <td style="padding:8px 12px;text-align:center;">${r.cantidad}</td>
+                        <td style="padding:8px 12px;text-align:right;">$${r.precio_unitario.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        <td style="padding:8px 12px;text-align:right;font-weight:bold;">$${(r.precio_unitario * r.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                  <tfoot>
+                    <tr style="background:#f8fafc;font-weight:bold;">
+                      <td colspan="4" style="padding:10px 12px;text-align:right;">Total Refacciones</td>
+                      <td style="padding:10px 12px;text-align:right;">
+                        $${totalRefacciones.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>`
+            : '<p style="color:#94a3b8;font-style:italic;">No se utilizaron refacciones en este servicio.</p>';
+
+        const costosHtml = data.costos_externos && data.costos_externos.length > 0
+            ? `<div style="margin-top: 24px; border-top: 1px solid #fbbf24; padding-top: 16px;">
+                  <h4 style="margin: 0 0 8px; font-size: 12px; font-weight: 900; color: #d97706; text-transform: uppercase; letter-spacing: 0.5px;">Costos Externos</h4>
+                  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                      <tr style="background:#f59e0b;color:white;">
+                        <th style="padding:10px 12px;text-align:left;font-size:11px;">Descripción</th>
+                        <th style="padding:10px 12px;text-align:left;font-size:11px;">Observaciones</th>
+                        <th style="padding:10px 12px;text-align:right;font-size:11px;">Precio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${data.costos_externos.map(c => `
+                        <tr style="border-bottom:1px solid #fef3c7;">
+                          <td style="padding:8px 12px;font-weight:bold;">${c.descripcion}</td>
+                          <td style="padding:8px 12px;color:#64748b;">${c.observaciones || '—'}</td>
+                          <td style="padding:8px 12px;text-align:right;font-weight:bold;">$${c.precio.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                    <tfoot>
+                      <tr style="background:#fffbeb;font-weight:bold;">
+                        <td colspan="2" style="padding:10px 12px;text-align:right;">Total Costos Externos</td>
+                        <td style="padding:10px 12px;text-align:right;">$${totalExternos.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>`
+            : '';
+
         const html = `
-      <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
-        <div style="background-color: #e11d48; color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0; font-size: 24px;">Renovado Completado</h1>
+      <div style="font-family: sans-serif; color: #333; max-width: 620px; margin: 0 auto; border: 1px solid #eee; border-radius: 20px; overflow: hidden;">
+        <div style="background-color: #e11d48; color: white; padding: 30px; text-align: center;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: 900;">Renovado Completado</h1>
+          <p style="margin: 8px 0 0; font-size: 13px; opacity: 0.9;">El equipo está disponible en stock</p>
         </div>
         <div style="padding: 30px;">
-          <p>Se ha finalizado el proceso de renovación para el siguiente equipo:</p>
+          <p style="font-size: 16px;">Hola,</p>
+          <p>Se ha finalizado el proceso de renovación para el siguiente equipo. Queda liberado en el stock con estado <strong>Stock renovado</strong>.</p>
           <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-            <tr>
-              <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Serial:</td>
-              <td style="padding: 10px; border-bottom: 1px solid #eee;">${data.serial}</td>
+            <tr style="background:#f8fafc">
+              <td style="padding:12px 16px;font-weight:bold;font-size:11px;text-transform:uppercase;color:#64748b;width:40%">Número de Serie</td>
+              <td style="padding:12px 16px;font-size:14px;font-weight:900;color:#0f172a">${data.serial}</td>
             </tr>
             <tr>
-              <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Cliente:</td>
-              <td style="padding: 10px; border-bottom: 1px solid #eee;">${data.cliente || 'N/A'}</td>
+              <td style="padding:12px 16px;font-weight:bold;font-size:11px;text-transform:uppercase;color:#64748b">Cliente</td>
+              <td style="padding:12px 16px;font-size:13px;color:#0f172a">${data.cliente || 'N/A'}</td>
+            </tr>
+            <tr style="background:#f8fafc">
+              <td style="padding:12px 16px;font-weight:bold;font-size:11px;text-transform:uppercase;color:#64748b">Técnico Responsable</td>
+              <td style="padding:12px 16px;font-size:13px;color:#0f172a">${data.tecnico}</td>
             </tr>
             <tr>
-              <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Técnico Responsable:</td>
-              <td style="padding: 10px; border-bottom: 1px solid #eee;">${data.tecnico}</td>
+              <td style="padding:12px 16px;font-weight:bold;font-size:11px;text-transform:uppercase;color:#64748b">Fecha de Finalización</td>
+              <td style="padding:12px 16px;font-size:13px;color:#e11d48;font-weight:bold">${fechaStr}</td>
             </tr>
-            <tr>
-              <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Fecha de Finalización:</td>
-              <td style="padding: 10px; border-bottom: 1px solid #eee;">${data.fecha.toLocaleString()}</td>
+            <tr style="background:#f8fafc">
+              <td style="padding:12px 16px;font-weight:bold;font-size:11px;text-transform:uppercase;color:#64748b">Horas Totales</td>
+              <td style="padding:12px 16px;font-size:13px;color:#0f172a;font-weight:bold">${data.total_horas?.toFixed(1) || '0'} h</td>
             </tr>
           </table>
-          <p style="margin-top: 30px; font-size: 14px; color: #666;">
-            El equipo ha sido liberado en el stock con estado <strong>Stock renovado</strong>.
-          </p>
+
+          <div style="margin-top: 30px; border-top: 2px solid #e11d48; padding-top: 20px;">
+            <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Refacciones Utilizadas</h3>
+            ${refaccionesHtml}
+            ${costosHtml}
+            <div style="margin-top: 20px; padding: 16px; background: #0f172a; border-radius: 12px; text-align: right;">
+              <p style="margin: 0; font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Costo Total del Servicio</p>
+              <p style="margin: 4px 0 0; font-size: 24px; font-weight: 900; color: #ffffff;">
+                $${(totalRefacciones + totalExternos).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
         </div>
-        <div style="background-color: #f9fafb; padding: 15px; text-align: center; font-size: 12px; color: #999;">
-          &copy; ${new Date().getFullYear()} Raymond wms
+        <div style="background-color: #f9fafb; padding: 20px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #eee;">
+          <p style="margin: 0; font-weight: bold;">Sistema de Reportes Logística Raymond</p>
         </div>
       </div>
     `;
 
-        const to = this.getRecipientsBySite(); // Default recipients
-        await this.sendMail({ to, subject, html });
+        // Generate PDF with refacciones
+        const pdfBase64 = await this.generateRefaccionesPDF(data);
+        const attachments = [];
+        if (pdfBase64) {
+            attachments.push({ filename: `Renovado_${data.serial}_Refacciones.pdf`, content: pdfBase64 });
+        }
+
+        const envEmails = this.configService.get<string>('NOTIFICATION_EMAILS_RENOVADOS');
+        const to = envEmails ? envEmails.split(',').map(e => e.trim()).filter(e => e !== '') : this.getRecipientsBySite('R1');
+        await this.sendMail({ to, subject, html, attachments });
     }
 
     async sendEntradaSalidaEmail(data: {
@@ -355,6 +452,164 @@ export class TallerR1MailService {
                .text('FIRMA SOLICITANTE', doc.page.width - 260, sigY + 6, { width: 200, align: 'center' });
 
             // ── FOOTER ────────────────────────────────────────────────────
+            doc.rect(0, doc.page.height - 50, doc.page.width, 50).fill(DARK);
+            doc.fontSize(8).font('Helvetica').fillColor('#64748b')
+               .text('Sistema de Reportes Logística Raymond  ·  Confidencial', 60, doc.page.height - 34,
+                     { width: doc.page.width - 120, align: 'center' });
+
+            doc.end();
+        });
+    }
+
+    private async generateRefaccionesPDF(data: {
+        serial: string;
+        tecnico: string;
+        fecha: Date;
+        cliente?: string;
+        refacciones?: { area: string, descripcion: string, cantidad: number, precio_unitario: number }[];
+        costos_externos?: { descripcion: string, precio: number, observaciones?: string }[];
+        total_horas?: number;
+    }): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const doc = new PDFDocument({
+                size: 'LETTER',
+                margins: { top: 60, bottom: 60, left: 60, right: 60 }
+            });
+            const chunks: Buffer[] = [];
+            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+            doc.on('end', () => {
+                const pdfBuffer = Buffer.concat(chunks);
+                resolve(pdfBuffer.toString('base64'));
+            });
+            doc.on('error', reject);
+
+            const PAGE_W = doc.page.width - 120;
+            const RED = '#e11d48';
+            const DARK = '#0f172a';
+            const GRAY = '#64748b';
+            const LIGHT = '#f8fafc';
+
+            // Header
+            doc.rect(0, 0, doc.page.width, 100).fill(DARK);
+            doc.fontSize(20).font('Helvetica-Bold').fillColor('#ffffff')
+               .text('RAYMOND', 60, 28, { continued: true })
+               .fontSize(10).font('Helvetica').fillColor(RED)
+               .text('  |  SISTEMA DE TALLER', { continued: false });
+            doc.fontSize(8).font('Helvetica').fillColor('#94a3b8')
+               .text('REPORTE DE FINALIZACIÓN', 60, 54);
+            const fechaDoc = data.fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+            doc.fontSize(8).fillColor('#94a3b8').text('FECHA', doc.page.width - 200, 28, { width: 140, align: 'right' });
+            doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff')
+               .text(fechaDoc, doc.page.width - 200, 42, { width: 140, align: 'right' });
+
+            doc.rect(0, 100, doc.page.width, 6).fill(RED);
+
+            let y = 130;
+
+            // Title
+            doc.fontSize(18).font('Helvetica-Bold').fillColor(DARK)
+               .text('RENOVADO FINALIZADO', 60, y);
+            y += 30;
+
+            // Info card
+            doc.rect(60, y, PAGE_W, 70).fill(LIGHT).stroke('#e2e8f0');
+            doc.fontSize(7).font('Helvetica-Bold').fillColor(GRAY)
+               .text('NÚMERO DE SERIE', 80, y + 10);
+            doc.fontSize(18).font('Helvetica-Bold').fillColor(DARK)
+               .text(data.serial, 80, y + 22);
+            const midX = 60 + PAGE_W / 2 + 10;
+            doc.fontSize(7).font('Helvetica-Bold').fillColor(GRAY)
+               .text('TÉCNICO', midX, y + 10);
+            doc.fontSize(12).font('Helvetica-Bold').fillColor(DARK)
+               .text(data.tecnico, midX, y + 22, { width: PAGE_W / 2 - 20 });
+            doc.fontSize(7).font('Helvetica-Bold').fillColor(GRAY)
+               .text('CLIENTE', midX, y + 42);
+            doc.fontSize(10).font('Helvetica').fillColor(DARK)
+               .text(data.cliente || 'N/D', midX, y + 52, { width: PAGE_W / 2 - 20 });
+            doc.fontSize(7).font('Helvetica-Bold').fillColor(GRAY)
+               .text('HORAS TOTALES', 80, y + 42);
+            doc.fontSize(12).font('Helvetica-Bold').fillColor(DARK)
+               .text(`${data.total_horas?.toFixed(1) || '0'} h`, 80, y + 52);
+            y += 90;
+
+            // Refacciones table
+            doc.fontSize(10).font('Helvetica-Bold').fillColor(DARK)
+               .text('REFACCIONES UTILIZADAS', 60, y);
+            y += 20;
+
+            const refs = data.refacciones || [];
+            if (refs.length === 0) {
+                doc.fontSize(10).font('Helvetica').fillColor(GRAY)
+                   .text('No se utilizaron refacciones en este servicio.', 60, y, { italic: true });
+                y += 24;
+            } else {
+                // Table header
+                const colX = [60, 120, 320, 390, 450];
+                const colW = [60, 200, 70, 60, 80];
+                doc.rect(60, y, PAGE_W, 22).fill(RED);
+                doc.fontSize(7).font('Helvetica-Bold').fillColor('#ffffff');
+                doc.text('ÁREA', colX[0] + 6, y + 6, { width: colW[0] });
+                doc.text('REFACCIÓN', colX[1] + 6, y + 6, { width: colW[1] });
+                doc.text('CANT.', colX[2] + 6, y + 6, { width: colW[2], align: 'center' });
+                doc.text('P/U', colX[3] + 6, y + 6, { width: colW[3], align: 'right' });
+                doc.text('TOTAL', colX[4] + 6, y + 6, { width: colW[4], align: 'right' });
+                y += 22;
+                let total = 0;
+                refs.forEach((r, i) => {
+                    const rowTotal = r.precio_unitario * r.cantidad;
+                    total += rowTotal;
+                    if (i % 2 === 0) doc.rect(60, y, PAGE_W, 22).fill(LIGHT);
+                    doc.fontSize(8).font('Helvetica-Bold').fillColor(DARK);
+                    doc.text(r.area, colX[0] + 6, y + 5, { width: colW[0] });
+                    doc.fontSize(8).font('Helvetica').fillColor(DARK);
+                    doc.text(r.descripcion, colX[1] + 6, y + 5, { width: colW[1] });
+                    doc.text(String(r.cantidad), colX[2] + 6, y + 5, { width: colW[2], align: 'center' });
+                    doc.text(`$${r.precio_unitario.toFixed(2)}`, colX[3] + 6, y + 5, { width: colW[3], align: 'right' });
+                    doc.text(`$${rowTotal.toFixed(2)}`, colX[4] + 6, y + 5, { width: colW[4], align: 'right' });
+                    y += 22;
+                });
+                // Total row
+                doc.rect(60, y, PAGE_W, 24).fill(DARK);
+                doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff');
+                doc.text('TOTAL GENERAL', 60 + 6, y + 6, { width: PAGE_W - 100, align: 'right' });
+                doc.text(`$${total.toFixed(2)}`, colX[4] + 6, y + 6, { width: colW[4], align: 'right' });
+                y += 40;
+            }
+
+            // Costos Externos section
+            const externos = data.costos_externos || [];
+            if (externos.length > 0) {
+                doc.fontSize(10).font('Helvetica-Bold').fillColor(DARK)
+                   .text('COSTOS EXTERNOS', 60, y);
+                y += 20;
+
+                const extColX = [60, 120, 380];
+                const extColW = [60, 260, 130];
+                doc.rect(60, y, PAGE_W, 22).fill('#f59e0b');
+                doc.fontSize(7).font('Helvetica-Bold').fillColor('#ffffff');
+                doc.text('DESCRIPCIÓN', extColX[0] + 6, y + 6, { width: extColW[0] });
+                doc.text('OBSERVACIONES', extColX[1] + 6, y + 6, { width: extColW[1] });
+                doc.text('PRECIO', extColX[2] + 6, y + 6, { width: extColW[2], align: 'right' });
+                y += 22;
+                let totalExt = 0;
+                externos.forEach((c, i) => {
+                    totalExt += c.precio;
+                    if (i % 2 === 0) doc.rect(60, y, PAGE_W, 22).fill(LIGHT);
+                    doc.fontSize(8).font('Helvetica-Bold').fillColor(DARK);
+                    doc.text(c.descripcion, extColX[0] + 6, y + 5, { width: extColW[0] });
+                    doc.fontSize(8).font('Helvetica').fillColor(DARK);
+                    doc.text(c.observaciones || '—', extColX[1] + 6, y + 5, { width: extColW[1] });
+                    doc.text(`$${c.precio.toFixed(2)}`, extColX[2] + 6, y + 5, { width: extColW[2], align: 'right' });
+                    y += 22;
+                });
+                doc.rect(60, y, PAGE_W, 24).fill(DARK);
+                doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff');
+                doc.text('TOTAL COSTOS EXTERNOS', 60 + 6, y + 6, { width: PAGE_W - 100, align: 'right' });
+                doc.text(`$${totalExt.toFixed(2)}`, extColX[2] + 6, y + 6, { width: extColW[2], align: 'right' });
+                y += 40;
+            }
+
+            // Footer
             doc.rect(0, doc.page.height - 50, doc.page.width, 50).fill(DARK);
             doc.fontSize(8).font('Helvetica').fillColor('#64748b')
                .text('Sistema de Reportes Logística Raymond  ·  Confidencial', 60, doc.page.height - 34,

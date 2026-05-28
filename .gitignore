@@ -332,6 +332,9 @@ apps/api/test/*.d.ts
 apps/api/test/security/*.js
 apps/api/test/security/*.d.ts
 
+apps/api/dist-test/
+*.csv
+
 # ====================
 # Debug / scratch files
 # ====================

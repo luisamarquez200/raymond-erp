@@ -224,6 +224,19 @@ export const salidasApi = {
         return response.data?.data || response.data || [];
     },
 
+    // Salida rápida (crea salida + detalle + retira equipo + libera sub-ubicación en una sola llamada)
+    createRapida: async (data: {
+        folio?: string;
+        fecha: string;
+        cliente?: string;
+        destino?: string;
+        numero_serie: string;
+        remision?: string;
+    }) => {
+        const response = await tallerApi.post<any>(`${API_URL}/rapida`, data);
+        return response.data?.data || response.data;
+    },
+
     // Enviar correos
     sendMail: async (data: { tipo: 'Entrada' | 'Salida', folio: string, fecha: string, site?: string, pdfBase64?: string, excelBase64?: string, remision?: string }) => {
         const response = await tallerApi.post<any>('/taller-r1/mail/entradas-salidas', data);

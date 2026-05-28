@@ -73,6 +73,9 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
     const [quickAddClientExtra, setQuickAddClientExtra] = useState({ rfc: '', telefono: '', persona_contacto: '' });
     const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
     const [showQuickAddConfirm, setShowQuickAddConfirm] = useState(false);
+    const [showQuickAddModelo, setShowQuickAddModelo] = useState(false);
+    const [quickAddModeloValue, setQuickAddModeloValue] = useState('');
+    const [quickAddModeloClase, setQuickAddModeloClase] = useState('');
 
     useEffect(() => {
         const fetchAdcs = async () => {
@@ -832,6 +835,35 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
         }
     };
 
+    const handleSaveQuickAddModelo = async () => {
+        if (!quickAddModeloValue.trim() || !quickAddModeloClase) return;
+        try {
+            setIsSavingQuickAdd(true);
+
+            const newModelo = await modelosApi.create({
+                modelo: quickAddModeloValue.trim().toUpperCase(),
+                clase_id: quickAddModeloClase || undefined,
+            });
+            const modeloData = newModelo?.data || newModelo;
+
+            setFilteredModelos(prev => {
+                const newList = [...prev, modeloData];
+                return newList.sort((a, b) => (a.modelo || '').localeCompare(b.modelo || ''));
+            });
+
+            setItemFormData((prev: any) => ({ ...prev, modelo: modeloData.modelo }));
+            toast.success('Modelo añadido correctamente');
+            setShowQuickAddModelo(false);
+            setQuickAddModeloValue('');
+            setQuickAddModeloClase('');
+        } catch (error) {
+            console.error('Error saving quick modelo:', error);
+            toast.error('Error al guardar el modelo');
+        } finally {
+            setIsSavingQuickAdd(false);
+        }
+    };
+
     const handleEditItem = (idx: number) => {
         const item = items[idx];
         setItemFormData(item);
@@ -1274,7 +1306,17 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Modelo <span className="text-red-500">*</span></label>
+                                                <div className="flex justify-between items-end px-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Modelo <span className="text-red-500">*</span></label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setQuickAddModeloClase(itemFormData.clase || ''); setShowQuickAddModelo(true); }}
+                                                        className="text-[10px] font-black uppercase text-slate-400 hover:text-red-600 transition-all flex items-center gap-1"
+                                                        title="Agregar nuevo modelo"
+                                                    >
+                                                        <Plus className="w-3 h-3" /> Añadir nuevo
+                                                    </button>
+                                                </div>
                                                 <select
                                                     value={itemFormData.modelo}
                                                     onChange={(e) => setItemFormData({ ...itemFormData, modelo: e.target.value })}
@@ -1494,7 +1536,17 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Modelo <span className="text-red-500">*</span></label>
+                                                <div className="flex justify-between items-end px-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Modelo <span className="text-red-500">*</span></label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setQuickAddModeloClase(itemFormData.tipo || ''); setShowQuickAddModelo(true); }}
+                                                        className="text-[10px] font-black uppercase text-slate-400 hover:text-red-600 transition-all flex items-center gap-1"
+                                                        title="Agregar nuevo modelo"
+                                                    >
+                                                        <Plus className="w-3 h-3" /> Añadir nuevo
+                                                    </button>
+                                                </div>
                                                 <select
                                                     value={itemFormData.modelo}
                                                     onChange={(e) => setItemFormData({ ...itemFormData, modelo: e.target.value })}
@@ -1791,15 +1843,15 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                 )}
 
                 {/* Quick Add Modals */}
-                {(showQuickAddClient || showQuickAddAdc) && (
+                {(showQuickAddClient || showQuickAddAdc || showQuickAddModelo) && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                         {/* Backdrop — shows confirm if data is present */}
                         <div
                             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in"
                             onClick={() => {
-                                const hasData = quickAddValue.trim() || quickAddClientExtra.rfc || quickAddClientExtra.telefono || quickAddClientExtra.persona_contacto;
+                                const hasData = quickAddValue.trim() || quickAddClientExtra.rfc || quickAddClientExtra.telefono || quickAddClientExtra.persona_contacto || quickAddModeloValue.trim();
                                 if (hasData) setShowQuickAddConfirm(true);
-                                else { setShowQuickAddClient(false); setShowQuickAddAdc(false); setQuickAddValue(''); setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' }); }
+                                else { setShowQuickAddClient(false); setShowQuickAddAdc(false); setShowQuickAddModelo(false); setQuickAddValue(''); setQuickAddModeloValue(''); setQuickAddModeloClase(''); setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' }); }
                             }}
                         />
 
@@ -1810,29 +1862,56 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
                             `}</style>
                             <h3 className="text-xl font-black text-slate-900 mb-2">
-                                {showQuickAddClient ? 'Nuevo Cliente' : 'Nuevo ADC'}
+                                {showQuickAddClient ? 'Nuevo Cliente' : showQuickAddAdc ? 'Nuevo ADC' : 'Nuevo Modelo'}
                             </h3>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-4">
-                                {showQuickAddClient ? 'Registro Rápido de Cliente' : 'Registro de Nombre ADC'}
+                                {showQuickAddClient ? 'Registro Rápido de Cliente' : showQuickAddAdc ? 'Registro de Nombre ADC' : 'Registro Rápido de Modelo'}
                             </p>
 
                             <div className="space-y-4">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                        {showQuickAddClient ? 'Nombre / Razón Social' : 'Nombre del ADC'} <span className="text-red-500">*</span>
+                                        {showQuickAddClient ? 'Nombre / Razón Social' : showQuickAddAdc ? 'Nombre del ADC' : 'Nombre del Modelo'} <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         autoFocus
-                                        value={quickAddValue}
-                                        onChange={(e) => setQuickAddValue(e.target.value)}
-                                        placeholder={showQuickAddClient ? "Nombre de la empresa o cliente..." : "Nombre del ADC..."}
+                                        value={showQuickAddModelo ? quickAddModeloValue : quickAddValue}
+                                        onChange={(e) => {
+                                            if (showQuickAddModelo) setQuickAddModeloValue(e.target.value);
+                                            else setQuickAddValue(e.target.value);
+                                        }}
+                                        placeholder={showQuickAddClient ? "Nombre de la empresa o cliente..." : showQuickAddAdc ? "Nombre del ADC..." : "Ej: 4150, FG20T, etc..."}
                                         className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !showQuickAddClient) handleSaveQuickAddAdc();
+                                            if (e.key === 'Enter') {
+                                                if (showQuickAddAdc) handleSaveQuickAddAdc();
+                                                else if (showQuickAddModelo) handleSaveQuickAddModelo();
+                                            }
                                         }}
                                     />
                                 </div>
+
+                                {/* Clase selector only for modelo */}
+                                {showQuickAddModelo && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Clase / Tipo <span className="text-red-500">*</span></label>
+                                        <select
+                                            value={quickAddModeloClase}
+                                            onChange={(e) => setQuickAddModeloClase(e.target.value)}
+                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
+                                        >
+                                            <option value="">Seleccionar Clase...</option>
+                                            <option value="Clase I">Clase I</option>
+                                            <option value="Clase II">Clase II</option>
+                                            <option value="Clase III">Clase III</option>
+                                            <option value="Bateria">Batería</option>
+                                            <option value="Cargador">Cargador</option>
+                                            <option value="Patin">Patín</option>
+                                            <option value="Otros">Otros</option>
+                                        </select>
+                                    </div>
+                                )}
 
                                 {/* Extra fields only for client */}
                                 {showQuickAddClient && (
@@ -1877,17 +1956,17 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                 <div className="flex gap-3 pt-2">
                                     <button
                                         onClick={() => {
-                                            const hasData = quickAddValue.trim() || quickAddClientExtra.rfc || quickAddClientExtra.telefono || quickAddClientExtra.persona_contacto;
-                                            if (hasData) setShowQuickAddConfirm(true);
-                                            else { setShowQuickAddClient(false); setShowQuickAddAdc(false); setQuickAddValue(''); setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' }); }
+                                    const hasData = quickAddValue.trim() || quickAddClientExtra.rfc || quickAddClientExtra.telefono || quickAddClientExtra.persona_contacto || quickAddModeloValue.trim();
+                                    if (hasData) setShowQuickAddConfirm(true);
+                                    else { setShowQuickAddClient(false); setShowQuickAddAdc(false); setShowQuickAddModelo(false); setQuickAddValue(''); setQuickAddModeloValue(''); setQuickAddModeloClase(''); setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' }); }
                                         }}
                                         className="flex-1 px-6 py-4 bg-slate-50 text-slate-400 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all"
                                     >
                                         Cancelar
                                     </button>
                                     <button
-                                        onClick={showQuickAddClient ? handleSaveQuickAddClient : handleSaveQuickAddAdc}
-                                        disabled={isSavingQuickAdd || !quickAddValue.trim()}
+                                        onClick={showQuickAddClient ? handleSaveQuickAddClient : showQuickAddAdc ? handleSaveQuickAddAdc : handleSaveQuickAddModelo}
+                                        disabled={isSavingQuickAdd || !(showQuickAddModelo ? quickAddModeloValue.trim() && quickAddModeloClase : quickAddValue).trim()}
                                         className="flex-1 px-6 py-4 bg-red-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-red-700 transition-all shadow-lg shadow-red-200 disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
                                         {isSavingQuickAdd ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
@@ -1922,7 +2001,10 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                                 setShowQuickAddConfirm(false);
                                                 setShowQuickAddClient(false);
                                                 setShowQuickAddAdc(false);
+                                                setShowQuickAddModelo(false);
                                                 setQuickAddValue('');
+                                                setQuickAddModeloValue('');
+                                                setQuickAddModeloClase('');
                                                 setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' });
                                             }}
                                             className="flex-1 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-rose-200 transition-all"

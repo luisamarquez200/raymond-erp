@@ -184,6 +184,23 @@ export const entradasApi = {
         return response.data?.data || response.data;
     },
 
+    // Entrada rápida (crea entrada + detalle + equipo_ubicacion en una sola llamada)
+    createRapida: async (data: {
+        folio: string;
+        fecha: string;
+        cliente?: string;
+        marca?: string;
+        modelo?: string;
+        numero_serie: string;
+        clase?: string;
+        ubicacion: string;
+        sub_ubicacion?: string;
+        tipo: 'equipo' | 'accesorio';
+    }) => {
+        const response = await tallerApi.post<any>(`${API_URL}/rapida`, data);
+        return response.data?.data || response.data;
+    },
+
     // Validar serial cross-site (R1, R2, R3)
     validateCrossSiteSerial: async (serial: string, tipo: 'Equipo' | 'Accesorio') => {
         const encodedSerial = encodeURIComponent(serial);

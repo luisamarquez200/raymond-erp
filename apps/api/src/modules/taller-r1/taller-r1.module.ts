@@ -25,6 +25,8 @@ import { EvaluacionesController } from './evaluaciones.controller';
 import { EvaluacionesService } from './evaluaciones.service';
 import { UsuariosController } from './usuarios.controller';
 import { UsuariosService } from './usuarios.service';
+import { TecnicosController } from './tecnicos.controller';
+import { TecnicosService } from './tecnicos.service';
 import { InventarioController } from './inventario.controller';
 import { InventarioService } from './inventario.service';
 import { RenovadosController } from './renovados.controller';
@@ -55,6 +57,7 @@ import { StorageService } from './storage.service';
         CargueMasivoController,
         EvaluacionesController,
         UsuariosController,
+        TecnicosController,
 
         InventarioController,
         EquipoUbicacionController,
@@ -79,6 +82,7 @@ import { StorageService } from './storage.service';
         CargueMasivoService,
         EvaluacionesService,
         UsuariosService,
+        TecnicosService,
 
         InventarioService,
         EquipoUbicacionService,
@@ -103,6 +107,7 @@ import { StorageService } from './storage.service';
         CargueMasivoService,
         EvaluacionesService,
         UsuariosService,
+        TecnicosService,
         InventarioService,
         TallerR1MailService,
         DashboardService,

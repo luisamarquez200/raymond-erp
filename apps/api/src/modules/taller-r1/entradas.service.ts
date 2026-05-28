@@ -1122,6 +1122,215 @@ export class EntradasService {
         });
     }
 
+    // Sistema de Entradas Rápidas
+    async createRapida(data: any) {
+        console.log('[EntradasService] createRapida called with', data);
+        return this.db.$transaction(async (tx) => {
+            // --- Resolver ubicación: primero por ID, luego por nombre ---
+            let id_ubicacion_final: string | null = null;
+            if (data.ubicacion) {
+                const byId = await tx.ubicacion.findUnique({
+                    where: { id_ubicacion: data.ubicacion },
+                    select: { id_ubicacion: true }
+                });
+                if (byId) {
+                    id_ubicacion_final = byId.id_ubicacion;
+                } else {
+                    // Intentar por nombre
+                    const byName = await tx.ubicacion.findFirst({
+                        where: { nombre_ubicacion: { contains: data.ubicacion } },
+                        select: { id_ubicacion: true }
+                    });
+                    if (byName) {
+                        id_ubicacion_final = byName.id_ubicacion;
+                        console.log(`[createRapida] Ubicación resuelta por nombre: "${data.ubicacion}" → ${id_ubicacion_final}`);
+                    } else {
+                        throw new BadRequestException(`Ubicación "${data.ubicacion}" no encontrada (ni por ID ni por nombre).`);
+                    }
+                }
+            } else {
+                throw new BadRequestException('La ubicación es requerida.');
+            }
+
+            // --- Buscar si ya existe una entrada con ese folio ---
+            let entrada = await tx.entradas.findFirst({
+                where: { folio: data.folio }
+            });
+
+            let id_entrada: string;
+
+            if (entrada) {
+                id_entrada = entrada.id_entrada;
+                console.log(`[createRapida] Reutilizando entrada existente con folio: ${data.folio} (ID: ${id_entrada})`);
+            } else {
+                id_entrada = `ENT-RAPIDA-${Date.now()}`;
+
+                // --- Resolver cliente: buscar por nombre, guardar id_cliente ---
+                let id_cliente: string | null = null;
+                if (data.cliente) {
+                    const found = await tx.cliente.findFirst({
+                        where: {
+                            nombre_cliente: {
+                                contains: data.cliente,
+                            }
+                        },
+                        select: { id_cliente: true }
+                    });
+                    if (found) {
+                        id_cliente = found.id_cliente;
+                        console.log(`[createRapida] Cliente resuelto: "${data.cliente}" → ${id_cliente}`);
+                    } else {
+                        console.warn(`[createRapida] Cliente "${data.cliente}" no encontrado en BD. Se dejará null.`);
+                    }
+                }
+
+                // 1. Crear Entrada
+                await tx.entradas.create({
+                    data: {
+                        id_entrada,
+                        folio: data.folio,
+                        fecha_creacion: data.fecha ? new Date(data.fecha) : new Date(),
+                        cliente: id_cliente,
+                        estado: 'Cerrado',
+                        prioridad: 'Cerrado',
+                        usuario_asignado: this.prisma.currentUser || 'Sistema',
+                        usuario_encargado: this.prisma.currentUser || 'Sistema',
+                        comentario_1: `Entrada rápida automática${data.cliente && !id_cliente ? ` (cliente "${data.cliente}" no encontrado)` : ''}`
+                    }
+                });
+            }
+
+            if (data.tipo === 'equipo') {
+                let id_equipo_final: string | null = null;
+
+                // Paso 1: buscar por número de serie exacto
+                if (data.numero_serie && data.numero_serie !== 'S/N') {
+                    const eqBySerial = await tx.equipos.findUnique({
+                        where: { numero_serie: data.numero_serie }
+                    });
+                    if (eqBySerial) {
+                        id_equipo_final = eqBySerial.id_equipos;
+                        console.log(`[createRapida] Equipo encontrado por serie: ${id_equipo_final}`);
+                    }
+                }
+
+                // Paso 2: buscar en catálogo por modelo (si no se encontró por serie)
+                if (!id_equipo_final && data.modelo) {
+                    const eqByModelo = await tx.equipos.findFirst({
+                        where: { modelo: { contains: data.modelo } },
+                        orderBy: { estado: 'asc' }
+                    });
+                    if (eqByModelo) {
+                        id_equipo_final = eqByModelo.id_equipos;
+                        console.log(`[createRapida] Equipo encontrado por modelo "${data.modelo}": ${id_equipo_final}`);
+                    }
+                }
+
+                // Paso 3: crear nuevo equipo si no existe en catálogo
+                if (!id_equipo_final) {
+                    id_equipo_final = uuidv4();
+                    await tx.equipos.create({
+                        data: {
+                            id_equipos: id_equipo_final,
+                            numero_serie: data.numero_serie && data.numero_serie !== 'S/N' ? data.numero_serie : null,
+                            clase: data.clase || 'Manual',
+                            modelo: data.modelo || 'Desconocido',
+                            marca: data.marca || 'Desconocida',
+                            estado: 'Activo'
+                        }
+                    });
+                    console.log(`[createRapida] Nuevo equipo creado: ${id_equipo_final} (${data.modelo})`);
+                }
+
+                // Auto-resolve sub_ubicacion: primera disponible en la ubicación resuelta
+                let id_sub_ubicacion: string | null = data.sub_ubicacion || null;
+                if (!id_sub_ubicacion && id_ubicacion_final) {
+                    const availableSub = await tx.sub_ubicaciones.findFirst({
+                        where: { id_ubicacion: id_ubicacion_final, ubicacion_ocupada: false },
+                        orderBy: { nombre: 'asc' }
+                    });
+                    if (availableSub) {
+                        id_sub_ubicacion = availableSub.id_sub_ubicacion;
+                        await tx.sub_ubicaciones.update({
+                            where: { id_sub_ubicacion: availableSub.id_sub_ubicacion },
+                            data: { ubicacion_ocupada: true }
+                        });
+                        console.log(`[createRapida] Sub-ubicación auto-asignada: ${availableSub.nombre}`);
+                    } else {
+                        console.warn(`[createRapida] Sin sub-ubicaciones disponibles en ${id_ubicacion_final}`);
+                    }
+                }
+
+                const id_detalles = `DET-RAP-${Date.now()}`;
+                await tx.entrada_detalle.create({
+                    data: {
+                        id_detalles,
+                        id_entrada,
+                        id_equipo: id_equipo_final,
+                        serial_equipo: data.numero_serie || 'S/N',
+                        id_ubicacion: id_ubicacion_final,
+                        id_sub_ubicacion,
+                        clase: data.clase,
+                        modelo: data.modelo,
+                        tipo_entrada: 'Renta',
+                        estado: 'Ingresado',
+                        pdf: false,
+                        fecha: data.fecha ? new Date(data.fecha) : new Date()
+                    }
+                });
+
+                const fechaMx = new Intl.DateTimeFormat('sv-SE', {
+                    timeZone: 'America/Mexico_City',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                }).format(new Date());
+
+                await tx.equipo_ubicacion.create({
+                    data: {
+                        id_equipo_ubicacion: uuidv4(),
+                        id_equipos: id_equipo_final,
+                        id_ubicacion: id_ubicacion_final,
+                        id_sub_ubicacion,
+                        stock: id_detalles.substring(0, 25),
+                        estado: 'Ingresado',
+                        fecha_entrada: fechaMx,
+                        serial_equipo: data.numero_serie || 'S/N',
+                        usuario_entrada: this.prisma.currentUser || 'Sistema'
+                    }
+                });
+
+            } else {
+                // Accesorios comparten sub-ubicación — tomar la primera sin bloquearla
+                let id_sub_acc: string | null = data.sub_ubicacion || null;
+                if (!id_sub_acc && id_ubicacion_final) {
+                    const anySub = await tx.sub_ubicaciones.findFirst({
+                        where: { id_ubicacion: id_ubicacion_final },
+                        orderBy: { nombre: 'asc' }
+                    });
+                    if (anySub) id_sub_acc = anySub.id_sub_ubicacion;
+                }
+
+                const id_accesorio = `ACC-RAP-${Date.now()}`;
+                await tx.entrada_accesorios.create({
+                    data: {
+                        id_accesorio,
+                        id_entrada,
+                        tipo: data.clase || 'Accesorio',
+                        modelo: data.modelo,
+                        serial: data.numero_serie,
+                        fecha_ingreso: data.fecha ? new Date(data.fecha) : new Date(),
+                        estado: 'Ingresado',
+                        estado_acc: 'Ingresado',
+                        ubicacion: id_ubicacion_final,
+                        sub_ubicacion: id_sub_acc
+                    }
+                });
+            }
+
+            return { success: true, id_entrada };
+        });
+    }
+
     // Obtener el último folio generado (Formato E-n)
     async getLastFolio() {
         const lastEntrada = await this.db.entradas.findFirst({

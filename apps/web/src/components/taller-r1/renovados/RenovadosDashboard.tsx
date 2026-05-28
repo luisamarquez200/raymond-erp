@@ -99,6 +99,11 @@ export const RenovadosDashboard = ({ forceView }: { forceView?: 'estaciones' | '
         return next ? `Pendiente: ${next.nombre_fase}` : 'Finalizado';
     };
 
+    const getTotalHours = (solicitud: RenovadoSolicitud) => {
+        if (!solicitud.fases || solicitud.fases.length === 0) return 0;
+        return solicitud.fases.reduce((sum, f) => sum + (f.horas_registradas || 0), 0);
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* Header */}
@@ -322,10 +327,13 @@ export const RenovadosDashboard = ({ forceView }: { forceView?: 'estaciones' | '
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 gap-4">
-                                {sortedFiltered.map((solicitud) => (
+                                {sortedFiltered.map((solicitud) => {
+                                    const totalHours = getTotalHours(solicitud);
+                                    return (
                                     <div
                                         key={solicitud.id_solicitud}
-                                        className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:border-red-200 hover:shadow-xl hover:shadow-red-500/5 transition-all group relative overflow-hidden flex flex-col md:flex-row md:items-center gap-8"
+                                        onClick={() => setSelectedId(solicitud.id_solicitud)}
+                                        className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:border-red-200 hover:shadow-xl hover:shadow-red-500/5 transition-all group relative overflow-hidden flex flex-col md:flex-row md:items-start gap-6 cursor-pointer"
                                     >
                                         {/* Status Indicator */}
                                         <div className={cn(
@@ -333,13 +341,13 @@ export const RenovadosDashboard = ({ forceView }: { forceView?: 'estaciones' | '
                                             solicitud.estado === 'Finalizado' ? "bg-emerald-500" : 
                                             solicitud.estado === 'Por Iniciar' ? "bg-slate-300" : "bg-amber-500"
                                         )} />
- 
+
                                         <div className="flex-1 space-y-4">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-red-50 group-hover:text-red-600 transition-all">
                                                     <Package className="w-7 h-7" />
                                                 </div>
-                                                <div>
+                                                <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Serie</span>
                                                         <span className={cn(
@@ -350,50 +358,78 @@ export const RenovadosDashboard = ({ forceView }: { forceView?: 'estaciones' | '
                                                             {solicitud.estado}
                                                         </span>
                                                     </div>
-                                                    <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">{solicitud.serial_equipo}</h3>
+                                                    <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase truncate">{solicitud.serial_equipo}</h3>
+                                                </div>
+
+                                                {/* Progress badge - visible on mobile */}
+                                                <div className="md:hidden flex items-center gap-2 shrink-0">
+                                                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center">
+                                                        <span className="text-xs font-black text-slate-700">{getProgress(solicitud)}%</span>
+                                                    </div>
+                                                    <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-red-500 transition-all group-hover:translate-x-1" />
                                                 </div>
                                             </div>
- 
-                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 px-1">
-                                                <div>
+
+                                            {/* 4-column grid: Estación, Fase, Responsable, Target */}
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-1">
+                                                <div className="min-w-0">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Estación</span>
                                                     <p className="text-sm font-black text-red-600 truncate">{solicitud.rel_estacion?.nombre || 'General'}</p>
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Fase Actual</span>
                                                     <p className="text-sm font-black text-slate-700 truncate">{getActivePhase(solicitud)}</p>
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Responsable</span>
                                                     <p className="text-sm font-black text-slate-700 truncate">{solicitud.tecnico_responsable || 'Sin asignar'}</p>
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Fecha Target</span>
                                                     <div className="flex items-center gap-1.5">
-                                                        <Calendar className="w-3 h-3 text-red-500" />
-                                                        <p className="text-sm font-black text-slate-700">
+                                                        <Calendar className="w-3 h-3 text-red-500 shrink-0" />
+                                                        <p className="text-sm font-black text-slate-700 truncate">
                                                             {solicitud.fecha_target ? format(new Date(solicitud.fecha_target), 'dd MMM yyyy', { locale: es }) : 'N/A'}
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div>
+                                            </div>
+
+                                            {/* 4-column grid: Cliente, ADC, Incidencias, Horas */}
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-1">
+                                                <div className="min-w-0">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cliente</span>
+                                                    <p className="text-sm font-black text-slate-700 truncate">{solicitud.cliente || '—'}</p>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">ADC</span>
+                                                    <p className="text-sm font-black text-slate-700 truncate">{solicitud.adc || '—'}</p>
+                                                </div>
+                                                <div className="min-w-0">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Incidencias</span>
                                                     <div className="flex items-center gap-1.5">
-                                                        <AlertCircle className={cn("w-3 h-3", (solicitud._count?.incidencias || 0) > 0 ? "text-red-500" : "text-slate-300")} />
-                                                        <p className="text-sm font-black text-slate-700">{solicitud._count?.incidencias || 0} registradas</p>
+                                                        <AlertCircle className={cn("w-3 h-3 shrink-0", (solicitud._count?.incidencias || 0) > 0 ? "text-red-500" : "text-slate-300")} />
+                                                        <p className="text-sm font-black text-slate-700">{solicitud._count?.incidencias || 0}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Horas Proceso</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                                                        <p className="text-sm font-black text-slate-700">{totalHours > 0 ? `${totalHours.toFixed(1)}h` : '—'}</p>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Progress & Actions */}
-                                        <div className="flex flex-col items-center md:items-end gap-6 min-w-[180px]">
+                                        {/* Desktop: Progress bar + arrow */}
+                                        <div className="hidden md:flex flex-col items-center justify-between h-full min-w-[140px] py-2">
                                             <div className="w-full space-y-2">
                                                 <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
                                                     <span>Progreso</span>
                                                     <span className="text-slate-900">{getProgress(solicitud)}%</span>
                                                 </div>
-                                                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                                                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
                                                     <div
                                                         className={cn(
                                                             "h-full transition-all duration-1000",
@@ -403,16 +439,13 @@ export const RenovadosDashboard = ({ forceView }: { forceView?: 'estaciones' | '
                                                     />
                                                 </div>
                                             </div>
-                                            <button
-                                                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-slate-900 text-white rounded-2xl hover:bg-red-600 transition-all font-black text-xs uppercase tracking-widest group"
-                                                onClick={() => setSelectedId(solicitud.id_solicitud)}
-                                            >
-                                                Continuar
-                                                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                                            </button>
+                                            <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-red-50 group-hover:text-red-600 transition-all text-slate-400">
+                                                <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                                            </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )
                     )}

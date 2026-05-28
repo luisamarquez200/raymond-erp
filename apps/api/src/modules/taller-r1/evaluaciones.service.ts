@@ -348,7 +348,15 @@ export class EvaluacionesService {
                 include: {
                     entrada_detalle: {
                         include: {
-                            entradas: true
+                            entradas: {
+                                include: {
+                                    rel_cliente: {
+                                        select: {
+                                            nombre_cliente: true
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

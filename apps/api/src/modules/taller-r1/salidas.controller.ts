@@ -95,6 +95,12 @@ export class SalidasController {
         return this.salidasService.cerrarFolio(id);
     }
 
+    @Post('rapida')
+    async createRapida(@Body() data: any) {
+        console.log('[SalidasController] POST rapida:', JSON.stringify(data));
+        return this.salidasService.createRapida(data);
+    }
+
     @Delete(':id')
     async remove(@Param('id') id: string) {
         return this.salidasService.remove(id);

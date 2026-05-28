@@ -8,7 +8,7 @@ export interface Cliente {
     nombre_cliente: string;
     rfc?: string;
     persona_contacto?: string;
-    telefono?: number;
+    telefono?: string | number;
     razon_social?: string;
     calle?: string;
     numero_calle?: string;
@@ -21,7 +21,7 @@ export interface CreateClienteDto {
     nombre_cliente: string;
     rfc?: string;
     persona_contacto?: string;
-    telefono?: number;
+    telefono?: string | number;
     razon_social?: string;
     calle?: string;
     numero_calle?: string;

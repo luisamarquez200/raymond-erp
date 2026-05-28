@@ -8,7 +8,7 @@ export interface CreateClienteDto {
     nombre_cliente: string;
     rfc?: string;
     persona_contacto?: string;
-    telefono?: number;
+    telefono?: string | number;
     razon_social?: string;
     calle?: string;
     numero_calle?: string;
@@ -42,7 +42,7 @@ export class ClientesService {
                 id_documento: data.id_documento,
                 rfc: data.rfc,
                 persona_contacto: data.persona_contacto,
-                telefono: data.telefono,
+                telefono: data.telefono !== undefined && data.telefono !== null ? String(data.telefono) : undefined,
                 razon_social: data.razon_social,
                 calle: data.calle,
                 numero_calle: data.numero_calle,
@@ -60,7 +60,7 @@ export class ClientesService {
                 id_documento: data.id_documento,
                 rfc: data.rfc,
                 persona_contacto: data.persona_contacto,
-                telefono: data.telefono,
+                telefono: data.telefono !== undefined && data.telefono !== null ? String(data.telefono) : undefined,
                 razon_social: data.razon_social,
                 calle: data.calle,
                 numero_calle: data.numero_calle,

@@ -98,6 +98,26 @@ export class RenovadosService implements OnModuleInit {
         return this.prisma.client;
     }
 
+    private async checkNotFinalizado(idSolicitud: string): Promise<void> {
+        const solicitud = await this.db.renovado_solicitud.findUnique({
+            where: { id_solicitud: idSolicitud },
+            select: { estado: true }
+        });
+        if (!solicitud) throw new NotFoundException('Solicitud no encontrada');
+        if (solicitud.estado === 'Finalizado') {
+            throw new BadRequestException('La orden ya ha sido finalizada. No se permiten más cambios.');
+        }
+    }
+
+    private async checkNotFinalizadoByFase(idFase: string): Promise<void> {
+        const fase = await this.db.renovado_fase.findUnique({
+            where: { id_fase: idFase },
+            select: { id_solicitud: true }
+        });
+        if (!fase) throw new NotFoundException('Fase no encontrada');
+        await this.checkNotFinalizado(fase.id_solicitud);
+    }
+
     // Fases predefinidas (pueden ser 9 o 14 según requerimiento final)
     private readonly FASES_DEFAULT = [
         'Desmontaje',
@@ -164,6 +184,19 @@ export class RenovadosService implements OnModuleInit {
                 return dateB - dateA;
             });
 
+            // 3. Buscar detalles de entrada para obtener modelo y clase
+            const detallesEntrada = await this.db.entrada_detalle.findMany({
+                where: {
+                    serial_equipo: { in: serials }
+                },
+                select: {
+                    serial_equipo: true,
+                    modelo: true,
+                    clase: true,
+                    id_entrada: true
+                }
+            });
+
             const results = [];
             const seenSerials = new Set(); // Para asegurar que tomamos la evaluación más reciente por equipo
 
@@ -172,19 +205,38 @@ export class RenovadosService implements OnModuleInit {
                 if (!serial || seenSerials.has(serial)) continue;
                 seenSerials.add(serial);
 
-                if (evalua.estado_montacargas?.toLowerCase().includes('renov')) {
+                // [TEMPORAL] Quitar filtro de renovación para mostrar todos los equipos evaluados
+                // if (evalua.estado_montacargas?.toLowerCase().includes('renov')) {
                     const eqUbi = equiposUbicacion.find(e => e.serial_equipo === serial);
                     if (eqUbi) {
+                        const detail = detallesEntrada.find(d => d.serial_equipo === serial);
                         results.push({
                             ...eqUbi,
                             id_detalle: evalua.id_detalle,
                             calificacion: evalua.estado_montacargas,
                             fecha_evaluacion: evalua.fecha_creacion,
-                            modelo: evalua.entrada_detalle?.modelo,
-                            clase: evalua.entrada_detalle?.clase,
-                            id_entrada: evalua.entrada_detalle?.id_entrada
+                            modelo: evalua.entrada_detalle?.modelo || detail?.modelo || 'Desconocido',
+                            clase: evalua.entrada_detalle?.clase || detail?.clase || 'Desconocido',
+                            id_entrada: evalua.entrada_detalle?.id_entrada || detail?.id_entrada
                         });
                     }
+                // }
+            }
+
+            // [TEMPORAL] Agregar también los equipos en stock que no tienen evaluación
+            for (const eqUbi of equiposUbicacion) {
+                if (eqUbi.serial_equipo && !seenSerials.has(eqUbi.serial_equipo)) {
+                    seenSerials.add(eqUbi.serial_equipo);
+                    const detail = detallesEntrada.find(d => d.serial_equipo === eqUbi.serial_equipo);
+                    results.push({
+                        ...eqUbi,
+                        id_detalle: null,
+                        calificacion: 'Sin Evaluación',
+                        fecha_evaluacion: null,
+                        modelo: detail?.modelo || 'Desconocido',
+                        clase: detail?.clase || 'Desconocido',
+                        id_entrada: detail?.id_entrada || null
+                    });
                 }
             }
 
@@ -333,6 +385,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async startFase(idFase: string, tecnico: string) {
+        await this.checkNotFinalizadoByFase(idFase);
         const fase = await this.db.renovado_fase.findUnique({ where: { id_fase: idFase } });
         if (!fase) throw new NotFoundException('Fase no encontrada');
 
@@ -356,6 +409,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async completeFase(idFase: string, nextPhaseName?: string) {
+        await this.checkNotFinalizadoByFase(idFase);
         const fase = await this.db.renovado_fase.findUnique({ 
             where: { id_fase: idFase },
             include: { solicitud: true }
@@ -379,6 +433,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async repeatFase(idFase: string) {
+        await this.checkNotFinalizadoByFase(idFase);
         const fase = await this.db.renovado_fase.findUnique({ where: { id_fase: idFase } });
         if (!fase) throw new NotFoundException('Fase no encontrada');
 
@@ -398,6 +453,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async updateFaseEvidence(idFase: string, dto: { comentarios?: string, fotos?: any, foto_1?: string, foto_2?: string }) {
+        await this.checkNotFinalizadoByFase(idFase);
         const fase = await this.db.renovado_fase.findUnique({
             where: { id_fase: idFase },
             include: { solicitud: true }
@@ -432,6 +488,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async changeStation(idSolicitud: string, idEstacionNueva: string, motivo: string, usuarioQueCambia: string) {
+        await this.checkNotFinalizado(idSolicitud);
         const solicitud = await this.db.renovado_solicitud.findUnique({
             where: { id_solicitud: idSolicitud }
         });
@@ -474,6 +531,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async changeTechnician(idSolicitud: string, tecnicoNuevo: string, motivo: string, usuarioQueCambia: string) {
+        await this.checkNotFinalizado(idSolicitud);
         const solicitud = await this.db.renovado_solicitud.findUnique({
             where: { id_solicitud: idSolicitud }
         });
@@ -522,6 +580,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async addRefaccion(idSolicitud: string, dto: AddRefaccionDto) {
+        await this.checkNotFinalizado(idSolicitud);
         try {
             // 1. Obtener datos de la solicitud para el serial
             const solicitud = await this.db.renovado_solicitud.findUnique({
@@ -581,6 +640,7 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async createIncidencia(idSolicitud: string, dto: CreateIncidenciaDto) {
+        await this.checkNotFinalizado(idSolicitud);
         // Si el tipo es "ESTACION LIBRE", deberíamos liberar la estación asociada a la solicitud
         if (dto.tipo === 'ESTACION LIBRE') {
             const solicitud = await this.db.renovado_solicitud.findUnique({
@@ -605,8 +665,14 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async closeIncidencia(idIncidencia: string) {
-        const incidencia = await this.db.renovado_incidencia.findUnique({ where: { id_incidencia: idIncidencia } });
+        const incidencia = await this.db.renovado_incidencia.findUnique({
+            where: { id_incidencia: idIncidencia },
+            include: { solicitud: { select: { estado: true } } }
+        });
         if (!incidencia) throw new NotFoundException('Incidencia no encontrada');
+        if (incidencia.solicitud?.estado === 'Finalizado') {
+            throw new BadRequestException('La orden ya ha sido finalizada. No se permiten más cambios.');
+        }
 
         const fechaFin = new Date();
         const horas = this.calcularHorasLaborales(incidencia.fecha_inicio, fechaFin);
@@ -621,20 +687,33 @@ export class RenovadosService implements OnModuleInit {
     }
 
     async finalizeRenovado(idSolicitud: string) {
+        await this.checkNotFinalizado(idSolicitud);
         const solicitud = await this.db.renovado_solicitud.findUnique({
-            where: { id_solicitud: idSolicitud }
+            where: { id_solicitud: idSolicitud },
+            include: { refacciones: true, fases: { orderBy: { orden: 'asc' } } }
         });
 
         if (!solicitud) throw new NotFoundException('Solicitud no encontrada');
 
-        return this.db.$transaction(async (tx) => {
-            // 1. Actualizar solicitud
-            const updated = await tx.renovado_solicitud.update({
+        // Load external costs for the email/PDF
+        const equipoUbicacion = await this.db.equipo_ubicacion.findFirst({
+            where: { serial_equipo: solicitud.serial_equipo }
+        });
+        let costosExternos: any[] = [];
+        if (equipoUbicacion) {
+            try {
+                costosExternos = await this.db.costos_refacciones.findMany({
+                    where: { id_equipo_ubicacion: equipoUbicacion.id_equipo_ubicacion, tipo: 'externo' }
+                });
+            } catch (_) { /* silent if model not available */ }
+        }
+
+        const updated = await this.db.$transaction(async (tx) => {
+            const upd = await tx.renovado_solicitud.update({
                 where: { id_solicitud: idSolicitud },
                 data: { estado: 'Finalizado' }
             });
 
-            // 2. Actualizar equipo_ubicacion a "Stock renovado"
             const equipoStock = await tx.equipo_ubicacion.findFirst({
                 where: { serial_equipo: solicitud.serial_equipo }
             });
@@ -646,7 +725,6 @@ export class RenovadosService implements OnModuleInit {
                 });
             }
 
-            // 3. Liberar estación si tenía una asignada
             if (solicitud.id_estacion) {
                 await tx.taller_estacion.update({
                     where: { id_estacion: solicitud.id_estacion },
@@ -654,13 +732,41 @@ export class RenovadosService implements OnModuleInit {
                 });
             }
 
-            // TODO: Enviar correo automático
-
-            return updated;
+            return upd;
         });
+
+        // Enviar correo de notificación con PDF de refacciones y costos externos
+        try {
+            const totalHoras = solicitud.fases?.reduce((sum, f) => sum + (f.horas_registradas || 0), 0) || 0;
+            await this.mailService.sendRenovadoCompletionEmail({
+                serial: solicitud.serial_equipo,
+                solicitud_id: idSolicitud,
+                tecnico: solicitud.tecnico_responsable || 'No asignado',
+                fecha: new Date(),
+                cliente: solicitud.cliente || undefined,
+                refacciones: solicitud.refacciones?.map(r => ({
+                    area: r.area || '',
+                    descripcion: r.descripcion || '',
+                    cantidad: r.cantidad,
+                    precio_unitario: r.precio_unitario || 0,
+                })) || [],
+                costos_externos: costosExternos.map(c => ({
+                    descripcion: c.descripcion || '',
+                    precio: Number(c.precio) || 0,
+                    observaciones: c.observaciones || undefined,
+                })),
+                total_horas: totalHoras,
+            });
+        } catch (error: any) {
+            console.error(`[RenovadosService] Error sending completion email: ${error.message}`);
+            // No bloquear la finalización si el correo falla
+        }
+
+        return updated;
     }
 
     async startOrder(idSolicitud: string) {
+        await this.checkNotFinalizado(idSolicitud);
         const solicitud = await this.db.renovado_solicitud.findUnique({
             where: { id_solicitud: idSolicitud }
         });

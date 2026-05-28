@@ -1109,7 +1109,7 @@ export function EntradaDetailsModal({ entradaId, open, onClose, onEdit, onDelete
                                                                                     tipo: 'equipo',
                                                                                     clase: detalle.clase,
                                                                                     distribuidor: entrada?.distribuidor,
-                                                                                    cliente_origen: entrada?.cliente_origen || entrada?.cliente
+                                                                                    cliente_origen: entrada?.rel_cliente?.nombre_cliente || entrada?.cliente_origen || entrada?.cliente
                                                                                 });
                                                                                 setEvalModalOpen(true);
                                                                             }}
@@ -1184,7 +1184,7 @@ export function EntradaDetailsModal({ entradaId, open, onClose, onEdit, onDelete
                                                                                     tipo: 'equipo' as const,
                                                                                     clase: detalle.clase,
                                                                                     distribuidor: entrada?.distribuidor,
-                                                                                    cliente_origen: entrada?.cliente_origen || entrada?.cliente
+                                                                                    cliente_origen: entrada?.rel_cliente?.nombre_cliente || entrada?.cliente_origen || entrada?.cliente
                                                                                 });
                                                                                 setEvalId(evaluationId);
                                                                                 setEvalModalOpen(true);
@@ -1265,7 +1265,7 @@ export function EntradaDetailsModal({ entradaId, open, onClose, onEdit, onDelete
                                                                                         modelo: acc.modelo,
                                                                                         tipo: 'accesorio',
                                                                                         distribuidor: entrada?.distribuidor,
-                                                                                        cliente_origen: entrada?.cliente_origen || entrada?.cliente
+                                                                                        cliente_origen: entrada?.rel_cliente?.nombre_cliente || entrada?.cliente_origen || entrada?.cliente
                                                                                     });
                                                                                     setEvalModalOpen(true);
                                                                                 }}
@@ -1309,7 +1309,7 @@ export function EntradaDetailsModal({ entradaId, open, onClose, onEdit, onDelete
                                                                                         modelo: acc.modelo,
                                                                                         tipo: 'accesorio' as const,
                                                                                         distribuidor: entrada?.distribuidor,
-                                                                                        cliente_origen: entrada?.cliente_origen || entrada?.cliente
+                                                                                        cliente_origen: entrada?.rel_cliente?.nombre_cliente || entrada?.cliente_origen || entrada?.cliente
                                                                                     });
                                                                                     setEvalId(evaluationId);
                                                                                     setEvalModalOpen(true);

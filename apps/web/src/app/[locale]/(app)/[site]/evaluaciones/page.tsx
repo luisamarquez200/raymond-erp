@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { evaluacionesApi } from '@/services/taller-r1/evaluaciones.service';
 import { accesoriosApi, Accesorio } from '@/services/taller-r1/accesorios.service';
 import { EvaluacionModal } from '@/components/taller-r1/evaluaciones/EvaluacionModal';
@@ -53,18 +54,39 @@ const getCalificacionColor = (calificacion: string) => {
 };
 
 export default function EvaluacionesPage() {
+  const params = useParams();
+  const currentSite = (params?.site as string) || 'r1';
   const [activeMainTab, setActiveMainTab] = useState('Equipos');
   const [activeAccTab, setActiveAccTab] = useState('Pendientes de evaluación');
   const [filterEstado, setFilterEstado] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   
   const [isLoading, setIsLoading] = useState(true);
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [equiposData, setEquiposData] = useState<any[]>([]);
   const [accesoriosData, setAccesoriosData] = useState<Accesorio[]>([]);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+
+  const handleBulkGeneric = async () => {
+    if (!window.confirm('¿Estás seguro de que deseas aplicar la evaluación genérica rápida (70% - Renovación) a todos los equipos elegibles en estado "Renovar"?')) {
+      return;
+    }
+    
+    setIsBulkLoading(true);
+    try {
+      const res = await evaluacionesApi.bulkGenericR1();
+      toast.success(res.message || 'Evaluaciones rápidas aplicadas correctamente');
+      await loadData();
+    } catch (error: any) {
+      console.error('Error al aplicar evaluaciones rápidas:', error);
+      toast.error('Error al procesar las evaluaciones rápidas');
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -97,7 +119,7 @@ export default function EvaluacionesPage() {
             tipo: 'equipo',
             evaluationId: item.id_evaluacion,
             distribuidor: detail?.entradas?.distribuidor,
-            cliente_origen: detail?.entradas?.cliente_origen
+            cliente_origen: detail?.entradas?.rel_cliente?.nombre_cliente || detail?.entradas?.cliente_origen
         });
     } else {
         setSelectedItem({
@@ -160,10 +182,24 @@ export default function EvaluacionesPage() {
                 Historial técnico de equipos y accesorios en proceso de evaluación.
               </p>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2">
-                <p className="text-red-800 font-bold text-sm">
-                    {activeMainTab === 'Equipos' ? filteredEquipos.length : filteredAccesorios.length} Registros
-                </p>
+            <div className="flex items-center gap-3">
+              {/* COMENTADO TEMPORALMENTE - Evaluación Rápida
+              {currentSite.toLowerCase() === 'r1' && (
+                <button
+                  onClick={handleBulkGeneric}
+                  disabled={isBulkLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 hover:shadow-lg disabled:opacity-50"
+                >
+                  <Zap className={cn("w-4 h-4", isBulkLoading && "animate-pulse")} />
+                  {isBulkLoading ? 'Procesando...' : 'Evaluación Rápida'}
+                </button>
+              )}
+              */}
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+                  <p className="text-red-800 font-bold text-sm">
+                      {activeMainTab === 'Equipos' ? filteredEquipos.length : filteredAccesorios.length} Registros
+                  </p>
+              </div>
             </div>
           </div>
         </div>
