@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/utils';
 import { entradasApi } from '@/services/taller-r1/entradas.service';
 
 interface EntradaDetalleModalProps {
@@ -50,9 +51,7 @@ export function EntradaDetalleModal({ entradaId, open, onClose, onSuccess }: Ent
             onSuccess?.();
             onClose();
         } catch (error) {
-            const message = (error as any).response?.data?.message || 'Error al agregar el detalle del equipo';
-            toast.error(message);
-            console.error(error);
+            toast.error(getErrorMessage(error, 'Error al agregar el detalle del equipo'));
         }
     };
 

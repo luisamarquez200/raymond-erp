@@ -13,14 +13,16 @@ import {
     Box,
     Truck,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { salidasApi, CreateSalidaDto, CreateDetalleDto, CreateAccesorioDto } from '@/services/taller-r1/salidas.service';
 import { clientesApi, Cliente } from '@/services/taller-r1/clientes.service';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
+import { useAuthStore } from '@/store/auth.store';
 
 const OBLIGATORY_PHOTOS = [
     { key: 'foto_llave', label: 'Llave' },
@@ -112,10 +114,13 @@ interface NuevaSalidaModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    editingSalidaId?: string | null;
 }
 
-export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSalidaModalProps) {
+export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSalidaId }: NuevaSalidaModalProps) {
     const selectedSite = useAuthTallerStore(state => state.selectedSite);
+    const { user } = useAuthStore();
+    const evaluatorName = user ? `${user.firstName || (user as any).Usuario || ''} ${user.lastName || ''}`.trim() : 'Usuario';
     const [loading, setLoading] = useState(false);
     const [nextFolio, setNextFolio] = useState<string>('');
     const [availableEquipos, setAvailableEquipos] = useState<any[]>([]);
@@ -134,6 +139,16 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
     const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
     const [triedToSubmit, setTriedToSubmit] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<any | null>(null);
+    const [showQuickAddClient, setShowQuickAddClient] = useState(false);
+    const [showQuickAddConfirm, setShowQuickAddConfirm] = useState(false);
+    const [quickAddValue, setQuickAddValue] = useState('');
+    const [motivoSalida, setMotivoSalida] = useState<string>('RENTA');
+    const [quickAddClientExtra, setQuickAddClientExtra] = useState({
+        rfc: '',
+        telefono: '',
+        persona_contacto: ''
+    });
+    const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
 
     const [basicInfo, setBasicInfo] = useState<CreateSalidaDto>({
         tiene_remision: false,
@@ -160,38 +175,129 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
     useEffect(() => {
         if (isOpen) {
             loadAvailableItems();
-            loadNextFolio();
             loadClientes();
-            // Reset states when modal opens
-            setBasicInfo({
-                tiene_remision: false,
-                numero_remision: '',
-                numero_transporte: '',
-                pedido_venta: '',
-                cliente: '',
-                tipo_elemento: 'Equipos',
-                razon_social: '',
-                direccion_cliente: '',
-                rfc: '',
-                contacto: '',
-                telefono: '',
-                destino: 'Distribuidor', // Default destination as requested
-                tipo_documento: 'Remision',
-            });
-            setSelectedItems([]);
-            setObservations('');
-            setEvidencia('');
-            setChecklistValues({});
-            setConfirmingItem(null);
-            setLoading(false);
-            setIsAddingItem(false);
-            setShowScanner(false);
-            setScanning(false);
-            setChecklistModalFor(null);
-            setTriedToSubmit(false);
-            setItemToDelete(null);
+            
+            if (editingSalidaId) {
+                loadSalidaToEdit(editingSalidaId);
+            } else {
+                loadNextFolio();
+                // Reset states when modal opens
+                setBasicInfo({
+                    tiene_remision: false,
+                    numero_remision: '',
+                    numero_transporte: '',
+                    pedido_venta: '',
+                    cliente: '',
+                    tipo_elemento: 'Equipos',
+                    razon_social: '',
+                    direccion_cliente: '',
+                    rfc: '',
+                    contacto: '',
+                    telefono: '',
+                    destino: 'Distribuidor', // Default destination as requested
+                    tipo_documento: 'Remision',
+                });
+                setSelectedItems([]);
+                setObservations('');
+                setEvidencia('');
+                setChecklistValues({});
+                setConfirmingItem(null);
+                setLoading(false);
+                setIsAddingItem(false);
+                setShowScanner(false);
+                setScanning(false);
+                setChecklistModalFor(null);
+                setTriedToSubmit(false);
+                setItemToDelete(null);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, editingSalidaId]);
+
+    const loadSalidaToEdit = async (id: string) => {
+        try {
+            setLoading(true);
+            const data = await salidasApi.getById(id);
+            setBasicInfo({
+                tiene_remision: data.remision_confirmacion === 1 || !!data.remision,
+                numero_remision: data.remision || '',
+                numero_transporte: data.numero_transporte || '',
+                pedido_venta: data.pedido || '',
+                cliente: data.cliente || '',
+                tipo_elemento: (data.elemento as any) || 'Equipos',
+                razon_social: data.razon_social || '',
+                direccion_cliente: data.direccion_cliente || '',
+                rfc: data.rfc || '',
+                contacto: data.contacto || '',
+                telefono: data.telefono || '',
+                destino: data.destino || 'Distribuidor',
+                tipo_documento: data.tipo_documento || 'Remision',
+            });
+            setObservations(data.observaciones || '');
+            setNextFolio(data.folio);
+            
+            // Map existing items to selectedItems state
+            const items: any[] = [];
+            
+            const detallesList = data.detalles || data.salida_detalle || [];
+            console.log('[NuevaSalidaModal] Processing details:', detallesList.length);
+            
+            if (Array.isArray(detallesList)) {
+                detallesList.forEach((d: any) => {
+                    items.push({
+                        ...d,
+                        _type: 'equipo',
+                        id_equipo: d.id_equipo,
+                        id_detalles: d.id_detalle,
+                        id_equipo_ubicacion: d.id_detalle,
+                        serial_equipo: d.serial_equipos || d.serial || d.numero_serie,
+                        modelo: d.modelo || d.filtro_modelo || '-',
+                        clase: d.clase || d.filtro_clase || '-',
+                        nombre_ubicacion: d.nombre_ubicacion || d.ubicacion || d.id_ubicacion || '-',
+                        nombre_sub_ubicacion: d.nombre_sub_ubicacion || d.id_sub_ubicacion || '-',
+                        photos: {
+                            foto_llave: d.foto_llave,
+                            foto_kit_tapon: d.foto_kit_tapon,
+                            foto_compartimento_baterias: d.foto_compartimento_baterias,
+                            foto_lineas_vida: d.foto_lineas_vida,
+                            foto_compartimento_operador: d.foto_compartimento_operador,
+                            foto_pernos_horquillas: d.foto_pernos_horquillas,
+                            foto_clamp_opc: d.foto_clamp_opc,
+                            foto_frente_equipo: d.foto_frente_equipo,
+                            foto_posterior_equipo: d.foto_posterior_equipo,
+                            foto_kit_aceite: d.foto_kit_aceite,
+                        },
+                        checklist_entrega: d.checklist_entrega || {}
+                    });
+                });
+            }
+
+            const accesoriosList = data.accesorios || data.salida_accesorios || [];
+            console.log('[NuevaSalidaModal] Processing accessories:', accesoriosList.length);
+
+            if (Array.isArray(accesoriosList)) {
+                accesoriosList.forEach((a: any) => {
+                    items.push({
+                        ...a,
+                        _type: 'accesorio',
+                        id_accesorio: a.id_accesorio || a.id_sal_acc,
+                        serial: a.serial || a.serial_accesorio || '-',
+                        modelo: a.modelo || '-',
+                        clase: a.clase || 'Batería',
+                        nombre_ubicacion: a.nombre_ubicacion || '-',
+                        nombre_sub_ubicacion: a.nombre_sub_ubicacion || '-'
+                    });
+                });
+            }
+
+            console.log('[NuevaSalidaModal] Total items to set:', items.length);
+            setSelectedItems(items);            
+        } catch (error) {
+            console.error('Error loading salida for edit:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al cargar datos para edición'));
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadNextFolio = async () => {
         try {
@@ -205,9 +311,43 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
     const loadClientes = async () => {
         try {
             const res = await clientesApi.getAll();
-            setClientes(Array.isArray(res) ? res : []);
+            const sortedList = (Array.isArray(res) ? res : []).sort((a, b) => 
+                (a.nombre_cliente || '').localeCompare(b.nombre_cliente || '')
+            );
+            setClientes(sortedList);
         } catch (error) {
             console.error('Error loading clientes:', error);
+        }
+    };
+
+    const handleSaveQuickAddClient = async () => {
+        if (!quickAddValue.trim()) return;
+        try {
+            setIsSavingQuickAdd(true);
+            const payload: any = {
+                nombre_cliente: quickAddValue.toUpperCase(),
+            };
+            if (quickAddClientExtra.rfc.trim()) payload.rfc = quickAddClientExtra.rfc.trim().toUpperCase();
+            if (quickAddClientExtra.telefono.trim()) payload.telefono = Number(quickAddClientExtra.telefono.trim());
+            if (quickAddClientExtra.persona_contacto.trim()) payload.persona_contacto = quickAddClientExtra.persona_contacto.trim();
+
+            const newClient = await clientesApi.create(payload);
+            
+            setClientes(prev => {
+                const newList = [...prev, newClient];
+                return newList.sort((a, b) => (a.nombre_cliente || '').localeCompare(b.nombre_cliente || ''));
+            });
+
+            setBasicInfo(prev => ({ ...prev, cliente: newClient.id_cliente }));
+            toast.success('Cliente añadido correctamente');
+            setQuickAddValue('');
+            setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' });
+            setShowQuickAddClient(false);
+        } catch (error) {
+            console.error('Error saving quick client:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar el cliente'));
+        } finally {
+            setIsSavingQuickAdd(false);
         }
     };
 
@@ -253,6 +393,26 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
         toast.success(`${addingType === 'Equipos' ? 'Equipo' : 'Accesorio'} añadido a la salida`);
     };
 
+    // Filter available items based on search term and those already selected
+    const getFilteredAvailableItems = () => {
+        const items = addingType === 'Equipos' ? availableEquipos : availableAccesorios;
+        if (!Array.isArray(items)) return [];
+
+        return items.filter(item => {
+            // Search filter
+            if (searchTermManual) {
+                const serial = (item.serial_equipo || item.serial || '').toLowerCase();
+                if (!serial.includes(searchTermManual.toLowerCase())) return false;
+            }
+
+            // Exclude already selected
+            const itemId = item.id_equipo_ubicacion || item.id_accesorio;
+            return !selectedItems.some(selected => (selected.id_equipo_ubicacion || selected.id_accesorio) === itemId);
+        });
+    };
+
+    const filteredAvailableItems = getFilteredAvailableItems();
+
 
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -286,10 +446,13 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
     };
 
     const isChecklistComplete = (item: any) => {
-        // Solo R1 requiere checklist obligatorio
-        if (selectedSite?.toLowerCase() !== 'r1' && selectedSite) return true;
+        // R1 y R2 requieren checklist obligatorio
+        const site = selectedSite?.toLowerCase();
+        if (site !== 'r1' && site !== 'r2') return true;
 
         if (item._type !== 'equipo') return true;
+        if (item.tipo_salida === 'SCRAP') return true;
+        
         if (!item.photos) return false;
 
         for (const photo of OBLIGATORY_PHOTOS) {
@@ -340,48 +503,76 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
 
         setLoading(true);
         try {
-            // 1. Create Salida
-            const salidaData: CreateSalidaDto = {
-                ...basicInfo,
-                observaciones: observations,
-                evidencia,
-                firma: signatures?.firma || undefined,
-                firma_usuario: signatures?.firma_usuario || undefined,
-                nombre_recibe: signatures?.nombre_recibe || undefined,
-            };
-            const newSalida = await salidasApi.create(salidaData);
+            if (editingSalidaId) {
+                // UPDATE
+                const updateData: any = {
+                    numero_transporte: basicInfo.numero_transporte,
+                    pedido: basicInfo.pedido_venta,
+                    cliente: basicInfo.cliente,
+                    razon_social: basicInfo.razon_social,
+                    direccion_cliente: basicInfo.direccion_cliente,
+                    rfc: basicInfo.rfc,
+                    contacto: basicInfo.contacto,
+                    telefono: basicInfo.telefono,
+                    destino: basicInfo.destino,
+                    tipo_documento: basicInfo.tipo_documento,
+                    observaciones: observations,
+                    remision: basicInfo.numero_remision,
+                    remision_confirmacion: basicInfo.tiene_remision ? 1 : 0,
+                };
 
-            // 2. Add Items
-            for (const item of selectedItems) {
-                if (item._type === 'equipo') {
-                    const detalleData: CreateDetalleDto = {
-                        id_equipo: item.id_detalles || item.id_equipo,
-                        id_equipo_ubicacion: item.id_equipo_ubicacion,
-                        tipo_salida: 'Embarque', // Default
-                        serial_equipos: item.serial_equipo,
-                        id_ubicacion: item.id_ubicacion,
-                        id_sub_ubicacion: item.id_sub_ubicacion,
-                        checklist_entrega: item.checklist_entrega,
-                        ...item.photos // Spread the photo keys
-                    };
-                    await salidasApi.addDetalle(newSalida.id_salida, detalleData);
-                } else {
-                    const accData: CreateAccesorioDto = {
-                        id_accesorio: item.id_accesorio,
-                        modelo: item.modelo,
-                        serial: item.serial,
-                        voltaje: item.voltaje,
-                    };
-                    await salidasApi.addAccesorio(newSalida.id_salida, accData);
+                if (signatures) {
+                    updateData.firma = signatures.firma;
+                    updateData.firma_usuario = signatures.firma_usuario;
+                    updateData.nombre_recibe = signatures.nombre_recibe;
                 }
-            }
 
-            toast.success(`Salida ${newSalida.folio} registrada correctamente`);
+                await salidasApi.update(editingSalidaId, updateData);
+                toast.success(`Salida ${nextFolio} actualizada correctamente`);
+            } else {
+                // CREATE
+                const salidaData: CreateSalidaDto = {
+                    ...basicInfo,
+                    observaciones: observations,
+                    evidencia,
+                    firma: signatures?.firma || undefined,
+                    firma_usuario: signatures?.firma_usuario || undefined,
+                    nombre_recibe: signatures?.nombre_recibe || undefined,
+                };
+                const newSalida = await salidasApi.create(salidaData);
+
+                // 2. Add Items
+                for (const item of selectedItems) {
+                    if (item._type === 'equipo') {
+                        const detalleData: CreateDetalleDto = {
+                            id_equipo: item.id_detalles || item.id_equipo,
+                            id_equipo_ubicacion: item.id_equipo_ubicacion,
+                            tipo_salida: item.tipo_salida || 'Embarque',
+                            serial_equipos: item.serial_equipo,
+                            id_ubicacion: item.id_ubicacion,
+                            id_sub_ubicacion: item.id_sub_ubicacion,
+                            checklist_entrega: item.checklist_entrega,
+                            ...item.photos // Spread the photo keys
+                        };
+                        await salidasApi.addDetalle(newSalida.id_salida, detalleData);
+                    } else {
+                        const accData: CreateAccesorioDto = {
+                            id_accesorio: item.id_accesorio,
+                            modelo: item.modelo,
+                            serial: item.serial,
+                            voltaje: item.voltaje,
+                        };
+                        await salidasApi.addAccesorio(newSalida.id_salida, accData);
+                    }
+                }
+
+                toast.success(`Salida ${newSalida.folio} registrada correctamente`);
+            }
+            
             onSuccess();
             onClose();
         } catch (error) {
-            toast.error('Error al registrar la salida');
-            console.error(error);
+            toast.error(getErrorMessage(error, editingSalidaId ? 'Error al actualizar la salida' : 'Error al registrar la salida'));
         } finally {
             setLoading(false);
         }
@@ -519,9 +710,19 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                         />
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 px-1">
-                                            Cliente <span className="text-red-500 ml-1">*</span>
-                                        </label>
+                                        <div className="flex justify-between items-end mb-1.5 px-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                                Cliente <span className="text-red-500">*</span>
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowQuickAddClient(true)}
+                                                className="text-[10px] font-black uppercase text-slate-400 hover:text-red-600 transition-all flex items-center gap-1"
+                                                title="Añadir nuevo cliente"
+                                            >
+                                                <Plus className="w-3 h-3" /> Añadir nuevo
+                                            </button>
+                                        </div>
                                         <select
                                             value={basicInfo.cliente || ''}
                                             onChange={(e) => setBasicInfo({ ...basicInfo, cliente: e.target.value })}
@@ -546,6 +747,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                         >
                                             <option value="Distribuidor">Distribuidor</option>
                                             <option value="R2">R2</option>
+                                            <option value="Cliente directo">Cliente directo</option>
                                         </select>
                                     </div>
                                 </div>
@@ -618,7 +820,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            {item._type === 'equipo' && (selectedSite?.toLowerCase() === 'r1' || !selectedSite) && (
+                                                            {item._type === 'equipo' && (['r1', 'r2'].includes(selectedSite?.toLowerCase() || '') || !selectedSite) && (
                                                                 <div className={cn(
                                                                     "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border",
                                                                     isChecklistComplete(item) ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-orange-50 text-orange-600 border-orange-100"
@@ -628,7 +830,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                             )}
                                                             <button
                                                                 onClick={() => setItemToDelete(item)}
-                                                                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                                                className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
@@ -678,6 +880,17 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                     <Upload className="w-8 h-8 mb-2" />
                                                     Cambiar Foto
                                                 </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        e.preventDefault();
+                                                        setEvidencia('');
+                                                    }}
+                                                    className="absolute top-4 right-4 bg-red-600 text-white p-2 rounded-full shadow-xl hover:bg-red-700 transition-all z-10"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
                                             </>
                                         ) : (
                                             <div className="flex flex-col items-center">
@@ -763,13 +976,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
 
                                                 {/* Floating Counter */}
                                                 <div className="absolute right-6 top-1/2 -translate-y-1/2 px-3 py-1 bg-slate-200 rounded-full text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                                    {(Array.isArray(addingType === 'Equipos' ? availableEquipos : availableAccesorios)
-                                                        ? (addingType === 'Equipos' ? availableEquipos : availableAccesorios)
-                                                        : []).filter(item => {
-                                                            if (!searchTermManual) return true;
-                                                            const serial = (item.serial_equipo || item.serial || '').toLowerCase();
-                                                            return serial.includes(searchTermManual.toLowerCase());
-                                                        }).length} Disponibles
+                                                    {filteredAvailableItems.length} Disponibles
                                                 </div>
                                             </div>
                                         </div>
@@ -789,14 +996,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
 
                                         {/* Result List (Interactive "tira" results) */}
                                         <div className="bg-white border-2 border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm divide-y divide-slate-50 max-h-[400px] overflow-y-auto custom-scrollbar">
-                                            {(Array.isArray(addingType === 'Equipos' ? availableEquipos : availableAccesorios)
-                                                ? (addingType === 'Equipos' ? availableEquipos : availableAccesorios)
-                                                : [])
-                                                .filter(item => {
-                                                    if (!searchTermManual) return true;
-                                                    const serial = (item.serial_equipo || item.serial || '').toLowerCase();
-                                                    return serial.includes(searchTermManual.toLowerCase());
-                                                })
+                                            {filteredAvailableItems
                                                 .map((item, index) => (
                                                     <button
                                                         key={`${item.id_detalles || item.id_accesorio}-${index}`}
@@ -837,18 +1037,12 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                 ))}
 
                                             {/* Empty State in List */}
-                                            {(Array.isArray(addingType === 'Equipos' ? availableEquipos : availableAccesorios)
-                                                ? (addingType === 'Equipos' ? availableEquipos : availableAccesorios)
-                                                : []).filter(item => {
-                                                    if (!searchTermManual) return true;
-                                                    const serial = (item.serial_equipo || item.serial || '').toLowerCase();
-                                                    return serial.includes(searchTermManual.toLowerCase());
-                                                }).length === 0 && (
-                                                    <div className="p-12 text-center flex flex-col items-center justify-center text-slate-300">
-                                                        <Search className="w-8 h-8 mb-3 opacity-20" />
-                                                        <p className="font-black text-[10px] uppercase tracking-[0.2em]">No se encontraron resultados</p>
-                                                    </div>
-                                                )}
+                                            {filteredAvailableItems.length === 0 && (
+                                                <div className="p-12 text-center flex flex-col items-center justify-center text-slate-300">
+                                                    <Search className="w-8 h-8 mb-3 opacity-20" />
+                                                    <p className="font-black text-[10px] uppercase tracking-[0.2em]">No se encontraron resultados</p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -894,11 +1088,47 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                         </div>
 
                                         {(() => {
-                                            if ((selectedSite?.toLowerCase() === 'r1' || !selectedSite) && addingType === 'Equipos') {
+                                            const site = selectedSite?.toLowerCase();
+                                            const isChecklistSite = site === 'r1' || site === 'r2' || !site;
+                                            if (isChecklistSite && addingType === 'Equipos') {
                                                 return (
                                                     <div className="space-y-10">
-                                                        {/* Category Checklist */}
+                                                        {/* Evaluador Badge */}
+                                                        <div className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                                                            <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center shrink-0">
+                                                                <CheckCircle2 className="w-4 h-4 text-white" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.15em]">Evaluador de Salida</p>
+                                                                <p className="text-sm font-black text-indigo-900">{evaluatorName}</p>
+                                                            </div>
+                                                        </div>
+                                                        {/* Motivo de Salida */}
                                                         <div className="space-y-6">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-2 h-10 bg-red-600 rounded-full" />
+                                                                <div>
+                                                                    <h4 className="text-lg font-black text-slate-900 uppercase tracking-wide">Motivo de Salida</h4>
+                                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clasificación de la operación</p>
+                                                                </div>
+                                                            </div>
+                                                            <select 
+                                                                value={motivoSalida} 
+                                                                onChange={(e) => setMotivoSalida(e.target.value)}
+                                                                className="w-full bg-white border border-slate-200 p-4 rounded-2xl font-black text-slate-700 outline-none focus:ring-2 focus:ring-red-500 shadow-sm"
+                                                            >
+                                                                <option value="RENTA">RENTA</option>
+                                                                <option value="VENTA">VENTA</option>
+                                                                <option value="MANIOBRA">MANIOBRA</option>
+                                                                <option value="DEMO">DEMO</option>
+                                                                <option value="SCRAP">SCRAP</option>
+                                                            </select>
+                                                        </div>
+
+                                                        {/* Category Checklist */}
+                                                        {motivoSalida !== 'SCRAP' && (
+                                                            <>
+                                                                <div className="space-y-6">
                                                             <div className="flex items-center gap-4">
                                                                 <div className="w-2 h-10 bg-red-600 rounded-full" />
                                                                 <div>
@@ -1025,6 +1255,20 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                                                         <div className="absolute top-4 right-4 bg-emerald-500 text-white p-2 rounded-2xl shadow-xl shadow-emerald-200">
                                                                                             <CheckCircle2 className="w-4 h-4" />
                                                                                         </div>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                e.preventDefault();
+                                                                                                setConfirmingItem((prev: any) => ({
+                                                                                                    ...prev,
+                                                                                                    tempPhotos: { ...(prev.tempPhotos || {}), [photo.key]: '' }
+                                                                                                }));
+                                                                                            }}
+                                                                                            className="absolute bottom-4 right-4 bg-red-600 text-white p-2 rounded-xl shadow-xl hover:bg-red-700 transition-all z-10"
+                                                                                        >
+                                                                                            <X className="w-4 h-4" />
+                                                                                        </button>
                                                                                     </>
                                                                                 ) : (
                                                                                     <>
@@ -1087,6 +1331,20 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100">
                                                                                             <Upload className="w-6 h-6 text-white" />
                                                                                         </div>
+                                                                                        <button
+                                                                                             type="button"
+                                                                                             onClick={(e) => {
+                                                                                                 e.stopPropagation();
+                                                                                                 e.preventDefault();
+                                                                                                 setConfirmingItem((prev: any) => ({
+                                                                                                     ...prev,
+                                                                                                     tempPhotos: { ...(prev.tempPhotos || {}), [photo.key]: '' }
+                                                                                                 }));
+                                                                                             }}
+                                                                                             className="absolute top-4 right-4 bg-red-600 text-white p-2 rounded-xl shadow-xl hover:bg-red-700 transition-all z-10"
+                                                                                          >
+                                                                                              <X className="w-4 h-4" />
+                                                                                          </button>
                                                                                     </>
                                                                                 ) : (
                                                                                     <Upload className="w-6 h-6 text-slate-200 group-hover:text-slate-400 transition-all" />
@@ -1097,6 +1355,8 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                                 })}
                                                             </div>
                                                         </div>
+                                                        </>
+                                                        )}
                                                     </div>
                                                 );
                                             }
@@ -1152,9 +1412,10 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                             </button>
                                             <button
                                                 onClick={() => {
-                                                    const isR1 = selectedSite?.toLowerCase() === 'r1' || !selectedSite;
+                                                    const site = selectedSite?.toLowerCase();
+                                                    const isChecklistSite = site === 'r1' || site === 'r2' || !site;
 
-                                                    if (addingType === 'Equipos' && isR1) {
+                                                    if (addingType === 'Equipos' && isChecklistSite && motivoSalida !== 'SCRAP') {
                                                         // Validate Checklist
                                                         const missingItems = [];
                                                         CHECKLIST_CATEGORIES.forEach(cat => {
@@ -1180,7 +1441,11 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
 
                                                     handleAddItem({
                                                         ...confirmingItem,
-                                                        checklist_entrega: checklistValues,
+                                                        tipo_salida: motivoSalida,
+                                                        checklist_entrega: {
+                                                            ...checklistValues,
+                                                            _evaluador: evaluatorName,
+                                                        },
                                                         photos: (confirmingItem as any).tempPhotos || {}
                                                     });
                                                 }}
@@ -1271,16 +1536,19 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">
                                 Firma del Usuario Entregó <span className="text-red-500">*</span>
                             </label>
-                            <div className="border-2 border-slate-200 rounded-2xl overflow-hidden bg-slate-50 relative aspect-[2/1]">
+                            <div className="border-2 border-slate-200 rounded-2xl overflow-hidden bg-white relative aspect-[2/1]">
                                 <canvas
                                     ref={(el) => {
                                         if (el && !el.dataset.initialized) {
-                                            el.width = el.offsetWidth;
-                                            el.height = el.offsetHeight;
+                                            const rect = el.getBoundingClientRect();
+                                            el.width = el.offsetWidth * 2;
+                                            el.height = el.offsetHeight * 2;
                                             el.dataset.initialized = 'true';
                                             const ctx = el.getContext('2d');
                                             if (ctx) {
+                                                ctx.scale(2, 2);
                                                 let drawing = false;
+                                                
                                                 const startDrawing = (e: any) => {
                                                     drawing = true;
                                                     ctx.beginPath();
@@ -1289,7 +1557,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                     const y = (e.clientY || e.touches[0].clientY) - rect.top;
                                                     ctx.moveTo(x, y);
                                                 };
-                                                const stopDrawing = () => drawing = false;
+
                                                 const draw = (e: any) => {
                                                     if (!drawing) return;
                                                     const rect = el.getBoundingClientRect();
@@ -1297,30 +1565,37 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                                                     const y = (e.clientY || e.touches[0].clientY) - rect.top;
                                                     ctx.lineTo(x, y);
                                                     ctx.stroke();
-                                                    if (e.touches) e.preventDefault();
+                                                };
+
+                                                const stopDrawing = () => {
+                                                    drawing = false;
+                                                    ctx.closePath();
                                                 };
 
                                                 el.addEventListener('mousedown', startDrawing);
-                                                el.addEventListener('mouseup', stopDrawing);
                                                 el.addEventListener('mousemove', draw);
-                                                el.addEventListener('touchstart', startDrawing);
-                                                el.addEventListener('touchend', stopDrawing);
-                                                el.addEventListener('touchmove', draw);
+                                                el.addEventListener('mouseup', stopDrawing);
+                                                el.addEventListener('mouseleave', stopDrawing);
 
-                                                ctx.lineWidth = 3;
+                                                el.addEventListener('touchstart', (e) => { startDrawing(e); e.preventDefault(); }, { passive: false });
+                                                el.addEventListener('touchmove', (e) => { draw(e); e.preventDefault(); }, { passive: false });
+                                                el.addEventListener('touchend', (e) => { stopDrawing(); e.preventDefault(); }, { passive: false });
+
+                                                ctx.lineWidth = 2.5;
                                                 ctx.lineCap = 'round';
+                                                ctx.lineJoin = 'round';
                                                 ctx.strokeStyle = '#0f172a';
                                             }
                                         }
                                     }}
-                                    className="w-full h-full cursor-crosshair"
+                                    className="w-full h-full cursor-crosshair touch-none"
                                     id="userSignatureCanvas"
                                 />
                                 <button
                                     onClick={() => {
                                         const canvas = document.getElementById('userSignatureCanvas') as HTMLCanvasElement;
                                         const ctx = canvas?.getContext('2d');
-                                        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                        if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
                                     }}
                                     className="absolute bottom-4 right-4 p-2 bg-white/80 hover:bg-white rounded-lg text-slate-400 hover:text-red-500 transition-all border border-slate-200 shadow-sm"
                                     title="Limpiar firma"
@@ -1353,6 +1628,139 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess }: NuevaSa
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Quick Add Client Modal */}
+            {showQuickAddClient && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"
+                        onClick={() => {
+                            const hasData = quickAddValue.trim() || quickAddClientExtra.rfc || quickAddClientExtra.telefono || quickAddClientExtra.persona_contacto;
+                            if (hasData) setShowQuickAddConfirm(true);
+                            else { setShowQuickAddClient(false); setQuickAddValue(''); setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' }); }
+                        }}
+                    />
+                    
+                    <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] overflow-y-auto custom-scrollbar tracking-tight">
+                        <style>{`
+                            .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                            .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                            .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+                        `}</style>
+                        <h3 className="text-2xl font-black text-slate-900 mb-2">Nuevo Cliente</h3>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 border-b border-slate-100 pb-4">
+                            Registro Rápido de Cliente
+                        </p>
+
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 px-1">
+                                    Nombre / Razón Social <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={quickAddValue}
+                                    onChange={(e) => setQuickAddValue(e.target.value)}
+                                    placeholder="Nombre de la empresa..."
+                                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-red-500 transition-all outline-none font-bold text-slate-900 shadow-sm"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 px-1">RFC <span className="text-slate-300 font-bold normal-case tracking-normal">(opcional)</span></label>
+                                    <input
+                                        type="text"
+                                        value={quickAddClientExtra.rfc}
+                                        onChange={(e) => setQuickAddClientExtra(p => ({ ...p, rfc: e.target.value.toUpperCase() }))}
+                                        placeholder="RFC..."
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-slate-400 transition-all outline-none font-bold text-slate-700 placeholder:text-slate-300 text-sm"
+                                        maxLength={13}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 px-1">Teléfono <span className="text-slate-300 font-bold normal-case tracking-normal">(opcional)</span></label>
+                                    <input
+                                        type="tel"
+                                        value={quickAddClientExtra.telefono}
+                                        onChange={(e) => setQuickAddClientExtra(p => ({ ...p, telefono: e.target.value.replace(/\D/g, '') }))}
+                                        placeholder="10 dígitos..."
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-slate-400 transition-all outline-none font-bold text-slate-700 placeholder:text-slate-300 text-sm"
+                                        maxLength={15}
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 px-1">Persona de Contacto <span className="text-slate-300 font-bold normal-case tracking-normal">(opcional)</span></label>
+                                <input
+                                    type="text"
+                                    value={quickAddClientExtra.persona_contacto}
+                                    onChange={(e) => setQuickAddClientExtra(p => ({ ...p, persona_contacto: e.target.value }))}
+                                    placeholder="Nombre del contacto..."
+                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-slate-400 transition-all outline-none font-bold text-slate-700 placeholder:text-slate-300 text-sm"
+                                />
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button
+                                    onClick={() => {
+                                        const hasData = quickAddValue.trim() || quickAddClientExtra.rfc || quickAddClientExtra.telefono || quickAddClientExtra.persona_contacto;
+                                        if (hasData) setShowQuickAddConfirm(true);
+                                        else { setShowQuickAddClient(false); setQuickAddValue(''); setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' }); }
+                                    }}
+                                    className="flex-1 px-6 py-4 bg-slate-50 text-slate-400 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleSaveQuickAddClient}
+                                    disabled={isSavingQuickAdd || !quickAddValue.trim()}
+                                    className="flex-[2] px-8 py-4 bg-red-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-red-700 transition-all shadow-xl shadow-red-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isSavingQuickAdd ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                    {isSavingQuickAdd ? 'Guardando...' : 'Guardar Cliente'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Quick Add Discard Confirmation */}
+                    {showQuickAddConfirm && (
+                        <div className="absolute inset-0 z-[160] flex items-center justify-center p-6 bg-slate-900/20 backdrop-blur-[2px]">
+                            <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 w-full max-w-xs animate-in zoom-in-95 duration-150 space-y-6 border border-slate-100">
+                                <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto">
+                                    <AlertCircle className="w-8 h-8 text-rose-500" />
+                                </div>
+                                <div className="text-center space-y-2">
+                                    <h4 className="text-lg font-black text-slate-900 tracking-tight">¿Descartar datos?</h4>
+                                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wide">Se perderá la información ingresada.</p>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        onClick={() => setShowQuickAddConfirm(false)}
+                                        className="w-full py-4 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+                                    >
+                                        Continuar Editando
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowQuickAddConfirm(false);
+                                            setShowQuickAddClient(false);
+                                            setQuickAddValue('');
+                                            setQuickAddClientExtra({ rfc: '', telefono: '', persona_contacto: '' });
+                                        }}
+                                        className="w-full py-4 text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 rounded-2xl transition-all"
+                                    >
+                                        Sí, descartar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

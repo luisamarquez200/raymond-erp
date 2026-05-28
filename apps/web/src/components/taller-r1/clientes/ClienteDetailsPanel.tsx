@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { ClienteForm } from '@/components/taller-r1/clientes/ClienteForm';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/utils';
 
 interface ClienteDetailsPanelProps {
     clientId: string;
@@ -44,7 +45,7 @@ export function ClienteDetailsPanel({ clientId, onClose, onUpdateSuccess }: Clie
             const data = await clientesApi.getById(clientId);
             setClient(data);
         } catch (error) {
-            toast.error('Error al cargar los detalles del cliente');
+            toast.error(getErrorMessage(error, 'Error al cargar los detalles del cliente'));
         } finally {
             setIsLoading(false);
         }
@@ -59,8 +60,7 @@ export function ClienteDetailsPanel({ clientId, onClose, onUpdateSuccess }: Clie
             loadClientDetails();
             if (onUpdateSuccess) onUpdateSuccess();
         } catch (error) {
-            toast.error('Error al actualizar el cliente');
-            console.error(error);
+            toast.error(getErrorMessage(error, 'Error al actualizar el cliente'));
         } finally {
             setIsSubmitting(false);
         }

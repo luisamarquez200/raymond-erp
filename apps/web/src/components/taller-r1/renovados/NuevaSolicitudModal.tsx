@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react';
 import renovadosService, { CreateRenovadoDto } from '@/services/taller-r1/renovados.service';
 import { equipoUbicacionApi, EquipoUbicacion } from '@/services/taller-r1/equipo-ubicacion.service';
 import { clientesApi } from '@/services/taller-r1/clientes.service';
+import { adcApi } from '@/services/taller-r1/adc.service';
 import { toast } from 'sonner';
-import { X, Calendar, User, Search, Package, CheckCircle2, ChevronDown, Layout } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { X, Calendar, User, Search, Package, CheckCircle2, ChevronDown, Layout, Plus, Check } from 'lucide-react';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useTallerUsuarios } from '@/hooks/taller-r1/useTallerUsuarios';
+import api from '@/lib/api-taller';
+import { QrScannerButton } from '@/components/ui/qr-scanner-button';
 
 interface Props {
     open: boolean;
@@ -21,17 +24,21 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
     const [loading, setLoading] = useState(false);
     const [equipos, setEquipos] = useState<EquipoUbicacion[]>([]);
     const [clientes, setClientes] = useState<any[]>([]);
+    const [adcs, setAdcs] = useState<any[]>([]);
     const [estaciones, setEstaciones] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
 
+    const [showQuickAddClient, setShowQuickAddClient] = useState(false);
+    const [showQuickAddAdc, setShowQuickAddAdc] = useState(false);
+    const [quickAddValue, setQuickAddValue] = useState('');
+
     const [formData, setFormData] = useState<CreateRenovadoDto>({
         serial_equipo: '',
-        fecha_target: '',
+        fecha_target: undefined as any,
         cliente: '',
         adc: '',
         meses_fuera: '1-3',
-        tecnico_responsable: '',
-        id_estacion: ''
+        comentarios: ''
     });
 
     useEffect(() => {
@@ -45,22 +52,75 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
                     adc: equipo.adc || ''
                 }));
             }
+        } else {
+            // Reset form when closing
+            setFormData({
+                serial_equipo: '',
+                fecha_target: undefined as any,
+                cliente: '',
+                adc: '',
+                meses_fuera: '1-3',
+                comentarios: ''
+            });
+            setSearchTerm('');
+            setShowQuickAddClient(false);
+            setShowQuickAddAdc(false);
+            setQuickAddValue('');
         }
     }, [open, equipo]);
 
     const loadData = async () => {
         try {
-            const [allEquipos, allClientes, allEstaciones] = await Promise.all([
-                equipoUbicacionApi.getAll(),
+            const [allEquipos, allClientes, allAdcs, allEstaciones] = await Promise.all([
+                renovadosService.getPending(),
                 clientesApi.getAll(),
+                adcApi.getAll(),
                 renovadosService.getEstaciones()
             ]);
-            // Solo equipos en stock y que no estén ya en renovación (aunque el backend valida esto también)
-            setEquipos(allEquipos.filter((e: any) => e.stock === 'SI' && e.estado !== 'Renovación'));
-            setClientes(allClientes);
+            
+            setEquipos(allEquipos || []);
+            setClientes((allClientes || []).sort((a: any, b: any) => a.nombre_cliente?.localeCompare(b.nombre_cliente)));
+            setAdcs((allAdcs || []).sort((a: any, b: any) => a.nombre?.localeCompare(b.nombre)));
             setEstaciones(allEstaciones || []);
         } catch (error) {
-            toast.error('Error al cargar datos para la solicitud');
+            toast.error(getErrorMessage(error, 'Error al cargar datos para la solicitud'));
+        }
+    };
+
+    const handleSaveQuickAddClient = async () => {
+        if (!quickAddValue.trim()) return;
+        try {
+            setLoading(true);
+            const newClient = await api.post('/taller-r1/clientes', {
+                nombre_cliente: quickAddValue.toUpperCase()
+            });
+            const clientData = newClient.data?.data || newClient.data;
+            setClientes(prev => [...prev, clientData].sort((a, b) => a.nombre_cliente.localeCompare(b.nombre_cliente)));
+            setFormData(prev => ({ ...prev, cliente: clientData.nombre_cliente }));
+            toast.success('Cliente añadido');
+            setShowQuickAddClient(false);
+            setQuickAddValue('');
+        } catch (error) {
+            toast.error('Error al guardar cliente');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSaveQuickAddAdc = async () => {
+        if (!quickAddValue.trim()) return;
+        try {
+            setLoading(true);
+            const newAdc = await adcApi.create(quickAddValue.toUpperCase());
+            setAdcs(prev => [...prev, newAdc]);
+            setFormData(prev => ({ ...prev, adc: newAdc.nombre }));
+            toast.success('ADC añadido');
+            setShowQuickAddAdc(false);
+            setQuickAddValue('');
+        } catch (error) {
+            toast.error('Error al guardar ADC');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -80,15 +140,14 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
             // Reset form
             setFormData({
                 serial_equipo: '',
-                fecha_target: '',
+                fecha_target: undefined as any,
                 cliente: '',
                 adc: '',
                 meses_fuera: '1-3',
-                tecnico_responsable: '',
-                id_estacion: ''
+                comentarios: ''
             });
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Error al crear la solicitud');
+            toast.error(getErrorMessage(error, 'Error al crear la solicitud'));
         } finally {
             setLoading(false);
         }
@@ -124,15 +183,18 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
                         
                         {!equipo ? (
                             <>
-                                <div className="relative group">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar por serie o modelo..."
-                                        className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
+                                <div className="flex items-center gap-2">
+                                    <div className="relative group flex-1">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar por serie o modelo..."
+                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                    <QrScannerButton onScan={(val) => setSearchTerm(val)} />
                                 </div>
                                 <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                                     {filteredEquipos.map((e) => (
@@ -187,12 +249,16 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Fecha Target <span className="text-red-500">*</span></label>
                             <div className="relative">
-                                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none z-10" />
                                 <input
                                     type="date"
-                                    className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
-                                    value={typeof formData.fecha_target === 'string' ? formData.fecha_target : ''}
+                                    className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold min-h-[58px] cursor-pointer"
+                                    value={formData.fecha_target instanceof Date 
+                                        ? formData.fecha_target.toISOString().split('T')[0] 
+                                        : (typeof formData.fecha_target === 'string' ? formData.fecha_target : '')}
                                     onChange={(e) => setFormData({ ...formData, fecha_target: e.target.value })}
+                                    onClick={(e) => (e.target as any).showPicker?.()}
+                                    onFocus={(e) => (e.target as any).showPicker?.()}
                                     required
                                 />
                             </div>
@@ -217,85 +283,127 @@ export const NuevaSolicitudModal = ({ open, equipo, onClose, onSuccess }: Props)
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Cliente */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cliente</label>
-                            <select
-                                className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold appearance-none"
-                                value={formData.cliente}
-                                onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                            >
-                                <option value="">Seleccionar cliente...</option>
-                                {clientes.map(c => (
-                                    <option key={c.id_cliente} value={c.nombre_cliente}>{c.nombre_cliente}</option>
-                                ))}
-                            </select>
+                            <div className="flex justify-between items-end mb-0.5 px-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowQuickAddClient(true)}
+                                    className="text-[10px] font-black uppercase text-slate-400 hover:text-red-600 transition-all flex items-center gap-1"
+                                    title="Agregar nuevo cliente"
+                                >
+                                    <Plus className="w-3 h-3" /> Añadir Nuevo
+                                </button>
+                            </div>
+                            
+                            {showQuickAddClient ? (
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Nuevo nombre de cliente"
+                                        className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
+                                        value={quickAddValue}
+                                        onChange={(e) => setQuickAddValue(e.target.value)}
+                                        autoFocus
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveQuickAddClient}
+                                        className="px-4 py-4 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all shadow-sm flex items-center justify-center"
+                                    >
+                                        <Check className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowQuickAddClient(false)}
+                                        className="px-4 py-4 bg-slate-100 text-slate-400 rounded-2xl hover:bg-slate-200 transition-all shadow-sm flex items-center justify-center"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="relative appearance-none">
+                                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                    <select
+                                        className="w-full pl-4 pr-10 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold appearance-none"
+                                        value={formData.cliente}
+                                        onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+                                    >
+                                        <option value="">Seleccionar cliente...</option>
+                                        {clientes.map(c => (
+                                            <option key={c.id_cliente} value={c.nombre_cliente}>{c.nombre_cliente}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
 
                         {/* ADC */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">ADC</label>
-                            <input
-                                type="text"
-                                placeholder="Nombre del ADC"
-                                className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
-                                value={formData.adc}
-                                onChange={(e) => setFormData({ ...formData, adc: e.target.value })}
-                            />
+                            <div className="flex justify-between items-end mb-0.5 px-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ADC</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowQuickAddAdc(true)}
+                                    className="text-[10px] font-black uppercase text-slate-400 hover:text-red-600 transition-all flex items-center gap-1"
+                                    title="Agregar nuevo ADC"
+                                >
+                                    <Plus className="w-3 h-3" /> Añadir Nuevo
+                                </button>
+                            </div>
+                            
+                            {showQuickAddAdc ? (
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Nuevo nombre de ADC"
+                                        className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold"
+                                        value={quickAddValue}
+                                        onChange={(e) => setQuickAddValue(e.target.value)}
+                                        autoFocus
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveQuickAddAdc}
+                                        className="px-4 py-4 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all shadow-sm flex items-center justify-center"
+                                    >
+                                        <Check className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowQuickAddAdc(false)}
+                                        className="px-4 py-4 bg-slate-100 text-slate-400 rounded-2xl hover:bg-slate-200 transition-all shadow-sm flex items-center justify-center"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="relative appearance-none">
+                                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                    <select
+                                        className="w-full pl-4 pr-10 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold appearance-none"
+                                        value={formData.adc}
+                                        onChange={(e) => setFormData({ ...formData, adc: e.target.value })}
+                                    >
+                                        <option value="">Seleccionar ADC...</option>
+                                        {adcs.map(a => (
+                                            <option key={a.id} value={a.nombre}>{a.nombre}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Técnico Responsable */}
+                    <div className="grid grid-cols-1 gap-6">
+                        {/* Comentarios */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Técnico Responsable</label>
-                            <div className="relative appearance-none">
-                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                                <select
-                                    className="w-full pl-11 pr-10 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold appearance-none"
-                                    value={formData.tecnico_responsable}
-                                    onChange={(e) => setFormData({ ...formData, tecnico_responsable: e.target.value })}
-                                >
-                                    <option value="">Seleccionar técnico...</option>
-                                    {usuarios
-                                        .filter(u => u.sitio?.includes('R1'))
-                                        .map(u => (
-                                            <option key={u.IDUsuarios} value={u.Usuario}>{u.Usuario}</option>
-                                        ))
-                                    }
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Estación */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Estación de Taller</label>
-                            <div className="relative appearance-none">
-                                <Layout className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                                <select
-                                    className="w-full pl-11 pr-10 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold appearance-none"
-                                    value={formData.id_estacion}
-                                    onChange={(e) => setFormData({ ...formData, id_estacion: e.target.value })}
-                                >
-                                    <option value="">Seleccionar estación...</option>
-                                    {[...estaciones]
-                                        .sort((a, b) => {
-                                            const numA = parseInt(a.nombre.replace(/\D/g, '')) || 0;
-                                            const numB = parseInt(b.nombre.replace(/\D/g, '')) || 0;
-                                            return numA - numB;
-                                        })
-                                        .map(est => (
-                                            <option 
-                                                key={est.id_estacion} 
-                                                value={est.id_estacion}
-                                                disabled={est.ocupada}
-                                            >
-                                                {est.nombre} {est.ocupada ? '(Ocupada)' : '(Libre)'}
-                                            </option>
-                                        ))
-                                    }
-                                </select>
-                            </div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Comentarios</label>
+                            <textarea
+                                className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:border-red-500 transition-all outline-none font-bold resize-none min-h-[100px]"
+                                placeholder="Escribe observaciones adicionales o requerimientos iniciales aquí..."
+                                value={formData.comentarios}
+                                onChange={(e) => setFormData({ ...formData, comentarios: e.target.value })}
+                            />
                         </div>
                     </div>
                 </form>

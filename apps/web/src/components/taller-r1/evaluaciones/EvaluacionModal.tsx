@@ -33,7 +33,9 @@ import {
 } from 'lucide-react';
 import { evaluacionesApi } from '@/services/taller-r1/evaluaciones.service';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import axios from 'axios';
 
 interface EvaluacionModalProps {
     open: boolean;
@@ -244,6 +246,9 @@ export function EvaluacionModal({
                     setFaltantePiezas(data.id_evaluacion ? (data as any).faltante_piezas || '' : '');
                     setFotosFaltantes(data.id_evaluacion ? (data as any).fotos_faltantes || {} : {});
                     setObservaciones(data.id_evaluacion ? (data as any).observaciones || { obs1: '', obs2: '', obs3: '' } : { obs1: '', obs2: '', obs3: '' });
+                    // Load who previously evaluated (display in badge)
+                    if (data.usuario_evaluador) setEvaluator(data.usuario_evaluador);
+                    if ((data as any).fecha_creacion) setDateCreated((data as any).fecha_creacion);
                 }
             } else {
                 data = await evaluacionesApi.getAccesorioEvaluation(item.id);
@@ -257,13 +262,14 @@ export function EvaluacionModal({
                     setCeldasBuenEstado(data.celdas_buen_estado != null ? String(data.celdas_buen_estado) : '');
                     setFechaUltimaCarga(data.fecha_ultima_carga ? String(data.fecha_ultima_carga) : '');
                     setNotasAccesorios(data.notas || '');
+                    setEvaluator((data as any).usuario_evaluador || '');
+                    setDateCreated((data as any).fecha_creacion || '');
                 }
             }
         } catch (error: any) {
-            // Ignore 404 errors as it just means no evaluation exists yet
             if (error?.response?.status !== 404) {
-                console.error('Error loading evaluation:', error);
-                toast.error('Error al cargar la evaluación existente.');
+                console.error('Error loading evaluation:', getErrorMessage(error));
+                toast.error(getErrorMessage(error, 'Error al cargar la evaluación existente.'));
             }
         } finally {
             setLoading(false);
@@ -324,6 +330,19 @@ export function EvaluacionModal({
                     observaciones: observaciones,
                     usuario_evaluador: evaluatorName
                 });
+
+                try {
+                    const pdfBase64 = await exportToPDF(true);
+                    if (pdfBase64) {
+                        await axios.post('/api/taller-r1/mail/evaluacion', {
+                            serial: item.serial,
+                            resultado: porcentaje ? `${porcentaje}%` : 'N/A',
+                            pdfBase64: pdfBase64
+                        });
+                    }
+                } catch (e) {
+                    console.error("Error sending evaluation email", getErrorMessage(e));
+                }
             } else {
                 await evaluacionesApi.saveAccesorioEvaluation({
                     id_accesorio: item.id,
@@ -336,14 +355,15 @@ export function EvaluacionModal({
                     celdas_buen_estado: celdasBuenEstado ? parseInt(celdasBuenEstado) : undefined,
                     fecha_ultima_carga: fechaUltimaCarga || undefined,
                     notas: notasAccesorios,
+                    usuario_evaluador: evaluatorName,
                 });
             }
             toast.success('Calificación guardada correctamente.');
             onSuccess?.();
             onClose();
         } catch (error) {
-            console.error('Error saving evaluation:', error);
-            toast.error('Error al guardar la calificación.');
+            console.error('Error saving evaluation:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al guardar la calificación.'));
         } finally {
             setSaving(false);
         }
@@ -498,15 +518,46 @@ export function EvaluacionModal({
         saveAs(new Blob([buffer]), `Evaluacion_${item.serial}_${new Date().getTime()}.xlsx`);
     };
 
-    const exportToPDF = () => {
+    const exportToPDF = async (returnBase64Only = false): Promise<string | void> => {
         if (!item) return;
 
         const doc = new jsPDF();
 
+        const logoUrl = window.location.origin + '/fsimage.png';
+        const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
+            try {
+                let finalUrl = imageUrl;
+                
+                // Si la imagen es externa (S3/DigitalOcean), usamos el proxy del backend para evitar CORS
+                if (imageUrl.startsWith('http') && !imageUrl.includes(window.location.hostname)) {
+                    const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api');
+                    finalUrl = `${apiBase}/taller-r1/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+                }
+
+                const response = await fetch(finalUrl);
+                const blob = await response.blob();
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            } catch (error) {
+                console.error('Error fetching image for PDF:', imageUrl, error);
+                return '';
+            }
+        };
+
+        const logoBase64 = await getBase64ImageFromUrl(logoUrl);
+
         // Header
-        doc.setFontSize(18);
-        doc.setTextColor(200, 0, 0);
-        doc.text('RAYMOND', 160, 20);
+        if (logoBase64) {
+            doc.addImage(logoBase64, 'PNG', 160, 10, 40, 10);
+        } else {
+            doc.setFontSize(18);
+            doc.setTextColor(200, 0, 0);
+            doc.text('RAYMOND', 160, 20);
+        }
 
         doc.setDrawColor(0);
         doc.setFillColor(68, 68, 68);
@@ -537,12 +588,20 @@ export function EvaluacionModal({
         const tableBody: any[] = [];
         PILLARES.forEach(pilar => {
             pilar.items.forEach((crit, idx) => {
-                tableBody.push([
-                    idx === 0 ? pilar.label : '',
-                    crit.label,
-                    '10',
-                    scores[crit.id] || '0'
-                ]);
+                if (idx === 0) {
+                    tableBody.push([
+                        { content: pilar.label, rowSpan: pilar.items.length, styles: { valign: 'middle', halign: 'center' } },
+                        crit.label,
+                        '10',
+                        scores[crit.id] || '0'
+                    ]);
+                } else {
+                    tableBody.push([
+                        crit.label,
+                        '10',
+                        scores[crit.id] || '0'
+                    ]);
+                }
             });
         });
 
@@ -577,7 +636,60 @@ export function EvaluacionModal({
         doc.setFontSize(10);
         doc.line(10, finalY + 25, 80, finalY + 25);
         doc.text(`EVALUADO POR: ${evaluator || evaluatorName}`, 10, finalY + 30);
-        doc.save(`Evaluacion_${item.serial}_${new Date().getTime()}.pdf`);
+
+        // Evidencia Fotográfica
+        const allPhotos: string[] = [];
+        Object.values(photos).forEach(val => val && allPhotos.push(val));
+        Object.values(fotosFaltantes).forEach(val => val && allPhotos.push(val));
+
+        if (allPhotos.length > 0) {
+            doc.addPage();
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('EVIDENCIA FOTOGRÁFICA', 105, 20, { align: 'center' });
+            
+            let imgX = 20;
+            let imgY = 30;
+            const imgWidth = 80;
+            const imgHeight = 60;
+            let count = 0;
+
+            for (const photo of allPhotos) {
+                let base64 = photo;
+                if (photo.startsWith('http')) {
+                    base64 = await getBase64ImageFromUrl(photo);
+                }
+                
+                if (!base64) continue;
+                
+                if (count > 0 && count % 6 === 0) {
+                    doc.addPage();
+                    imgX = 20;
+                    imgY = 20;
+                }
+                
+                const isPng = base64.toLowerCase().includes('image/png') || photo.toLowerCase().endsWith('.png');
+                try {
+                    doc.addImage(base64, isPng ? 'PNG' : 'JPEG', imgX, imgY, imgWidth, imgHeight);
+                } catch (e) {
+                    console.error("Error adding photo to PDF", e);
+                }
+                
+                if (imgX === 20) {
+                    imgX += 90;
+                } else {
+                    imgX = 20;
+                    imgY += 70;
+                }
+                count++;
+            }
+        }
+
+        if (returnBase64Only) {
+            return doc.output('datauristring');
+        } else {
+            doc.save(`Evaluacion_${item.serial}_${new Date().getTime()}.pdf`);
+        }
     };
 
     if (!item) return null;
@@ -599,7 +711,7 @@ export function EvaluacionModal({
                                 </div>
                                 <div>
                                     <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-100">
-                                        R1 Evaluación
+                                        Evaluación de Entrada
                                     </span>
                                 </div>
                             </div>
@@ -618,6 +730,23 @@ export function EvaluacionModal({
                                 </>
                             )}
                         </DialogDescription>
+                        {/* Evaluator Badge */}
+                        <div className="mt-4 flex items-center gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                            <div className="w-7 h-7 bg-indigo-600 rounded-full flex items-center justify-center shrink-0">
+                                <CheckCircle2 size={14} className="text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.15em]">Evaluador</p>
+                                <p className="text-sm font-black text-indigo-900 truncate">
+                                    {isHistory ? (evaluator || 'No registrado') : evaluatorName}
+                                </p>
+                            </div>
+                            {dateCreated && (
+                                <span className="text-[9px] font-bold text-indigo-400 shrink-0">
+                                    {new Date(dateCreated).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     <div className="p-8">
@@ -664,24 +793,24 @@ export function EvaluacionModal({
                                                                     <option value="7">7 (Preventivo)</option>
                                                                     <option value="10">10 (Perfecto)</option>
                                                                 </select>
-                                                            </div>
-
-                                                            <div className="relative group/photo shrink-0">
+                                                                                                         <div className="relative group/photo shrink-0">
                                                                 {photos[crit.id] ? (
                                                                     <div className="relative w-20 h-20 rounded-2xl overflow-hidden shadow-inner group-hover/photo:opacity-90 transition-opacity">
                                                                         <img src={photos[crit.id]} alt={crit.id} className="w-full h-full object-cover" />
-                                                                        <button
-                                                                            onClick={() => setPhotos(prev => {
-                                                                                const n = { ...prev };
-                                                                                delete n[crit.id];
-                                                                                return n;
-                                                                            })}
-                                                                            className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full shadow-lg opacity-0 group-hover/photo:opacity-100 transition-opacity"
-                                                                        >
-                                                                            <X size={10} />
-                                                                        </button>
+                                                                        {!isHistory && (
+                                                                            <button
+                                                                                onClick={() => setPhotos(prev => {
+                                                                                    const n = { ...prev };
+                                                                                    delete n[crit.id];
+                                                                                    return n;
+                                                                                })}
+                                                                                className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full shadow-lg opacity-0 group-hover/photo:opacity-100 transition-opacity"
+                                                                            >
+                                                                                <X size={10} />
+                                                                            </button>
+                                                                        )}
                                                                     </div>
-                                                                ) : (
+                                                                ) : !isHistory ? (
                                                                     <label className="flex flex-col items-center justify-center w-20 h-20 border-2 border-dashed border-slate-200 bg-slate-50 rounded-2xl cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 transition-all text-slate-400 hover:text-indigo-500">
                                                                         <ImageIcon size={20} className="mb-1 opacity-50" />
                                                                         <span className="text-[8px] font-black uppercase tracking-tight">Foto</span>
@@ -693,8 +822,14 @@ export function EvaluacionModal({
                                                                             onChange={(e) => handlePhotoUpload(crit.id, e, false)}
                                                                         />
                                                                     </label>
+                                                                ) : (
+                                                                    <div className="flex flex-col items-center justify-center w-20 h-20 border border-slate-100 bg-slate-50 rounded-2xl text-slate-300">
+                                                                        <ImageIcon size={20} className="opacity-30" />
+                                                                        <span className="text-[8px] font-black uppercase tracking-tight">Sin Foto</span>
+                                                                    </div>
                                                                 )}
                                                             </div>
+                 </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -710,6 +845,7 @@ export function EvaluacionModal({
                                     <Input
                                         type="number"
                                         min="0"
+                                        disabled={isHistory}
                                         placeholder="Horas"
                                         className="h-14 bg-white rounded-2xl border-slate-200 font-bold text-xl px-4 focus-visible:ring-indigo-500 shadow-sm text-slate-900"
                                         value={horometro}
@@ -720,7 +856,8 @@ export function EvaluacionModal({
                                 <div className="space-y-2">
                                     <Label className="text-xs font-black uppercase text-slate-500 px-1">Año de Fabricación</Label>
                                     <select
-                                        className="w-full h-14 bg-white rounded-2xl border border-slate-200 font-bold text-xl px-4 focus-visible:ring-indigo-500 shadow-sm appearance-none text-slate-900"
+                                        disabled={isHistory}
+                                        className="w-full h-14 bg-white rounded-2xl border border-slate-200 font-bold text-xl px-4 focus-visible:ring-indigo-500 shadow-sm appearance-none text-slate-900 disabled:opacity-100"
                                         value={anioFabricacion}
                                         onChange={(e) => setAnioFabricacion(e.target.value)}
                                     >
@@ -739,6 +876,7 @@ export function EvaluacionModal({
                                     <div className="space-y-2">
                                         <Label className="text-xs font-black uppercase text-orange-800 px-1">Faltante de Piezas</Label>
                                         <Textarea
+                                            disabled={isHistory}
                                             placeholder="Describa las refacciones faltantes..."
                                             className="min-h-[100px] bg-white rounded-2xl border-orange-200 p-4 font-medium focus-visible:ring-orange-500 shadow-sm placeholder:text-orange-300 text-slate-900"
                                             value={faltantePiezas}
@@ -753,18 +891,20 @@ export function EvaluacionModal({
                                                 {fotosFaltantes[num] ? (
                                                     <div className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-sm border-2 border-orange-200 group-hover/photo:opacity-90 transition-opacity">
                                                         <img src={fotosFaltantes[num]} alt={`Faltante ${num}`} className="w-full h-full object-cover" />
-                                                        <button
-                                                            onClick={() => setFotosFaltantes(prev => {
-                                                                const n = { ...prev };
-                                                                delete n[num];
-                                                                return n;
-                                                            })}
-                                                            className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full shadow-lg opacity-0 group-hover/photo:opacity-100 transition-opacity"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
+                                                        {!isHistory && (
+                                                            <button
+                                                                onClick={() => setFotosFaltantes(prev => {
+                                                                    const n = { ...prev };
+                                                                    delete n[num];
+                                                                    return n;
+                                                                })}
+                                                                className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full shadow-lg opacity-0 group-hover/photo:opacity-100 transition-opacity"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                ) : (
+                                                ) : !isHistory ? (
                                                     <label className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-orange-200 bg-white rounded-2xl cursor-pointer hover:bg-orange-100 hover:border-orange-300 transition-all text-orange-300 hover:text-orange-500">
                                                         <div className="p-2 bg-orange-100 rounded-full mb-1">
                                                             <ImageIcon size={16} />
@@ -778,6 +918,11 @@ export function EvaluacionModal({
                                                             onChange={(e) => handlePhotoUpload(String(num), e, true)}
                                                         />
                                                     </label>
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center w-24 h-24 border border-orange-100 bg-white rounded-2xl text-orange-200">
+                                                        <ImageIcon size={16} className="opacity-50" />
+                                                        <span className="text-[8px] font-black uppercase">Sin Foto</span>
+                                                    </div>
                                                 )}
                                             </div>
                                         ))}
@@ -788,6 +933,7 @@ export function EvaluacionModal({
                                 <div className="space-y-2">
                                     <Label className="text-xs font-black uppercase text-slate-500 px-1">El equipo llega con los Siguientes codigos en su software</Label>
                                     <Textarea
+                                        disabled={isHistory}
                                         placeholder="Ingrese códigos..."
                                         className="min-h-[100px] bg-white rounded-2xl border-slate-200 p-4 font-medium focus-visible:ring-indigo-500 shadow-sm text-slate-900"
                                         value={notasEquipo}
@@ -799,18 +945,21 @@ export function EvaluacionModal({
                                 <div className="space-y-3">
                                     <Label className="text-xs font-black uppercase text-slate-500 px-1">Observaciones Generales</Label>
                                     <Input
+                                        disabled={isHistory}
                                         placeholder="Observación 1..."
                                         className="h-12 bg-white rounded-xl border-slate-200 px-4 focus-visible:ring-indigo-500 shadow-sm text-slate-900"
                                         value={observaciones.obs1}
                                         onChange={(e) => setObservaciones(prev => ({ ...prev, obs1: e.target.value }))}
                                     />
                                     <Input
+                                        disabled={isHistory}
                                         placeholder="Observación 2..."
                                         className="h-12 bg-white rounded-xl border-slate-200 px-4 focus-visible:ring-indigo-500 shadow-sm text-slate-900"
                                         value={observaciones.obs2}
                                         onChange={(e) => setObservaciones(prev => ({ ...prev, obs2: e.target.value }))}
                                     />
                                     <Input
+                                        disabled={isHistory}
                                         placeholder="Observación 3..."
                                         className="h-12 bg-white rounded-xl border-slate-200 px-4 focus-visible:ring-indigo-500 shadow-sm text-slate-900"
                                         value={observaciones.obs3}
@@ -835,6 +984,7 @@ export function EvaluacionModal({
                                         <Label className="text-xs font-black uppercase text-slate-500 px-1">Semanas Renovación</Label>
                                         <Input
                                             type="number"
+                                            disabled={isHistory}
                                             placeholder="Weeks"
                                             className="h-14 bg-white rounded-2xl border-slate-200 font-black text-xl text-indigo-600 px-4 focus-visible:ring-indigo-500 shadow-sm"
                                             value={semanas}
@@ -844,6 +994,7 @@ export function EvaluacionModal({
                                     <div className="space-y-2">
                                         <Label className="text-xs font-black uppercase text-slate-500 px-1">Estado</Label>
                                         <Input
+                                            disabled={isHistory}
                                             placeholder="Estado..."
                                             className="h-14 bg-white rounded-2xl border-slate-200 font-black text-xl text-indigo-600 px-4 focus-visible:ring-indigo-500 shadow-sm"
                                             value={estadoMontacargas}
@@ -981,38 +1132,39 @@ export function EvaluacionModal({
                                 </div>
                             </div>
                         )}
-                        <div className="p-8 flex gap-3 bg-slate-50 border-t border-slate-200 mt-8">
+                        <div className="p-6 sm:p-8 flex flex-col sm:flex-row gap-3 bg-slate-50 border-t border-slate-200 mt-8 rounded-b-[2.5rem] -mx-8 -mb-8">
                             <Button
                                 variant="ghost"
                                 onClick={() => setShowCancelConfirm(true)}
-                                className="flex-1 h-14 rounded-2xl border-none bg-white font-black text-slate-600 hover:bg-slate-100 shadow-sm"
+                                className="w-full sm:w-auto h-14 rounded-2xl border-none bg-white font-black text-slate-600 hover:bg-slate-100 shadow-sm shrink-0"
                             >
                                 {isHistory ? 'Cerrar' : 'Cancelar'}
                             </Button>
 
                             {isHistory && (
-                                <div className="p-8 border-t border-slate-100 bg-white flex justify-end gap-4">
+                                <div className="flex flex-col sm:flex-row gap-3 w-full sm:ml-auto">
                                     <Button
-                                        onClick={exportToPDF}
-                                        className="bg-rose-600 hover:bg-rose-700 text-white rounded-2xl px-8 h-12 font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-rose-200"
+                                        onClick={() => exportToPDF(false)}
+                                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl px-8 h-14 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-rose-200"
                                     >
                                         <FileText className="mr-2" size={16} />
                                         Exportar PDF
                                     </Button>
                                     <Button
                                         onClick={exportToExcel}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl px-8 h-12 font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-emerald-200"
+                                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl px-8 h-14 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-emerald-200"
                                     >
                                         <Save className="mr-2" size={16} />
                                         Exportar Excel
                                     </Button>
-                                </div>)}
+                                </div>
+                            )}
 
                             {!isHistory && (
                                 <Button
                                     disabled={saving}
                                     onClick={handleSave}
-                                    className="flex-[2] h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-800 text-white font-black shadow-xl shadow-indigo-200 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                                    className="flex-1 h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-800 text-white font-black shadow-xl shadow-indigo-200 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
                                 >
                                     {saving ? (
                                         <Loader2 className="animate-spin mr-2" />

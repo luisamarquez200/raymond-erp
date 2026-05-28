@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/modelos';
 
@@ -21,7 +22,7 @@ export const modelosApi = {
             }
             return [];
         } catch (error) {
-            console.error('[ModelosService] getAll failed:', error);
+            console.error('[ModelosService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },

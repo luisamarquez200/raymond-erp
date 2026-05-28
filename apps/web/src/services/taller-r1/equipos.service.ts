@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/equipos';
 
@@ -21,7 +22,7 @@ export const equiposApi = {
             }
             return [];
         } catch (error) {
-            console.error('[EquiposService] getAll failed:', error);
+            console.error('[EquiposService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },

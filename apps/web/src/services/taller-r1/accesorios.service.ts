@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/accesorios';
 
@@ -31,7 +32,7 @@ export const accesoriosApi = {
             }
             return [];
         } catch (error) {
-            console.error('[AccesoriosService] getAll failed:', error);
+            console.error('[AccesoriosService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },
@@ -46,7 +47,7 @@ export const accesoriosApi = {
             }
             return [];
         } catch (error) {
-            console.error('[AccesoriosService] getAlertasBaterias failed:', error);
+            console.error('[AccesoriosService] getAlertasBaterias failed:', getErrorMessage(error));
             return [];
         }
     },

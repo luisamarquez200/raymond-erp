@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/entradas';
 
@@ -88,7 +89,7 @@ export const entradasApi = {
             }
             return [];
         } catch (error) {
-            console.error('[EntradasService] getAll failed:', error);
+            console.error('[EntradasService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },
@@ -99,7 +100,7 @@ export const entradasApi = {
             const response = await tallerApi.get<any>(`${API_URL}/counts/all`);
             return response.data?.data || response.data || {};
         } catch (error) {
-            console.error('[EntradasService] getCounts failed:', error);
+            console.error('[EntradasService] getCounts failed:', getErrorMessage(error));
             return {};
         }
     },

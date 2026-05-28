@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/inventario';
 
@@ -30,7 +31,7 @@ export const inventarioApi = {
             }
             return [];
         } catch (error) {
-            console.error('[InventarioService] getAll failed:', error);
+            console.error('[InventarioService] getAll failed:', getErrorMessage(error));
             return [];
         }
     }

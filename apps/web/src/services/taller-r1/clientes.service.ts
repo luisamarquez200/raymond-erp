@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/clientes';
 
@@ -41,7 +42,7 @@ export const clientesApi = {
             }
             return [];
         } catch (error) {
-            console.error('[ClientesService] getAll failed:', error);
+            console.error('[ClientesService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },

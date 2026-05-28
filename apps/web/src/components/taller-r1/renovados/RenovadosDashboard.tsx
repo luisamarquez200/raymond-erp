@@ -10,7 +10,7 @@ import {
     Wrench, ArrowRight, Package, Calendar, User, LayoutDashboard,
     MoreVertical, Eye, Play
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -41,7 +41,7 @@ export const RenovadosDashboard = () => {
                 setPendingEquipos(data);
             }
         } catch (error) {
-            toast.error('Error al cargar datos');
+            toast.error(getErrorMessage(error, 'Error al cargar datos'));
         } finally {
             setLoading(false);
         }

@@ -23,7 +23,7 @@ import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { ubicacionesApi, Ubicacion } from '@/services/taller-r1/ubicaciones.service';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 
 interface SubUbicacion {
@@ -448,7 +448,7 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
             setSalida(data);
             setNewRemision(data.remision || '');
         } catch (error) {
-            toast.error('Error al cargar detalles de la salida');
+            toast.error(getErrorMessage(error, 'Error al cargar detalles de la salida'));
             onClose();
         } finally {
             setLoading(false);
@@ -469,7 +469,7 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
             loadSalida();
             onRefresh();
         } catch (error) {
-            toast.error('Error al actualizar remisión');
+            toast.error(getErrorMessage(error, 'Error al actualizar remisión'));
         } finally {
             setActionLoading(false);
         }
@@ -504,8 +504,8 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
                     });
                     toast.success('Correos enviados correctamente');
                 } catch (e) {
-                    console.error('Error al enviar correos:', e);
-                    toast.error('Error al enviar correos');
+                    console.error('Error al enviar correos:', getErrorMessage(e));
+                    toast.error(getErrorMessage(e, 'Error al enviar correos'));
                 }
             }
 
@@ -513,12 +513,12 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
             onRefresh();
             setConfirmingAction(null);
         } catch (error) {
-            toast.error('Error al cerrar folio');
+            toast.error(getErrorMessage(error, 'Error al cerrar folio'));
         } finally {
             setActionLoading(false);
         }
     };
-
+    
     const handleResendEmail = async () => {
         if (!salida) return;
         setActionLoading(true);
@@ -537,8 +537,8 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
             });
             toast.success('Correo reenviado correctamente');
         } catch (error) {
-            console.error('Error al reenviar correo:', error);
-            toast.error('Error al reenviar correo');
+            console.error('Error al reenviar correo:', getErrorMessage(error));
+            toast.error(getErrorMessage(error, 'Error al reenviar correo'));
         } finally {
             setActionLoading(false);
         }
@@ -555,12 +555,12 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
             setConfirmingAction(null);
             onClose();
         } catch (error) {
-            toast.error('Error al eliminar salida');
+            toast.error(getErrorMessage(error, 'Error al eliminar salida'));
         } finally {
             setActionLoading(false);
         }
     };
-
+    
     const handleRemoveItem = async () => {
         if (!id || !itemToRemove) return;
         const { id: itemId, type } = itemToRemove;
@@ -576,8 +576,7 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
             await loadSalida();
             onRefresh();
         } catch (error) {
-            toast.error(`Error al quitar el ${type}`);
-            console.error(error);
+            toast.error(getErrorMessage(error, `Error al quitar el ${type}`));
         } finally {
             setActionLoading(false);
             setItemToRemove(null);
@@ -599,7 +598,7 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh }: S
             loadSalida();
             onRefresh();
         } catch (error: any) {
-            toast.error(error?.response?.data?.message || 'Error al cancelar equipo');
+            toast.error(getErrorMessage(error, 'Error al cancelar equipo'));
         } finally {
             setActionLoading(false);
         }

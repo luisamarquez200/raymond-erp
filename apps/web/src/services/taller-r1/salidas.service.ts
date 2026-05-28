@@ -1,4 +1,5 @@
 import tallerApi from '@/lib/api-taller';
+import { getErrorMessage } from '@/lib/utils';
 
 const API_URL = '/taller-r1/salidas';
 
@@ -129,7 +130,7 @@ export const salidasApi = {
             }
             return [];
         } catch (error) {
-            console.error('[SalidasService] getAll failed:', error);
+            console.error('[SalidasService] getAll failed:', getErrorMessage(error));
             return [];
         }
     },
