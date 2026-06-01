@@ -60,6 +60,34 @@ export const MODULES: Module[] = [
         category: 'core',
         requiredRole: ['Admin', 'Administrador', 'Superadmin', 'CEO', 'CFO', 'Gerente Operaciones'],
     },
+    // R4 Comercial
+    {
+        id: 'r4-flotilla',
+        name: 'Flotilla / Activos',
+        path: '/r4/flotilla',
+        icon: Truck,
+        description: 'Gestión de activos de flotilla',
+        category: 'core',
+        requiredRole: ['Admin', 'Administrador', 'Superadmin', 'Gerente Operaciones'],
+    },
+    {
+        id: 'r4-rentas',
+        name: 'Rentas',
+        path: '/r4/rentas',
+        icon: Receipt,
+        description: 'Gestión de rentas de equipos',
+        category: 'core',
+        requiredRole: ['Admin', 'Administrador', 'Superadmin', 'Gerente Operaciones'],
+    },
+    {
+        id: 'r4-carga-masiva',
+        name: 'Carga Masiva',
+        path: '/r4/carga-masiva',
+        icon: FileSpreadsheet,
+        description: 'Importación masiva Excel',
+        category: 'core',
+        requiredRole: ['Admin', 'Administrador', 'Superadmin', 'Gerente Operaciones'],
+    },
     // Other Core Modules
 
 

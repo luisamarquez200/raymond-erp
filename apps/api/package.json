@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "build": "pnpm prisma:generate && nest build",
-        "prisma:generate": "npx prisma generate --schema=./prisma/schema.prisma && npx prisma generate --schema=./prisma/schemas/taller-r1.prisma && npx prisma generate --schema=./prisma/schemas/frontera.prisma && npx prisma generate --schema=./prisma/schemas/naves.prisma",
+        "prisma:generate": "npx prisma generate --schema=./prisma/schema.prisma && npx prisma generate --schema=./prisma/schemas/taller-r1.prisma && npx prisma generate --schema=./prisma/schemas/frontera.prisma && npx prisma generate --schema=./prisma/schemas/naves.prisma && npx prisma generate --schema=./prisma/schemas/comercial-r4.prisma",
         "format": "prettier --write \"src/**/*.ts\"",
         "start": "nest start",
         "dev": "NODE_OPTIONS='--max-old-space-size=8192' nest start --watch",

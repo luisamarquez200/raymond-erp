@@ -8,3 +8,286 @@ datasource db {
   url          = env("COMERCIAL_R4_DATABASE_URL")
   relationMode = "prisma"
 }
+
+// -----------------------------------------------------------------------------
+// SEGURIDAD Y AUDITORÍA
+// -----------------------------------------------------------------------------
+
+model Usuario {
+  id              String   @id @default(cuid()) @db.VarChar(50)
+  correo          String   @unique @db.VarChar(150)
+  nombre          String?  @db.VarChar(150)
+  rol             String   @default("USUARIO") @db.VarChar(50)
+  bloqueado       Boolean  @default(false)
+  created_at      DateTime @default(now())
+  
+  auditorias      Auditoria[]
+  documentos      Documento[]
+
+  @@map("usuarios")
+}
+
+model Auditoria {
+  id              String   @id @default(cuid()) @db.VarChar(50)
+  fecha           DateTime @default(now())
+  usuario_id      String?  @db.VarChar(50)
+  modulo          String   @db.VarChar(100)
+  registro_id     String   @db.VarChar(50)
+  accion          String   @db.VarChar(50)
+  valor_anterior  Json?
+  valor_nuevo     Json?
+  observaciones   String?  @db.Text
+
+  usuario         Usuario? @relation(fields: [usuario_id], references: [id])
+
+  @@index([usuario_id])
+  @@index([modulo, registro_id])
+  @@map("auditorias")
+}
+
+// -----------------------------------------------------------------------------
+// OPERACIÓN
+// -----------------------------------------------------------------------------
+
+model Cliente {
+  id                String   @id @default(cuid()) @db.VarChar(50)
+  codigo_cliente    String?  @unique @db.VarChar(100)
+  razon_social      String   @db.VarChar(255)
+  rfc               String?  @db.VarChar(100)
+  datos_comerciales Json?
+  datos_fiscales    Json?
+  estado            String   @default("ACTIVO") @db.VarChar(50)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  sitios            Sitio[]
+  activos           Activo[]
+  rentas            Renta[]
+  contratos         Contrato[]
+  ordenes           OrdenMensual[]
+  tarifas           Tarifa[]
+
+  @@map("clientes")
+}
+
+model Sitio {
+  id                 String   @id @default(cuid()) @db.VarChar(50)
+  cliente_id         String   @db.VarChar(50)
+  nombre             String   @db.VarChar(255)
+  no_totvs           String?  @db.VarChar(100)
+  tienda             String?  @db.VarChar(100)
+  direccion          String?  @db.VarChar(255)
+  ciudad             String?  @db.VarChar(100)
+  estado             String?  @db.VarChar(100)
+  cuenta             String?  @db.VarChar(100)
+  adc                String?  @db.VarChar(100)
+  distribuidor       String?  @db.VarChar(100)
+  contacto_operativo Json?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  cliente            Cliente  @relation(fields: [cliente_id], references: [id])
+  activos            Activo[]
+  rentas             Renta[]
+  contratos          Contrato[]
+
+  @@index([cliente_id])
+  @@map("sitios")
+}
+
+model Activo {
+  id                String   @id @default(cuid()) @db.VarChar(50)
+  id_ubiqo          String?  @unique @db.VarChar(100)
+  serie             String   @unique @db.VarChar(100)
+  clase             String?  @db.VarChar(100)
+  modelo            String?  @db.VarChar(100)
+  oach              String?  @db.VarChar(100)
+  altura            String?  @db.VarChar(50)
+  bc                String?  @db.VarChar(50)
+  info_tecnica      Json?
+  
+  estado_renta      String   @default("DISPONIBLE") @db.VarChar(50)
+  estatus_operativo String   @default("OPERATIVO") @db.VarChar(50)
+
+  cliente_id        String?  @db.VarChar(50)
+  sitio_id          String?  @db.VarChar(50)
+  cuenta            String?  @db.VarChar(100)
+  adc               String?  @db.VarChar(100)
+  distribuidor      String?  @db.VarChar(100)
+  
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  cliente           Cliente? @relation(fields: [cliente_id], references: [id])
+  sitio             Sitio?   @relation(fields: [sitio_id], references: [id])
+  rentas            Renta[]
+  ordenes           OrdenMensual[]
+  historial_sitios  CambioSitioLog[]
+
+  @@index([cliente_id])
+  @@index([sitio_id])
+  @@map("activos")
+}
+
+// -----------------------------------------------------------------------------
+// RENTAS, CONTRATOS Y ÓRDENES
+// -----------------------------------------------------------------------------
+
+model Contrato {
+  id              String   @id @default(cuid()) @db.VarChar(50)
+  numero_contrato String   @unique @db.VarChar(100)
+  cliente_id      String   @db.VarChar(50)
+  sitio_id        String?  @db.VarChar(50)
+  tipo            String?  @db.VarChar(100)
+  estado          String   @default("ACTIVO") @db.VarChar(50)
+  condiciones     Json?
+  fecha_inicio    DateTime @db.Date
+  fecha_fin       DateTime @db.Date
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  cliente         Cliente  @relation(fields: [cliente_id], references: [id])
+  sitio           Sitio?   @relation(fields: [sitio_id], references: [id])
+  rentas          Renta[]
+  ordenes         OrdenMensual[]
+
+  @@index([cliente_id])
+  @@index([sitio_id])
+  @@map("contratos")
+}
+
+model Renta {
+  id              String   @id @default(cuid()) @db.VarChar(50)
+  orden_compra    String?  @db.VarChar(100)
+  cliente_id      String   @db.VarChar(50)
+  sitio_id        String   @db.VarChar(50)
+  activo_id       String   @db.VarChar(50)
+  contrato_id     String?  @db.VarChar(50)
+  
+  tarifa          Float?
+  condiciones     Json?
+  periodicidad    String?  @db.VarChar(50)
+  comentarios     String?  @db.Text
+  estado          String   @default("VIGENTE") @db.VarChar(50)
+  
+  fecha_inicio    DateTime @db.Date
+  fecha_fin       DateTime @db.Date
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  cliente         Cliente  @relation(fields: [cliente_id], references: [id])
+  sitio           Sitio    @relation(fields: [sitio_id], references: [id])
+  activo          Activo   @relation(fields: [activo_id], references: [id])
+  contrato        Contrato? @relation(fields: [contrato_id], references: [id])
+  ordenes         OrdenMensual[]
+
+  @@index([cliente_id])
+  @@index([sitio_id])
+  @@index([activo_id])
+  @@index([contrato_id])
+  @@map("rentas")
+}
+
+model OrdenMensual {
+  id              String   @id @default(cuid()) @db.VarChar(50)
+  cliente_id      String   @db.VarChar(50)
+  contrato_id     String?  @db.VarChar(50)
+  renta_id        String?  @db.VarChar(50)
+  activo_id       String?  @db.VarChar(50)
+  
+  periodo         String   @db.VarChar(50) // e.g. "2026-05"
+  tarifa          Float?
+  condiciones     Json?
+  estado          String   @default("GENERADA") @db.VarChar(50)
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  cliente         Cliente  @relation(fields: [cliente_id], references: [id])
+  contrato        Contrato? @relation(fields: [contrato_id], references: [id])
+  renta           Renta?   @relation(fields: [renta_id], references: [id])
+  activo          Activo?  @relation(fields: [activo_id], references: [id])
+
+  @@index([cliente_id])
+  @@index([contrato_id])
+  @@index([renta_id])
+  @@index([activo_id])
+  @@map("ordenes_mensuales")
+}
+
+// -----------------------------------------------------------------------------
+// COMERCIAL
+// -----------------------------------------------------------------------------
+
+model Tarifa {
+  id              String   @id @default(cuid()) @db.VarChar(50)
+  cliente_id      String?  @db.VarChar(50)
+  servicio        String?  @db.VarChar(100)
+  clase           String?  @db.VarChar(100)
+  modelo          String?  @db.VarChar(100)
+  tarifa          Float
+  moneda          String   @default("MXN") @db.VarChar(10)
+  vigencia_inicio DateTime @db.Date
+  vigencia_fin    DateTime? @db.Date
+  observaciones   String?  @db.Text
+  
+  created_at      DateTime @default(now())
+
+  cliente         Cliente? @relation(fields: [cliente_id], references: [id])
+
+  @@index([cliente_id])
+  @@map("tarifas")
+}
+
+// -----------------------------------------------------------------------------
+// LOGS Y OTROS
+// -----------------------------------------------------------------------------
+
+model CambioSitioLog {
+  id                String   @id @default(cuid()) @db.VarChar(50)
+  activo_id         String   @db.VarChar(50)
+  sitio_anterior_id String?  @db.VarChar(50)
+  sitio_nuevo_id    String   @db.VarChar(50)
+  motivo            String?  @db.Text
+  aprobado          Boolean  @default(true)
+  fecha             DateTime @default(now())
+  usuario_id        String?  @db.VarChar(50)
+
+  activo            Activo   @relation(fields: [activo_id], references: [id])
+
+  @@index([activo_id])
+  @@map("cambios_sitio")
+}
+
+model Documento {
+  id                  String   @id @default(cuid()) @db.VarChar(50)
+  tipo_documento      String   @db.VarChar(100)
+  modulo_relacionado  String   @db.VarChar(100)
+  registro_id         String   @db.VarChar(50)
+  archivo_url         String   @db.Text
+  nombre_archivo      String   @db.VarChar(255)
+  formato             String?  @db.VarChar(50)
+  tamano_kb           Int?
+  fecha               DateTime @default(now())
+  usuario_id          String?  @db.VarChar(50)
+
+  usuario             Usuario? @relation(fields: [usuario_id], references: [id])
+
+  @@index([modulo_relacionado, registro_id])
+  @@index([usuario_id])
+  @@map("documentos")
+}
+
+model CargaMasivaLog {
+  id                String   @id @default(cuid()) @db.VarChar(50)
+  modulo            String   @db.VarChar(100)
+  fecha             DateTime @default(now())
+  usuario_id        String?  @db.VarChar(50)
+  archivo_url       String?  @db.Text
+  total_registros   Int      @default(0)
+  procesados        Int      @default(0)
+  errores           Int      @default(0)
+  resumen           Json?
+
+  @@map("cargas_masivas_logs")
+}
