@@ -168,7 +168,9 @@ model Renta {
   condiciones     Json?
   periodicidad    String?  @db.VarChar(50)
   comentarios     String?  @db.Text
+  // IMPORTADA = creada por carga masiva, VIGENTE = activa, RENOVADA, CANCELADA
   estado          String   @default("VIGENTE") @db.VarChar(50)
+  origen          String   @default("MANUAL") @db.VarChar(50) // MANUAL | IMPORTADA
   
   fecha_inicio    DateTime @db.Date
   fecha_fin       DateTime @db.Date
@@ -196,9 +198,12 @@ model OrdenMensual {
   activo_id       String?  @db.VarChar(50)
   
   periodo         String   @db.VarChar(50) // e.g. "2026-05"
+  po              String?  @db.VarChar(100) // Orden de Compra del mes
   tarifa          Float?
+  moneda          String?  @db.VarChar(20)
   condiciones     Json?
-  estado          String   @default("GENERADA") @db.VarChar(50)
+  // IMPORTADA = creada por carga masiva. Permite edición posterior desde módulo Rentas
+  estado          String   @default("IMPORTADA") @db.VarChar(50)
   
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
@@ -212,6 +217,8 @@ model OrdenMensual {
   @@index([contrato_id])
   @@index([renta_id])
   @@index([activo_id])
+  // Evitar duplicados: mismo activo + mismo periodo + misma PO
+  @@unique([activo_id, periodo, po])
   @@map("ordenes_mensuales")
 }
 

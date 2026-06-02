@@ -9,7 +9,9 @@ import {
     LogOut,
     ChevronLeft,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    Truck,
+    Receipt
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
@@ -28,10 +30,20 @@ interface SidebarProps {
 
 const menuItems = [
     {
-        label: 'Cargue Masivo',
-        icon: FileSpreadsheet,
-        href: '/es/administracion-comercial/cargue-masivo',
+        label: 'Flotilla',
+        icon: Truck,
+        href: '/es/r4/flotilla',
     },
+    {
+        label: 'Clientes y Sitios',
+        icon: FileSpreadsheet,
+        href: '/es/r4/clientes-sitios',
+    },
+    {
+        label: 'Rentas',
+        icon: Receipt,
+        href: '/es/r4/rentas',
+    }
 ];
 
 export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed, onToggle }: SidebarProps) {

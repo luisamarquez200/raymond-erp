@@ -51,6 +51,7 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
     const isIsolated = pathname.includes('/r1') ||
         pathname.includes('/r2') ||
         pathname.includes('/r3') ||
+        pathname.includes('/r4') ||
         pathname.includes('/site-selection') ||
         pathname.includes('/administracion-comercial')
 

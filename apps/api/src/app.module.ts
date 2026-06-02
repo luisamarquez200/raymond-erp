@@ -22,6 +22,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { SuperadminModule } from './modules/superadmin/superadmin.module';
 import { PhasesModule } from './modules/phases/phases.module';
 import { TallerR1Module } from './modules/taller-r1/taller-r1.module';
+import { ComercialR4Module } from './modules/comercial-r4/comercial-r4.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { join } from 'path';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -65,6 +66,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
         SuperadminModule,
         PhasesModule,
         TallerR1Module,
+        ComercialR4Module,
     ],
     controllers: [AppController],
     providers: [AppService, PrismaService],

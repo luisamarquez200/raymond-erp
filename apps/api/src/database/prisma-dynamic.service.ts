@@ -4,6 +4,7 @@ import { Request } from 'express';
 import { PrismaClient as PrismaR1 } from '@prisma/client-taller-r1';
 import { PrismaClient as PrismaFrontera } from '@prisma/client-frontera';
 import { PrismaClient as PrismaNaves } from '@prisma/client-naves';
+import { PrismaClient as PrismaComercial } from '@prisma/client-comercial';
 
 @Injectable({ scope: Scope.REQUEST })
 export class PrismaDynamicService {
@@ -12,7 +13,7 @@ export class PrismaDynamicService {
     constructor(@Inject(REQUEST) private request: Request) { }
 
     static async ensureClientsInitialized() {
-        if (PrismaDynamicService.clients.r1 && PrismaDynamicService.clients.r2 && PrismaDynamicService.clients.r3) {
+        if (PrismaDynamicService.clients.r1 && PrismaDynamicService.clients.r2 && PrismaDynamicService.clients.r3 && PrismaDynamicService.clients.r4) {
             return;
         }
 
@@ -35,6 +36,12 @@ export class PrismaDynamicService {
                 PrismaDynamicService.clients.r3 = client;
                 console.log('✅ Conexión establecida: R3');
             }
+            if (!PrismaDynamicService.clients.r4) {
+                const client = new PrismaComercial();
+                await client.$connect();
+                PrismaDynamicService.clients.r4 = client;
+                console.log('✅ Conexión establecida: R4 (Comercial)');
+            }
         } catch (error: any) {
             console.error('❌ [PrismaDynamicService] Error initializing clients:', error?.message || error);
             if (error.stack) {
@@ -48,6 +55,8 @@ export class PrismaDynamicService {
         const siteId = this.request.headers['x-site-id'] as string || 'r1';
 
         switch (siteId.toLowerCase()) {
+            case 'r4':
+                return PrismaDynamicService.clients.r4;
             case 'r2':
                 return PrismaDynamicService.clients.r2;
             case 'r3':
@@ -67,18 +76,19 @@ export class PrismaDynamicService {
     get client() {
         const siteId = (this.request.headers['x-site-id'] as string || 'r1').toLowerCase();
 
-        // Log all requests to see which site is being used
         console.log(`[PrismaDynamicService] Request to site: "${siteId}" for URL: ${this.request.url}`);
 
-        // Ensure clients are initialized before returning
-        if (!PrismaDynamicService.clients.r1 || !PrismaDynamicService.clients.r2 || !PrismaDynamicService.clients.r3) {
+        if (!PrismaDynamicService.clients.r1 || !PrismaDynamicService.clients.r2 || !PrismaDynamicService.clients.r3 || !PrismaDynamicService.clients.r4) {
             console.log('[PrismaDynamicService] Clients NOT initialized, triggering initialization...');
-            // Note: This is synchronous in the getter, but ensureClientsInitialized is async.
-            // Since onModuleInit calls it, they SHOULD be ready.
-            // If not, we might have a race condition.
         }
 
         switch (siteId) {
+            case 'r4':
+                if (!PrismaDynamicService.clients.r4) {
+                    console.error('[PrismaDynamicService] CRITICAL: client.r4 (Comercial) is MISSING');
+                    throw new Error('Database client for R4 (Comercial) is not initialized');
+                }
+                return PrismaDynamicService.clients.r4;
             case 'r2':
                 if (!PrismaDynamicService.clients.r2) {
                     console.error('[PrismaDynamicService] CRITICAL: client.r2 (Naves) is MISSING');

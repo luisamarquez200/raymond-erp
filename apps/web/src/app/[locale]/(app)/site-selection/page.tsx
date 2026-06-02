@@ -58,15 +58,13 @@ export default function SiteSelectionPage() {
         {
             id: 'admin-comercial',
             code: 'ADMIN_COMERCIAL',
-            name: 'Administración Comercial (Próximamente)',
-            description: 'Gestión comercial y cargue masivo de datos. Estará disponible pronto.',
+            name: 'Administración Comercial',
+            description: 'Gestión comercial y cargue masivo de datos.',
             icon: FileSpreadsheet,
             color: 'from-amber-500 to-amber-700',
             borderColor: 'border-amber-100',
             bgLight: 'bg-amber-50',
-            path: '/es/administracion-comercial/cargue-masivo',
-            requiresAdmin: true,
-            isUpcoming: true
+            path: '/es/r4/flotilla',
         },
     ];
 
