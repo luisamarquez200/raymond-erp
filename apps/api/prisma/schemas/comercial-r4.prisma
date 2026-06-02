@@ -157,13 +157,21 @@ model Contrato {
 }
 
 model Renta {
-  id              String   @id @default(cuid()) @db.VarChar(50)
-  orden_compra    String?  @db.VarChar(100)
-  cliente_id      String   @db.VarChar(50)
-  sitio_id        String   @db.VarChar(50)
-  activo_id       String   @db.VarChar(50)
-  contrato_id     String?  @db.VarChar(50)
-  
+  id                   String    @id @default(cuid()) @db.VarChar(50)
+  orden_compra         String?   @db.VarChar(100)
+  cliente_id           String    @db.VarChar(50)
+  sitio_id             String    @db.VarChar(50)
+  activo_id            String    @db.VarChar(50)
+  contrato_id          String?   @db.VarChar(50)
+
+  // Campos de identificación (MANUAL)
+  cuenta               String?   @db.VarChar(100)
+  adc                  String?   @db.VarChar(100)
+  distribuidor         String?   @db.VarChar(100)
+  no_registro_totvs    String?   @db.VarChar(100)
+  fecha_recepcion      DateTime? @db.Date
+  fecha_pedido_totvs   DateTime? @db.Date
+
   tarifa          Float?
   condiciones     Json?
   periodicidad    String?  @db.VarChar(50)
@@ -171,23 +179,52 @@ model Renta {
   // IMPORTADA = creada por carga masiva, VIGENTE = activa, RENOVADA, CANCELADA
   estado          String   @default("VIGENTE") @db.VarChar(50)
   origen          String   @default("MANUAL") @db.VarChar(50) // MANUAL | IMPORTADA
-  
+
   fecha_inicio    DateTime @db.Date
   fecha_fin       DateTime @db.Date
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  cliente         Cliente  @relation(fields: [cliente_id], references: [id])
-  sitio           Sitio    @relation(fields: [sitio_id], references: [id])
-  activo          Activo   @relation(fields: [activo_id], references: [id])
+  cliente         Cliente   @relation(fields: [cliente_id], references: [id])
+  sitio           Sitio     @relation(fields: [sitio_id], references: [id])
+  activo          Activo    @relation(fields: [activo_id], references: [id])
   contrato        Contrato? @relation(fields: [contrato_id], references: [id])
   ordenes         OrdenMensual[]
+  detalles        DetallesRenta?
 
   @@index([cliente_id])
   @@index([sitio_id])
   @@index([activo_id])
   @@index([contrato_id])
   @@map("rentas")
+}
+
+model DetallesRenta {
+  id                     String   @id @default(cuid()) @db.VarChar(50)
+  renta_id               String   @unique @db.VarChar(50)
+
+  periodo_cobro          String?  @db.VarChar(50)   // mensual | trimestral | anual
+  mes_cobro              String?  @db.VarChar(50)   // "Enero 2026"
+  oc_cliente             String?  @db.VarChar(100)
+  tipo_renta             String?  @db.VarChar(100)
+  moneda                 String   @default("MXN") @db.VarChar(10)
+  renta_base             Float?
+  renta_real             Float?
+  comentarios            String?  @db.Text
+
+  mantenimiento          Boolean  @default(false)
+  pago_mantenimiento     Float?
+
+  descuento_dias_caidos  Float    @default(0)
+  importe_recuperado     Float    @default(0)
+
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  renta                  Renta    @relation(fields: [renta_id], references: [id])
+
+  @@index([renta_id])
+  @@map("detalles_renta")
 }
 
 model OrdenMensual {

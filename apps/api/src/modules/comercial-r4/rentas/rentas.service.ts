@@ -1,65 +1,294 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
+import { MinioService } from '../minio/minio.service';
+import { CreateRentaDto } from './dto/create-renta.dto';
+import { UpdateRentaDto, UpdateDetallesRentaDto } from './dto/update-renta.dto';
 
 @Injectable()
 export class RentasService {
     private readonly logger = new Logger(RentasService.name);
 
-    constructor(private readonly prismaService: PrismaDynamicService) {}
+    constructor(
+        private readonly prismaService: PrismaDynamicService,
+        private readonly minioService: MinioService,
+    ) {}
+
+    private getDb() {
+        const db = PrismaDynamicService.clients.r4;
+        if (!db) throw new Error('Database client for R4 not initialized');
+        return db;
+    }
+
+    private mapRenta(renta: any) {
+        return {
+            id: renta.id,
+            estado: renta.estado,
+            origen: renta.origen,
+            cliente: renta.cliente ? {
+                id: renta.cliente.id,
+                razonSocial: renta.cliente.razon_social,
+                rfc: renta.cliente.rfc,
+            } : null,
+            sitio: renta.sitio ? {
+                id: renta.sitio.id,
+                nombre: renta.sitio.nombre,
+                ciudad: renta.sitio.ciudad,
+            } : null,
+            activo: renta.activo ? {
+                id: renta.activo.id,
+                serie: renta.activo.serie,
+                clase: renta.activo.clase,
+                modelo: renta.activo.modelo,
+            } : null,
+            cuenta: renta.cuenta,
+            adc: renta.adc,
+            distribuidor: renta.distribuidor,
+            no_registro_totvs: renta.no_registro_totvs,
+            fecha_recepcion: renta.fecha_recepcion,
+            fecha_pedido_totvs: renta.fecha_pedido_totvs,
+            fecha_inicio: renta.fecha_inicio,
+            fecha_fin: renta.fecha_fin,
+            detalles: renta.detalles ?? null,
+        };
+    }
 
     async obtenerRentas() {
         try {
-            const db = PrismaDynamicService.clients.r4;
-            if (!db) {
-                throw new Error('Database client for R4 not initialized');
-            }
-
+            const db = this.getDb();
             const rentas = await db.renta.findMany({
-                include: {
-                    cliente: true,
-                    activo: true
-                }
+                include: { cliente: true, sitio: true, activo: true, detalles: true },
+                orderBy: { created_at: 'desc' },
             });
-
-            const grouped = new Map<string, any>();
-
-            for (const renta of rentas) {
-                const cod = (renta.condiciones as any)?.codigo_renta_cli || renta.identificador || renta.id;
-                
-                if (!grouped.has(cod)) {
-                    grouped.set(cod, {
-                        id: cod, // Use code as ID for the frontend table
-                        identificador: cod,
-                        cliente: renta.cliente?.razon_social || 'Desconocido',
-                        estado: renta.estado || 'Activo',
-                        fechaInicio: renta.fecha_inicio ? new Date(renta.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
-                        fechaFin: renta.fecha_fin ? new Date(renta.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
-                        monto: 0, 
-                        moneda: (renta.condiciones as any)?.moneda || 'MXN',
-                        activos: []
-                    });
-                }
-                
-                const group = grouped.get(cod);
-                if (renta.activo) {
-                    group.activos.push({ serie: renta.activo.serie, modelo: renta.activo.modelo });
-                }
-            }
-
-            return Array.from(grouped.values()).map(g => ({
-                id: g.id,
-                identificador: g.identificador,
-                cliente: g.cliente,
-                estado: g.estado,
-                fechaInicio: g.fechaInicio,
-                fechaFin: g.fechaFin,
-                monto: 'Variable', // or sum if available
-                activosCount: g.activos.length,
-                activos: g.activos
-            }));
+            return rentas.map(r => this.mapRenta(r));
         } catch (error: any) {
             this.logger.error(`Error en obtenerRentas: ${error.message}`);
             throw error;
         }
+    }
+
+    async obtenerRentaPorId(id: string) {
+        const db = this.getDb();
+        const renta = await db.renta.findUnique({
+            where: { id },
+            include: { cliente: true, sitio: true, activo: true, detalles: true },
+        });
+        if (!renta) throw new NotFoundException(`Renta ${id} no encontrada`);
+        return this.mapRenta(renta);
+    }
+
+    async previewRenta(dto: CreateRentaDto) {
+        const db = this.getDb();
+
+        const [cliente, sitio, activo] = await Promise.all([
+            db.cliente.findUnique({ where: { id: dto.cliente_id } }),
+            db.sitio.findUnique({ where: { id: dto.sitio_id } }),
+            db.activo.findUnique({ where: { id: dto.activo_id } }),
+        ]);
+
+        if (!cliente) throw new NotFoundException(`Cliente ${dto.cliente_id} no encontrado`);
+        if (!sitio) throw new NotFoundException(`Sitio ${dto.sitio_id} no encontrado`);
+        if (!activo) throw new NotFoundException(`Activo ${dto.activo_id} no encontrado`);
+
+        const rentaBase = dto.detalles?.renta_base ?? 0;
+        const descuento = dto.detalles?.descuento_dias_caidos ?? 0;
+        const pagoMant = dto.detalles?.mantenimiento ? (dto.detalles?.pago_mantenimiento ?? 0) : 0;
+        const rentaReal = rentaBase - descuento;
+        const totalConMantenimiento = rentaReal + pagoMant;
+
+        return {
+            cliente: { id: cliente.id, razonSocial: cliente.razon_social, rfc: cliente.rfc },
+            sitio: { id: sitio.id, nombre: sitio.nombre, ciudad: sitio.ciudad },
+            activo: { id: activo.id, serie: activo.serie, clase: activo.clase, modelo: activo.modelo },
+            cuenta: dto.cuenta ?? sitio.cuenta,
+            adc: dto.adc ?? sitio.adc,
+            distribuidor: dto.distribuidor ?? sitio.distribuidor,
+            no_registro_totvs: dto.no_registro_totvs,
+            fecha_recepcion: dto.fecha_recepcion,
+            fecha_pedido_totvs: dto.fecha_pedido_totvs,
+            fecha_inicio: dto.fecha_inicio,
+            fecha_fin: dto.fecha_fin,
+            detalles: {
+                ...dto.detalles,
+                moneda: dto.detalles?.moneda ?? 'MXN',
+                renta_base: rentaBase,
+                renta_real: rentaReal,
+                pago_mantenimiento: pagoMant,
+                total_con_mantenimiento: totalConMantenimiento,
+            },
+        };
+    }
+
+    async crearRenta(dto: CreateRentaDto) {
+        const db = this.getDb();
+
+        const activo = await db.activo.findUnique({ where: { id: dto.activo_id } });
+        if (!activo) throw new NotFoundException(`Activo ${dto.activo_id} no encontrado`);
+
+        const rentaVigente = await db.renta.findFirst({
+            where: { activo_id: dto.activo_id, estado: 'VIGENTE' },
+        });
+        if (rentaVigente) {
+            throw new ConflictException(
+                `El activo (serie: ${activo.serie}) ya tiene una renta VIGENTE (id: ${rentaVigente.id}). Cancélala antes de crear una nueva.`,
+            );
+        }
+
+        const renta = await db.renta.create({
+            data: {
+                cliente_id: dto.cliente_id,
+                sitio_id: dto.sitio_id,
+                activo_id: dto.activo_id,
+                contrato_id: dto.contrato_id ?? null,
+                cuenta: dto.cuenta ?? null,
+                adc: dto.adc ?? null,
+                distribuidor: dto.distribuidor ?? null,
+                no_registro_totvs: dto.no_registro_totvs ?? null,
+                fecha_recepcion: dto.fecha_recepcion ? new Date(dto.fecha_recepcion) : null,
+                fecha_pedido_totvs: dto.fecha_pedido_totvs ? new Date(dto.fecha_pedido_totvs) : null,
+                fecha_inicio: new Date(dto.fecha_inicio),
+                fecha_fin: new Date(dto.fecha_fin),
+                estado: 'VIGENTE',
+                origen: 'MANUAL',
+            },
+        });
+
+        let detalles = null;
+        if (dto.detalles) {
+            const d = dto.detalles;
+            const rentaReal = d.renta_real ?? ((d.renta_base ?? 0) - (d.descuento_dias_caidos ?? 0));
+            detalles = await db.detallesRenta.create({
+                data: {
+                    renta_id: renta.id,
+                    periodo_cobro: d.periodo_cobro ?? null,
+                    mes_cobro: d.mes_cobro ?? null,
+                    oc_cliente: d.oc_cliente ?? null,
+                    tipo_renta: d.tipo_renta ?? null,
+                    moneda: d.moneda ?? 'MXN',
+                    renta_base: d.renta_base ?? null,
+                    renta_real: rentaReal,
+                    comentarios: d.comentarios ?? null,
+                    mantenimiento: d.mantenimiento ?? false,
+                    pago_mantenimiento: d.mantenimiento ? (d.pago_mantenimiento ?? null) : null,
+                    descuento_dias_caidos: d.descuento_dias_caidos ?? 0,
+                    importe_recuperado: d.importe_recuperado ?? 0,
+                },
+            });
+        }
+
+        this.logger.log(`Renta creada: ${renta.id} para activo ${activo.serie}`);
+        return { ...renta, detalles };
+    }
+
+    async actualizarRenta(id: string, dto: UpdateRentaDto) {
+        const db = this.getDb();
+        const existente = await db.renta.findUnique({ where: { id } });
+        if (!existente) throw new NotFoundException(`Renta ${id} no encontrada`);
+
+        return db.renta.update({
+            where: { id },
+            data: {
+                ...(dto.cuenta !== undefined && { cuenta: dto.cuenta }),
+                ...(dto.adc !== undefined && { adc: dto.adc }),
+                ...(dto.distribuidor !== undefined && { distribuidor: dto.distribuidor }),
+                ...(dto.no_registro_totvs !== undefined && { no_registro_totvs: dto.no_registro_totvs }),
+                ...(dto.fecha_recepcion && { fecha_recepcion: new Date(dto.fecha_recepcion) }),
+                ...(dto.fecha_pedido_totvs && { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) }),
+                ...(dto.fecha_inicio && { fecha_inicio: new Date(dto.fecha_inicio) }),
+                ...(dto.fecha_fin && { fecha_fin: new Date(dto.fecha_fin) }),
+                ...(dto.estado && { estado: dto.estado }),
+            },
+        });
+    }
+
+    async actualizarDetalles(rentaId: string, dto: UpdateDetallesRentaDto) {
+        const db = this.getDb();
+        const renta = await db.renta.findUnique({ where: { id: rentaId } });
+        if (!renta) throw new NotFoundException(`Renta ${rentaId} no encontrada`);
+
+        const existente = await db.detallesRenta.findUnique({ where: { renta_id: rentaId } });
+
+        const rentaBase = dto.renta_base ?? existente?.renta_base ?? 0;
+        const descuento = dto.descuento_dias_caidos ?? existente?.descuento_dias_caidos ?? 0;
+        const rentaReal = dto.renta_real ?? (rentaBase - descuento);
+        const mantenimiento = dto.mantenimiento ?? existente?.mantenimiento ?? false;
+
+        const data = {
+            ...(dto.periodo_cobro !== undefined && { periodo_cobro: dto.periodo_cobro }),
+            ...(dto.mes_cobro !== undefined && { mes_cobro: dto.mes_cobro }),
+            ...(dto.oc_cliente !== undefined && { oc_cliente: dto.oc_cliente }),
+            ...(dto.tipo_renta !== undefined && { tipo_renta: dto.tipo_renta }),
+            ...(dto.moneda !== undefined && { moneda: dto.moneda }),
+            ...(dto.renta_base !== undefined && { renta_base: dto.renta_base }),
+            renta_real: rentaReal,
+            ...(dto.comentarios !== undefined && { comentarios: dto.comentarios }),
+            mantenimiento,
+            pago_mantenimiento: mantenimiento ? (dto.pago_mantenimiento ?? existente?.pago_mantenimiento ?? null) : null,
+            ...(dto.descuento_dias_caidos !== undefined && { descuento_dias_caidos: dto.descuento_dias_caidos }),
+            ...(dto.importe_recuperado !== undefined && { importe_recuperado: dto.importe_recuperado }),
+        };
+
+        if (existente) {
+            return db.detallesRenta.update({ where: { renta_id: rentaId }, data });
+        }
+
+        return db.detallesRenta.create({ data: { renta_id: rentaId, ...data } });
+    }
+
+    async cancelarRenta(id: string) {
+        const db = this.getDb();
+        const existente = await db.renta.findUnique({ where: { id } });
+        if (!existente) throw new NotFoundException(`Renta ${id} no encontrada`);
+        return db.renta.update({ where: { id }, data: { estado: 'CANCELADA' } });
+    }
+
+    async subirDocumento(rentaId: string, file: Express.Multer.File) {
+        const db = this.getDb();
+        const renta = await db.renta.findUnique({ where: { id: rentaId } });
+        if (!renta) throw new NotFoundException(`Renta ${rentaId} no encontrada`);
+
+        const ext = file.originalname.split('.').pop() || '';
+        const objectKey = `rentas/${rentaId}/${Date.now()}_${file.originalname}`;
+
+        await this.minioService.uploadFile(objectKey, file.buffer, file.mimetype);
+
+        const documento = await db.documento.create({
+            data: {
+                tipo_documento: file.mimetype.startsWith('image') ? 'imagen' : 'pdf',
+                modulo_relacionado: 'rentas',
+                registro_id: rentaId,
+                archivo_url: objectKey,
+                nombre_archivo: file.originalname,
+                formato: ext,
+                tamano_kb: Math.round(file.size / 1024),
+            },
+        });
+
+        const url_firmada = await this.minioService.getSignedUrl(objectKey);
+
+        this.logger.log(`Documento subido para renta ${rentaId}: ${objectKey}`);
+        return { ...documento, url_firmada };
+    }
+
+    async obtenerDocumentos(rentaId: string) {
+        const db = this.getDb();
+        const renta = await db.renta.findUnique({ where: { id: rentaId } });
+        if (!renta) throw new NotFoundException(`Renta ${rentaId} no encontrada`);
+
+        const documentos = await db.documento.findMany({
+            where: { modulo_relacionado: 'rentas', registro_id: rentaId },
+            orderBy: { fecha: 'desc' },
+        });
+
+        return Promise.all(
+            documentos.map(async doc => ({
+                id: doc.id,
+                nombre_archivo: doc.nombre_archivo,
+                tipo_documento: doc.tipo_documento,
+                formato: doc.formato,
+                tamano_kb: doc.tamano_kb,
+                fecha: doc.fecha,
+                url_firmada: await this.minioService.getSignedUrl(doc.archivo_url),
+            })),
+        );
     }
 }

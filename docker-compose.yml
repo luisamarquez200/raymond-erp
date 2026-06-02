@@ -27,6 +27,9 @@ services:
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-raymond_admin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-raymond_secret_2024}
+      
     restart: unless-stopped
     networks:
       - raymond-network
@@ -81,7 +84,30 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    container_name: raymond-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-raymond_admin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-raymond_secret_2024}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - raymond-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 networks:
   raymond-network:
     driver: bridge
+
+volumes:
+  minio_data:
 
