@@ -37,6 +37,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 organizationId: rawUser.organization_id || rawUser.organizationId,
                 isSuperadmin: rawUser.isSuperadmin,
                 avatarUrl: rawUser.avatarUrl || rawUser.avatar_url,
+                sitio: rawUser.sitio,
             };
 
             localStorage.setItem('accessToken', data.accessToken);
@@ -74,6 +75,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 organizationId: rawUser.organization_id || rawUser.organizationId,
                 isSuperadmin: rawUser.isSuperadmin,
                 avatarUrl: rawUser.avatarUrl || rawUser.avatar_url,
+                sitio: rawUser.sitio,
             };
 
             localStorage.setItem('accessToken', data.accessToken);
@@ -139,6 +141,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         organizationId: rawUser.organization_id || rawUser.organizationId,
                         isSuperadmin: rawUser.isSuperadmin,
                         avatarUrl: rawUser.avatarUrl,
+                        sitio: rawUser.sitio,
                     };
                 } catch (e) {
                     set({ user: null, accessToken: null, refreshToken: null, isLoading: false });

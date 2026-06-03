@@ -73,6 +73,35 @@ export default function Fleet() {
   const [isNewAssetModalOpen, setIsNewAssetModalOpen] = useState(false);
   const [newAssetTipo, setNewAssetTipo] = useState("Montacargas");
 
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editingData, setEditingData] = useState<any>({});
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const startEditing = (e: React.MouseEvent, asset: any) => {
+    e.stopPropagation();
+    setEditingRowId(asset.serie);
+    setEditingData({ ...asset });
+    setIsEditModalOpen(true);
+  };
+
+  const cancelEditing = () => {
+    setEditingRowId(null);
+    setEditingData({});
+    setIsEditModalOpen(false);
+  };
+
+  const saveEditing = async () => {
+    try {
+      // await api.put(`/r4/flotilla/${editingRowId}`, editingData); // Real API call
+      setFleetAssets(prev => prev.map(a => a.serie === editingRowId ? { ...a, ...editingData } : a));
+      toast.success("Activo actualizado correctamente");
+      cancelEditing();
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al actualizar el activo");
+    }
+  };
+
   // Transfer Modal State
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [selectedAssetForTransfer, setSelectedAssetForTransfer] = useState<any>(null);
@@ -87,7 +116,12 @@ export default function Fleet() {
     ? fleetAssets.filter(a => a.adc?.toLowerCase() === adcAsignado?.toLowerCase())
     : fleetAssets;
     
-  const uniqueADCs = Array.from(new Set(baseAssets.map(a => a.adc).filter(Boolean))).sort();
+  const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
+  const uniqueADCs = Array.from(new Set(baseAssets.map(a => getValidString(a.adc)).filter(Boolean))).sort();
+  const uniqueClientes = Array.from(new Set(baseAssets.map(a => getValidString(a.cliente)).filter(Boolean))).sort();
+  const uniqueSites = Array.from(new Set(baseAssets.map(a => getValidString(a.site)).filter(Boolean))).sort();
+  const uniqueCuentas = Array.from(new Set(baseAssets.map(a => getValidString(a.cuenta)).filter(Boolean))).sort();
+  const uniqueDistribuidores = Array.from(new Set(baseAssets.map(a => getValidString(a.distribuidor)).filter(Boolean))).sort();
 
   const filteredAssets = baseAssets.filter((asset: any) => {
     if (selectedADC !== "Todos" && asset.adc !== selectedADC) return false;
@@ -192,7 +226,7 @@ export default function Fleet() {
             Exportar
           </button>
           {role === 'admin' && (
-            <button className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-amber-100">
+            <button onClick={() => setIsNewAssetModalOpen(true)} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-amber-100">
               <Plus className="w-4 h-4" />
               Alta de Equipo
             </button>
@@ -248,7 +282,7 @@ export default function Fleet() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
             <input
               type="text"
-              placeholder="Buscar por Serie, Cliente o Modelo..."
+              placeholder="Buscar por Serie, Cliente o Modelo"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -309,16 +343,16 @@ export default function Fleet() {
                   <th className="px-6 py-5 font-black">Cliente / Sitio</th>
                   <th className="px-6 py-5 font-black">ADC</th>
                   <th className="px-6 py-5 font-black">Ingreso / Plazo / Vencimiento</th>
-                  <th className="px-6 py-5 font-black">Recolección</th>
+                  <th className="px-6 py-5 font-black text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando flotilla...</td></tr>
                 ) : filteredAssets.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron activos.</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron activos.</td></tr>
                 ) : paginatedAssets.map((asset) => (
-                  <tr key={asset.serie} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => window.location.href = `/es/r4/flotilla/${asset.serie}`}>
+                  <tr key={asset.serie} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={(e) => startEditing(e, asset)}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
@@ -335,7 +369,6 @@ export default function Fleet() {
                         </div>
                       </div>
                     </td>
-                    
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2 py-0.5 text-[9px] font-black uppercase rounded border tracking-wider ${statusColors[asset.estatus as keyof typeof statusColors] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                         {asset.estatus}
@@ -343,7 +376,7 @@ export default function Fleet() {
                     </td>
                     
                     <td className="px-6 py-4">
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span className="font-bold text-slate-800 text-sm">{asset.cliente}</span>
                         <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-0.5">
                           <MapPin className="w-3 h-3" />
@@ -375,8 +408,16 @@ export default function Fleet() {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <span className="text-xs text-slate-500">{asset.fechaRecoleccion}</span>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={(e) => startEditing(e, asset)}
+                          className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded transition-colors"
+                          title="Editar Activo"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -717,23 +758,23 @@ export default function Fleet() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium mb-1.5">Número de Serie *</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 font-bold" placeholder="Ej. 7720-12345" />
+                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 font-bold" placeholder="Escribe la serie" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Modelo *</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Ej. 7720" />
+                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe el modelo" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5 flex justify-between">OACH {newAssetTipo === "Montacargas" && <span className="text-red-500">*</span>}</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Ej. 84&quot;" />
+                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe el ancho" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5 flex justify-between">Altura {newAssetTipo === "Montacargas" && <span className="text-red-500">*</span>}</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Ej. 210&quot;" />
+                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe la altura" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5 flex justify-between">Compartimiento Batería (BC) {newAssetTipo === "Montacargas" && <span className="text-red-500">*</span>}</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Ej. 36&quot;" />
+                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe el ancho" />
                     </div>
                   </div>
                   {newAssetTipo !== "Montacargas" && (
@@ -752,44 +793,35 @@ export default function Fleet() {
                       <label className="block text-sm font-medium mb-1.5">Cliente</label>
                       <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
                         <option>Seleccionar...</option>
-                        <option>Grupo Industrial MX</option>
-                        <option>Logística Express</option>
+                        {(uniqueClientes as string[]).map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Cuenta Relacionada</label>
                       <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
                         <option>Seleccionar...</option>
-                        <option>Cuenta A</option>
-                        <option>Cuenta B</option>
+                        {(uniqueCuentas as string[]).map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Site (Ubicación)</label>
                       <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
                         <option>Seleccionar...</option>
-                        <option>Planta Norte</option>
-                        <option>Centro Distribución</option>
+                        {(uniqueSites as string[]).map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Administrador de Cuenta (ADC)</label>
                       <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
                         <option>Seleccionar...</option>
-                        <option>Juan Pérez</option>
-                        <option>Ana Martínez</option>
-                        <option>Carlos Sánchez</option>
-                        <option>María López</option>
-                        <option>Roberto Gómez</option>
+                        {(uniqueADCs as string[]).map(adc => <option key={adc} value={adc}>{adc}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Distribuidor de Servicio</label>
                       <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
                         <option>Seleccionar...</option>
-                        <option>Raymond MTY</option>
-                        <option>Raymond CDMX</option>
-                        <option>Raymond GDL</option>
+                        {(uniqueDistribuidores as string[]).map(d => <option key={d} value={d}>{d}</option>)}
                       </select>
                     </div>
                   </div>
@@ -874,7 +906,7 @@ export default function Fleet() {
 
                 <div>
                   <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Comentarios</label>
-                  <textarea rows={2} placeholder="Detalles adicionales sobre la reubicación..." className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 resize-none"></textarea>
+                  <textarea rows={2} placeholder="Detalles adicionales sobre la reubicación" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 resize-none"></textarea>
                 </div>
                 
                 <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 flex gap-2">
@@ -894,8 +926,110 @@ export default function Fleet() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+        {/* --- MODAL EDICIÓN DE EQUIPO --- */}
+        {isEditModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="flex items-center justify-between p-5 border-b border-border bg-secondary/30 shrink-0">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-foreground">
+                  <Edit className="w-5 h-5 text-amber-600" />
+                  Editar Activo: {editingData.serie}
+                </h3>
+                <button onClick={cancelEditing} className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Modelo</label>
+                    <input 
+                      type="text" 
+                      value={editingData.modelo || ''} 
+                      onChange={(e) => setEditingData({...editingData, modelo: e.target.value})}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Estatus</label>
+                    <select 
+                      value={editingData.estatus || ''} 
+                      onChange={(e) => setEditingData({...editingData, estatus: e.target.value})}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="Activo">Activo</option>
+                      <option value="En Renta">En Renta</option>
+                      <option value="Inactivo">Inactivo</option>
+                      <option value="Disponible">Disponible</option>
+                      <option value="Back Up">Back Up</option>
+                      <option value="Inactivo con cliente">Inactivo con cliente</option>
+                      <option value="En Taller">En Taller</option>
+                      <option value="Mantenimiento">Mantenimiento</option>
+                    </select>
+                  </div>
+                </div>
 
+                <div className="space-y-4 pt-4 border-t border-border">
+                  <h4 className="font-bold text-sm text-primary">Asignación Comercial</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Cliente</label>
+                      <select 
+                        value={editingData.cliente || ''} 
+                        onChange={(e) => setEditingData({...editingData, cliente: e.target.value})}
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(uniqueClientes as string[]).map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Site (Ubicación)</label>
+                      <select 
+                        value={editingData.site || ''} 
+                        onChange={(e) => setEditingData({...editingData, site: e.target.value})}
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(uniqueSites as string[]).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Administrador de Cuenta (ADC)</label>
+                      <select 
+                        value={editingData.adc || ''} 
+                        onChange={(e) => setEditingData({...editingData, adc: e.target.value})}
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(uniqueADCs as string[]).map(adc => <option key={adc} value={adc}>{adc}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-border bg-secondary/30 shrink-0">
+                <button onClick={cancelEditing} className="px-5 py-2.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={saveEditing} className="px-6 py-2.5 bg-amber-600 text-white text-sm font-bold rounded-lg hover:bg-amber-700 transition-colors shadow-md">
+                  Guardar Cambios
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

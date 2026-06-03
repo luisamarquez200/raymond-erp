@@ -145,8 +145,11 @@ export default function SiteSelectionPage() {
                 </div>
 
                 <div className={cn(
-                    "grid gap-8",
-                    availableOptions.length === 4 ? "grid-cols-1 md:grid-cols-4" : "grid-cols-1 md:grid-cols-3"
+                    "grid gap-8 mx-auto",
+                    availableOptions.length === 1 ? "grid-cols-1 max-w-sm" :
+                    availableOptions.length === 2 ? "grid-cols-1 md:grid-cols-2 max-w-2xl" :
+                    availableOptions.length === 4 ? "grid-cols-1 md:grid-cols-4" : 
+                    "grid-cols-1 md:grid-cols-3"
                 )}>
                     {availableOptions.map((site) => (
                         <button

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Res, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Res, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import { ClientesService } from './clientes.service';
 import { CreateClienteDto, UpdateClienteDto } from './dto/create-cliente.dto';
@@ -55,6 +55,17 @@ export class ClientesController {
         try {
             const data = await this.clientesService.agregarSitio(clienteId, body);
             return res.status(HttpStatus.CREATED).json({ success: true, data });
+        } catch (error: any) {
+            const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            return res.status(status).json({ success: false, message: error.message });
+        }
+    }
+
+    @Delete(':id')
+    async eliminarCliente(@Param('id') id: string, @Res() res: Response) {
+        try {
+            await this.clientesService.eliminarCliente(id);
+            return res.status(HttpStatus.OK).json({ success: true, message: 'Cliente eliminado exitosamente' });
         } catch (error: any) {
             const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
             return res.status(status).json({ success: false, message: error.message });

@@ -1,4 +1,4 @@
-import { Controller, Patch, Body, Param, Res, HttpStatus } from '@nestjs/common';
+import { Controller, Patch, Delete, Body, Param, Res, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import { ClientesService } from './clientes.service';
 import { CreateSitioDto } from './dto/create-sitio.dto';
@@ -12,6 +12,17 @@ export class SitiosController {
         try {
             const data = await this.clientesService.actualizarSitio(sitioId, body);
             return res.status(HttpStatus.OK).json({ success: true, data });
+        } catch (error: any) {
+            const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            return res.status(status).json({ success: false, message: error.message });
+        }
+    }
+
+    @Delete(':sitioId')
+    async eliminarSitio(@Param('sitioId') sitioId: string, @Res() res: Response) {
+        try {
+            await this.clientesService.eliminarSitio(sitioId);
+            return res.status(HttpStatus.OK).json({ success: true, message: 'Sitio eliminado exitosamente' });
         } catch (error: any) {
             const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
             return res.status(status).json({ success: false, message: error.message });

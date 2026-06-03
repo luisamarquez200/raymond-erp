@@ -9,6 +9,7 @@ export interface User {
     organizationId: string | null; // CRITICAL: Nullable for global SuperAdmin
     isSuperadmin?: boolean; // CRITICAL: Flag for SuperAdmin global users
     avatarUrl?: string;
+    sitio?: string;
 }
 
 export interface AuthResponse {

@@ -25,9 +25,23 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
     }, []);
 
     useEffect(() => {
-        if (isClient && !isLoading && !user) {
-            const locale = params.locale || 'es';
-            router.push(`/${locale}/login`);
+        if (isClient && !isLoading) {
+            if (!user) {
+                const locale = params.locale || 'es';
+                router.push(`/${locale}/login`);
+            } else {
+                // Determine if user has R4 access
+                const hasR4Access = user.isSuperadmin || 
+                    (user.role?.toLowerCase() === 'administrador' && (user as any).sitio?.includes('R4')) ||
+                    (user as any).sitio?.includes('R4') ||
+                    user.role?.includes('R4');
+                
+                if (!hasR4Access) {
+                    const locale = params.locale || 'es';
+                    // If no access, send to unauthorized or back to Taller R1 main
+                    router.push(`/${locale}/r1/dashboard`);
+                }
+            }
         }
     }, [user, isLoading, router, isClient, params.locale]);
 

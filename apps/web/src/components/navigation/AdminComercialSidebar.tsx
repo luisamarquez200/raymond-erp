@@ -11,7 +11,8 @@ import {
     ChevronRight,
     AlertCircle,
     Truck,
-    Receipt
+    Receipt,
+    CircleDollarSign
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
@@ -29,6 +30,11 @@ interface SidebarProps {
 }
 
 const menuItems = [
+    {
+        label: 'Dashboard',
+        icon: LayoutDashboard,
+        href: '/es/r4/dashboard',
+    },
     {
         label: 'Flotilla',
         icon: Truck,

@@ -54,6 +54,7 @@ export default function LoginPage() {
                         lastName: '',
                         role: userData.role,
                         organizationId: null, // Taller doesn't use organizationId yet
+                        sitio: userData.sitio,
                     };
 
                     useAuthStore.getState().setTallerSession(

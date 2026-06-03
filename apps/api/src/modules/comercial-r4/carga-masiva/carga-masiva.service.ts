@@ -5,9 +5,18 @@ import { v4 as uuidv4 } from 'uuid'; // Fallback for IDs if needed
 
 // Mapeo de nombre completo del mes (como viene en el Excel) → número de mes
 const MONTH_NAME_MAP: Record<string, string> = {
-    'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
-    'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
-    'SEPTIEMBRE': '09', 'OCTUBRE': '10', 'NOVIEMBRE': '11', 'DICIEMBRE': '12',
+    'ENERO': '01', 'ENE': '01', 'JAN': '01',
+    'FEBRERO': '02', 'FEB': '02',
+    'MARZO': '03', 'MAR': '03',
+    'ABRIL': '04', 'ABR': '04', 'APR': '04',
+    'MAYO': '05', 'MAY': '05',
+    'JUNIO': '06', 'JUN': '06',
+    'JULIO': '07', 'JUL': '07',
+    'AGOSTO': '08', 'AGO': '08', 'AUG': '08',
+    'SEPTIEMBRE': '09', 'SEP': '09', 'SEPT': '09',
+    'OCTUBRE': '10', 'OCT': '10',
+    'NOVIEMBRE': '11', 'NOV': '11',
+    'DICIEMBRE': '12', 'DIC': '12', 'DEC': '12',
 };
 
 @Injectable()
@@ -155,8 +164,12 @@ export class CargaMasivaService {
                     let activo = activoCache.get(serie);
                     if (!activo) {
                         const activoData = {
+                            id: serie,
                             clase: getVal(row, 'CLASE'),
                             modelo: getVal(row, 'MODELO'),
+                            oach: getVal(row, 'OACH'),
+                            altura: getVal(row, 'ALTURA'),
+                            bc: getVal(row, 'BC'),
                             estatus_operativo: getVal(row, 'ESTATUS') || 'OPERATIVO',
                             cliente_id: cliente.id,
                             sitio_id: sitio.id,
@@ -165,7 +178,7 @@ export class CargaMasivaService {
                             distribuidor: getVal(row, 'DISTRIBUIDOR'),
                         };
                         activo = await db.activo.upsert({
-                            where: { serie },
+                            where: { id: serie },
                             update: activoData,
                             create: { serie, ...activoData },
                         });
@@ -176,13 +189,25 @@ export class CargaMasivaService {
                     let renta = rentaCache.get(activo.id);
                     if (!renta) {
                         renta = await db.renta.findFirst({ where: { activo_id: activo.id } });
+                        const codRentaCli = getVal(row, 'CÓD RENTA CLI') || getVal(row, 'COD RENTA CLI') || `RENTA-${serie}`;
+                        const tarifaStr = getVal(row, 'PRECIO RENTA CLIENTE') || getVal(row, 'RENTA') || getVal(row, 'TARIFA');
+                        const tarifaParsed = tarifaStr ? parseFloat(tarifaStr.replace(/[^0-9.-]+/g, '')) : null;
+                        
+                        const rentaData = {
+                            cuenta: getVal(row, 'CUENTA'),
+                            adc: getVal(row, 'ADC'),
+                            distribuidor: getVal(row, 'DISTRIBUIDOR'),
+                            ...(tarifaParsed !== null && !isNaN(tarifaParsed) && { tarifa: tarifaParsed })
+                        };
+
                         if (!renta) {
-                            const codRentaCli = getVal(row, 'CÓD RENTA CLI') || getVal(row, 'COD RENTA CLI') || `RENTA-${serie}`;
                             renta = await db.renta.create({
                                 data: {
+                                    id: codRentaCli,
                                     activo_id: activo.id,
                                     cliente_id: cliente.id,
                                     sitio_id: sitio.id,
+                                    ...rentaData,
                                     estado: 'IMPORTADA',
                                     origen: 'IMPORTADA',
                                     condiciones: {
@@ -192,7 +217,19 @@ export class CargaMasivaService {
                                     },
                                     fecha_inicio: new Date(),
                                     fecha_fin: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+                                    detalles: {
+                                        create: {
+                                            renta_base: (!isNaN(tarifaParsed as any) ? tarifaParsed : null),
+                                            moneda: getVal(row, 'MONEDA') || 'MXN',
+                                            tipo_renta: getVal(row, 'TIPO') || 'MENSUAL'
+                                        }
+                                    }
                                 },
+                            });
+                        } else {
+                            renta = await db.renta.update({
+                                where: { id: renta.id },
+                                data: rentaData
                             });
                         }
                         rentaCache.set(activo.id, renta);
@@ -219,17 +256,17 @@ export class CargaMasivaService {
                         ordenesMensualesSet.add(cacheKeyM);
                         ordenesMensualesSet.add(cacheKeyB);
 
-                        const parsedMonto = monto ? parseFloat(monto.replace(/,/g, '')) : null;
+                        const parsedMonto = monto ? parseFloat(monto.replace(/[^0-9.-]+/g, '')) : null;
                         const moneda = getVal(row, `MONEDA ${monthName}`);
                         const fechaOc = getVal(row, `FECHA OC ${monthName}`);
 
                         ordenesMensualesParaInsertar.push({
-                            activo_id: activo.id,
-                            renta_id: renta.id,
                             cliente_id: cliente.id,
+                            renta_id: renta.id,
+                            activo_id: activo.id,
                             periodo: period,
                             po,
-                            tarifa: parsedMonto,
+                            tarifa: (!isNaN(parsedMonto as any) ? parsedMonto : null),
                             moneda: moneda || getVal(row, 'MONEDA'),
                             estado: 'IMPORTADA',
                             condiciones: {

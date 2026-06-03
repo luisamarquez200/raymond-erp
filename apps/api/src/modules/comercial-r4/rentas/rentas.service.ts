@@ -20,8 +20,18 @@ export class RentasService {
     }
 
     private mapRenta(renta: any) {
+        let po = renta.orden_compra || renta.detalles?.oc_cliente;
+        if (!po && renta.ordenes && renta.ordenes.length > 0) {
+            const ordersWithPo = renta.ordenes.filter((o: any) => o.po && o.po.trim() !== '');
+            if (ordersWithPo.length > 0) {
+                const latestOrder = [...ordersWithPo].sort((a, b) => b.periodo.localeCompare(a.periodo))[0];
+                po = latestOrder.po;
+            }
+        }
+
         return {
             id: renta.id,
+            orden_compra: po,
             estado: renta.estado,
             origen: renta.origen,
             cliente: renta.cliente ? {
@@ -48,7 +58,9 @@ export class RentasService {
             fecha_pedido_totvs: renta.fecha_pedido_totvs,
             fecha_inicio: renta.fecha_inicio,
             fecha_fin: renta.fecha_fin,
+            tarifa: renta.tarifa,
             detalles: renta.detalles ?? null,
+            ordenes: renta.ordenes ?? [],
         };
     }
 
@@ -56,7 +68,15 @@ export class RentasService {
         try {
             const db = this.getDb();
             const rentas = await db.renta.findMany({
-                include: { cliente: true, sitio: true, activo: true, detalles: true },
+                include: { 
+                    cliente: true, 
+                    sitio: true, 
+                    activo: true, 
+                    detalles: true,
+                    ordenes: {
+                        orderBy: { periodo: 'desc' }
+                    }
+                },
                 orderBy: { created_at: 'desc' },
             });
             return rentas.map(r => this.mapRenta(r));
@@ -70,7 +90,15 @@ export class RentasService {
         const db = this.getDb();
         const renta = await db.renta.findUnique({
             where: { id },
-            include: { cliente: true, sitio: true, activo: true, detalles: true },
+            include: { 
+                cliente: true, 
+                sitio: true, 
+                activo: true, 
+                detalles: true,
+                ordenes: {
+                    orderBy: { periodo: 'desc' }
+                }
+            },
         });
         if (!renta) throw new NotFoundException(`Renta ${id} no encontrada`);
         return this.mapRenta(renta);

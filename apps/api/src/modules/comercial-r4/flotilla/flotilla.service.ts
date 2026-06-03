@@ -25,9 +25,10 @@ export class FlotillaService {
 
             // Mapeamos los datos para que el frontend los pueda consumir fácilmente
             return activos.map(activo => {
-                const renta = activo.rentas?.[0]; // Tomamos la primera renta activa
+                const renta = activo.rentas?.[0];
 
                 return {
+                    id: activo.id,
                     serie: activo.serie,
                     tipo: activo.clase?.includes('III') ? 'Patín' : 'Montacargas', // Estimación básica basada en clase
                     clase: activo.clase,

@@ -2,7 +2,7 @@
 
 import { 
   Search, FileSpreadsheet, Building2, MapPin, Truck, ChevronRight,
-  Filter, Plus, User, Phone, Mail, FileText, Settings, Shield, X, Map
+  Filter, Plus, User, Phone, Mail, FileText, Settings, Shield, X, Map, Trash
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
@@ -17,8 +17,23 @@ export default function ClientesSitios() {
   // Selection
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
 
-  // Modal
+  // Modal Client
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [newClientFormData, setNewClientFormData] = useState({
+    razon_social: '', rfc: '', adc: '', moneda: 'MXN', calle: '', numero: '', cp: '', ciudad: '', estado: '', sitio_nombre: '', sitio_direccion: ''
+  });
+  const [isSubmittingClient, setIsSubmittingClient] = useState(false);
+
+  // Modal Sitio
+  const [isNewSitioModalOpen, setIsNewSitioModalOpen] = useState(false);
+  const [newSitioFormData, setNewSitioFormData] = useState({
+    nombre: '', direccion: '', region: '', no_totvs: '', responsable: ''
+  });
+  const [isSubmittingSitio, setIsSubmittingSitio] = useState(false);
+
+  // Modal Eliminar
+  const [deleteModalConfig, setDeleteModalConfig] = useState<{ isOpen: boolean, type: 'cliente' | 'sitio', id: string, name: string, sitiosCount?: number } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Pagination for Directory
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,6 +59,94 @@ export default function ClientesSitios() {
   useEffect(() => {
     fetchClientes();
   }, []);
+
+  const handleCreateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClientFormData.razon_social || !newClientFormData.rfc) {
+      toast.error('Razón Social y RFC son obligatorios');
+      return;
+    }
+    
+    try {
+      setIsSubmittingClient(true);
+      const payload: any = {
+        razon_social: newClientFormData.razon_social,
+        rfc: newClientFormData.rfc,
+        adc: newClientFormData.adc,
+        moneda: newClientFormData.moneda,
+        datos_fiscales: {
+          calle: newClientFormData.calle,
+          numero: newClientFormData.numero,
+          cp: newClientFormData.cp,
+          ciudad: newClientFormData.ciudad,
+          estado: newClientFormData.estado,
+        }
+      };
+      
+      if (newClientFormData.sitio_nombre) {
+        payload.sitios = [{ nombre: newClientFormData.sitio_nombre, direccion: newClientFormData.sitio_direccion }];
+      }
+      
+      await api.post('/r4/clientes', payload);
+      toast.success('Cliente creado correctamente');
+      setIsNewClientModalOpen(false);
+      setNewClientFormData({
+        razon_social: '', rfc: '', adc: '', moneda: 'MXN', calle: '', numero: '', cp: '', ciudad: '', estado: '', sitio_nombre: '', sitio_direccion: ''
+      });
+      fetchClientes();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.response?.data?.message || 'Error al crear cliente');
+    } finally {
+      setIsSubmittingClient(false);
+    }
+  };
+
+  const handleCreateSitio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClienteId) return;
+    if (!newSitioFormData.nombre) {
+      toast.error('Nombre del sitio es obligatorio');
+      return;
+    }
+    try {
+      setIsSubmittingSitio(true);
+      await api.post(`/r4/clientes/${selectedClienteId}/sitios`, newSitioFormData);
+      toast.success('Sitio agregado correctamente');
+      setIsNewSitioModalOpen(false);
+      setNewSitioFormData({ nombre: '', direccion: '', region: '', no_totvs: '', responsable: '' });
+      fetchClientes();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.response?.data?.message || 'Error al crear sitio');
+    } finally {
+      setIsSubmittingSitio(false);
+    }
+  };
+
+  const requestDeleteCliente = (id: string, name: string, sitiosCount?: number) => setDeleteModalConfig({ isOpen: true, type: 'cliente', id, name, sitiosCount });
+  const requestDeleteSitio = (id: string, name: string) => setDeleteModalConfig({ isOpen: true, type: 'sitio', id, name });
+
+  const confirmDelete = async () => {
+    if (!deleteModalConfig) return;
+    try {
+      setIsDeleting(true);
+      if (deleteModalConfig.type === 'cliente') {
+        await api.delete(`/r4/clientes/${deleteModalConfig.id}`);
+        toast.success("Cliente eliminado exitosamente");
+        if (selectedClienteId === deleteModalConfig.id) setSelectedClienteId(null);
+      } else {
+        await api.delete(`/r4/sitios/${deleteModalConfig.id}`);
+        toast.success("Sitio eliminado exitosamente");
+      }
+      fetchClientes();
+      setDeleteModalConfig(null);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || `Error al eliminar ${deleteModalConfig.type}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const totalClientes = clientes.length;
   const totalSitios = clientes.reduce((acc, c) => acc + (c.sitiosCount || 0), 0);
@@ -130,7 +233,7 @@ export default function ClientesSitios() {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
               <input
                 type="text"
-                placeholder="Buscar cliente o RFC..."
+                placeholder="Buscar cliente o RFC"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -168,7 +271,14 @@ export default function ClientesSitios() {
 
             <div className="flex flex-col gap-3">
               {loading ? (
-                 <div className="py-12 text-center text-slate-400 font-bold text-sm">Cargando directorio...</div>
+                <div className="py-16 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+                  <div className="relative w-12 h-12">
+                     <div className="absolute inset-0 border-4 border-red-50 rounded-full"></div>
+                     <div className="absolute inset-0 border-4 border-[#E1000F] rounded-full border-t-transparent animate-spin"></div>
+                     <Building2 className="absolute inset-0 m-auto w-5 h-5 text-[#E1000F] animate-pulse" />
+                  </div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando directorio...</p>
+                </div>
               ) : paginatedClientes.length === 0 ? (
                  <div className="py-12 text-center text-slate-400 font-bold text-sm">No hay clientes.</div>
               ) : paginatedClientes.map((cliente) => (
@@ -255,10 +365,19 @@ export default function ClientesSitios() {
                       </div>
                     </div>
                   </div>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-sm">
-                    <Settings className="w-3.5 h-3.5" />
-                    Editar Info
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => requestDeleteCliente(selectedCliente.id, selectedCliente.razonSocial, selectedCliente.sitiosCount)}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-red-100 hover:border-red-200 hover:bg-red-50 text-red-600 rounded-xl font-bold text-xs transition-all shadow-sm"
+                    >
+                      <Trash className="w-3.5 h-3.5" />
+                      Eliminar
+                    </button>
+                    <button className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-sm">
+                      <Settings className="w-3.5 h-3.5" />
+                      Editar Info
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8 pt-8 border-t border-slate-100">
@@ -342,7 +461,10 @@ export default function ClientesSitios() {
                     <MapPin className="w-5 h-5 text-red-500"/>
                     Sitios de Operación ({selectedCliente.sitios?.length || 0})
                   </h3>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition-all shadow-sm">
+                  <button 
+                    onClick={() => setIsNewSitioModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition-all shadow-sm"
+                  >
                     <Plus className="w-3.5 h-3.5" />
                     Agregar Sitio
                   </button>
@@ -354,16 +476,28 @@ export default function ClientesSitios() {
                       <div className="p-5 border-l-4 border-l-red-500 flex-1">
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-black text-slate-900 text-lg">{sitio.nombre}</h4>
-                          <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-center min-w-[60px]">
-                            <p className="text-sm font-black text-slate-900">{sitio.activosCount || 12}</p>
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">activos</p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => requestDeleteSitio(sitio.id, sitio.nombre)}
+                              className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100"
+                              title="Eliminar sitio"
+                            >
+                              <Trash className="w-4 h-4" />
+                            </button>
+                            <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-center min-w-[60px]">
+                              <p className="text-sm font-black text-slate-900">{sitio.activosCount || 12}</p>
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">activos</p>
+                            </div>
                           </div>
                         </div>
                         <p className="text-xs font-bold text-slate-500 mb-4">SIT-00{idx+1} • Región {idx===0?'Occidente':'Norte'} • Tienda TOTVS: TD-01{idx}</p>
                         <p className="text-sm text-slate-600 font-medium leading-relaxed">{sitio.direccion || 'Av. Periférico Nte 123, Guadalajara, JAL'}</p>
                       </div>
                       <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-between items-center px-5">
-                        <p className="text-xs font-bold text-slate-600 flex items-center gap-2"><User className="w-3.5 h-3.5 text-slate-400"/> Juan Pérez</p>
+                        <p className="text-xs font-bold text-slate-600 flex items-center gap-2">
+                          <User className="w-3.5 h-3.5 text-slate-400"/> 
+                          {sitio.responsable && sitio.responsable !== '-' ? sitio.responsable : 'Sin responsable asignado'}
+                        </p>
                         <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-1.5"><Truck className="w-3.5 h-3.5"/> Raymond {idx===0?'GDL':'MTY'}</p>
                       </div>
                     </div>
@@ -384,8 +518,9 @@ export default function ClientesSitios() {
       {isNewClientModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col relative border border-slate-100">
-            
+            <form onSubmit={handleCreateClient} className="flex flex-col h-full overflow-hidden">
             <button 
+              type="button"
               onClick={() => setIsNewClientModalOpen(false)}
               className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors z-10"
             >
@@ -406,21 +541,21 @@ export default function ClientesSitios() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700">Nombre o Razón Social *</label>
-                    <input type="text" placeholder="Ej. Grupo Industrial MX S.A. de C.V." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                    <input type="text" value={newClientFormData.razon_social} onChange={e => setNewClientFormData({...newClientFormData, razon_social: e.target.value})} placeholder="Escribe el nombre o razón social" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" required />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700">RFC *</label>
-                    <input type="text" placeholder="Ej. GIM850615XY2" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all uppercase" />
+                    <input type="text" value={newClientFormData.rfc} onChange={e => setNewClientFormData({...newClientFormData, rfc: e.target.value})} placeholder="Escribe el RFC" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all uppercase placeholder:normal-case" required />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700">Clave ADC</label>
-                    <input type="text" placeholder="Ej. ADC-001" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                    <input type="text" value={newClientFormData.adc} onChange={e => setNewClientFormData({...newClientFormData, adc: e.target.value})} placeholder="Escribe la clave ADC" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700">Moneda Preferida</label>
-                    <select className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-red-500 focus:bg-white focus:outline-none transition-all appearance-none">
-                      <option>MXN - Peso Mexicano</option>
-                      <option>USD - Dólar Estadounidense</option>
+                    <select value={newClientFormData.moneda} onChange={e => setNewClientFormData({...newClientFormData, moneda: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-red-500 focus:bg-white focus:outline-none transition-all appearance-none">
+                      <option value="MXN">MXN - Peso Mexicano</option>
+                      <option value="USD">USD - Dólar Estadounidense</option>
                     </select>
                   </div>
                 </div>
@@ -434,24 +569,24 @@ export default function ClientesSitios() {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-xs font-black text-slate-700">Calle *</label>
-                    <input type="text" placeholder="Ej. Av. de los Insurgentes Sur" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                    <label className="text-xs font-black text-slate-700">Calle</label>
+                    <input type="text" value={newClientFormData.calle} onChange={e => setNewClientFormData({...newClientFormData, calle: e.target.value})} placeholder="Escribe la calle" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700">Número *</label>
-                    <input type="text" placeholder="Ej. 105, Int. 4" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                    <label className="text-xs font-black text-slate-700">Número</label>
+                    <input type="text" value={newClientFormData.numero} onChange={e => setNewClientFormData({...newClientFormData, numero: e.target.value})} placeholder="Escribe el número" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700">Código Postal *</label>
-                    <input type="text" placeholder="Ej. 06000" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                    <label className="text-xs font-black text-slate-700">Código Postal</label>
+                    <input type="text" value={newClientFormData.cp} onChange={e => setNewClientFormData({...newClientFormData, cp: e.target.value})} placeholder="Escribe el código postal" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700">Ciudad / Municipio *</label>
-                    <input type="text" placeholder="Ej. Cuauhtémoc" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                    <label className="text-xs font-black text-slate-700">Ciudad / Municipio</label>
+                    <input type="text" value={newClientFormData.ciudad} onChange={e => setNewClientFormData({...newClientFormData, ciudad: e.target.value})} placeholder="Escribe la ciudad o municipio" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700">Estado *</label>
-                    <input type="text" placeholder="Ej. Ciudad de México" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                    <label className="text-xs font-black text-slate-700">Estado</label>
+                    <input type="text" value={newClientFormData.estado} onChange={e => setNewClientFormData({...newClientFormData, estado: e.target.value})} placeholder="Escribe el estado" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
                   </div>
                 </div>
               </section>
@@ -462,11 +597,11 @@ export default function ClientesSitios() {
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700">Nombre del Sitio</label>
-                    <input type="text" placeholder="Ej. Centro de Distribución Norte" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all" />
+                    <input type="text" value={newClientFormData.sitio_nombre} onChange={e => setNewClientFormData({...newClientFormData, sitio_nombre: e.target.value})} placeholder="Escribe el nombre del sitio" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700">Dirección del sitio del cliente</label>
-                    <input type="text" placeholder="Calle, Número, CP, Ciudad, Estado" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all" />
+                    <input type="text" value={newClientFormData.sitio_direccion} onChange={e => setNewClientFormData({...newClientFormData, sitio_direccion: e.target.value})} placeholder="Calle, Número, CP, Ciudad, Estado" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all" />
                   </div>
                 </div>
               </div>
@@ -475,15 +610,117 @@ export default function ClientesSitios() {
 
             <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end gap-3 rounded-b-[2rem]">
               <button 
+                type="button"
                 onClick={() => setIsNewClientModalOpen(false)}
                 className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-sm transition-all"
               >
                 Cancelar
               </button>
               <button 
-                className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
+                type="submit"
+                disabled={isSubmittingClient}
+                className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
               >
-                <Building2 className="w-4 h-4"/> Guardar Cliente
+                <Building2 className="w-4 h-4"/> {isSubmittingClient ? 'Guardando...' : 'Guardar Cliente'}
+              </button>
+            </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ALTA DE NUEVO SITIO */}
+      {isNewSitioModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col relative border border-slate-100">
+            <form onSubmit={handleCreateSitio} className="flex flex-col h-full overflow-hidden">
+            <button 
+              type="button"
+              onClick={() => setIsNewSitioModalOpen(false)}
+              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="p-8 border-b border-slate-100 shrink-0">
+              <h2 className="text-2xl font-black text-slate-900">Agregar Sitio</h2>
+              <p className="text-slate-500 font-medium mt-1">Registra un nuevo sitio de operación para este cliente.</p>
+            </div>
+
+            <div className="p-8 overflow-y-auto flex-1 custom-scrollbar space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700">Nombre del Sitio *</label>
+                <input type="text" value={newSitioFormData.nombre} onChange={e => setNewSitioFormData({...newSitioFormData, nombre: e.target.value})} placeholder="Escribe el nombre del sitio" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" required />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700">Dirección</label>
+                <input type="text" value={newSitioFormData.direccion} onChange={e => setNewSitioFormData({...newSitioFormData, direccion: e.target.value})} placeholder="Escribe la dirección" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700">Región</label>
+                <input type="text" value={newSitioFormData.region} onChange={e => setNewSitioFormData({...newSitioFormData, region: e.target.value})} placeholder="Escribe la región" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700">Número TOTVS</label>
+                <input type="text" value={newSitioFormData.no_totvs} onChange={e => setNewSitioFormData({...newSitioFormData, no_totvs: e.target.value})} placeholder="Escribe el número TOTVS" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700">Responsable</label>
+                <input type="text" value={newSitioFormData.responsable} onChange={e => setNewSitioFormData({...newSitioFormData, responsable: e.target.value})} placeholder="Escribe el responsable" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end gap-3 rounded-b-[2rem]">
+              <button 
+                type="button"
+                onClick={() => setIsNewSitioModalOpen(false)}
+                className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit"
+                disabled={isSubmittingSitio}
+                className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
+              >
+                <MapPin className="w-4 h-4"/> {isSubmittingSitio ? 'Guardando...' : 'Guardar Sitio'}
+              </button>
+            </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL CONFIRMAR ELIMINACIÓN */}
+      {deleteModalConfig?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden flex flex-col relative border border-slate-100 p-8 text-center">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 mb-2">¿Estás seguro?</h2>
+            <p className="text-slate-500 font-medium mb-8">
+              Estás a punto de eliminar {deleteModalConfig.type === 'cliente' ? 'el cliente' : 'el sitio'} <strong className="text-slate-700">"{deleteModalConfig.name}"</strong>. 
+              {deleteModalConfig.type === 'cliente' && deleteModalConfig.sitiosCount && deleteModalConfig.sitiosCount > 0 ? (
+                <span className="block mt-4 text-red-600 font-medium bg-red-50 p-3 rounded-xl border border-red-100 text-sm">
+                  ⚠️ Este cliente tiene <strong>{deleteModalConfig.sitiosCount} sitio{deleteModalConfig.sitiosCount > 1 ? 's' : ''}</strong> asociado{deleteModalConfig.sitiosCount > 1 ? 's' : ''}. Al continuar, también se eliminarán de forma permanente.
+                </span>
+              ) : (
+                " Esta acción no se puede deshacer."
+              )}
+            </p>
+            <div className="flex justify-center gap-3 w-full">
+              <button 
+                onClick={() => setDeleteModalConfig(null)}
+                className="flex-1 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200"
+              >
+                {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
               </button>
             </div>
           </div>

@@ -23,6 +23,7 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
     const { user, isLoading, restoreSession } = useAuthStore()
     const { currentOrganization } = useOrganizationStore()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    const pathname = usePathname()
 
     useEffect(() => {
         restoreSession()
@@ -46,7 +47,6 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
         return null
     }
 
-    const pathname = usePathname()
     // Modules that should have their own navigation or be isolated from main ERP UI
     const isIsolated = pathname.includes('/r1') ||
         pathname.includes('/r2') ||

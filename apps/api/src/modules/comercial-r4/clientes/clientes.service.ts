@@ -7,7 +7,7 @@ import { CreateSitioDto } from './dto/create-sitio.dto';
 export class ClientesService {
     private readonly logger = new Logger(ClientesService.name);
 
-    constructor(private readonly prismaService: PrismaDynamicService) {}
+    constructor(private readonly prismaService: PrismaDynamicService) { }
 
     private getDb() {
         const db = PrismaDynamicService.clients.r4;
@@ -310,6 +310,53 @@ export class ClientesService {
             };
         } catch (error: any) {
             this.logger.error(`Error en actualizarSitio: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async eliminarCliente(id: string) {
+        try {
+            const db = this.getDb();
+            const existente = await db.cliente.findUnique({ where: { id } });
+            if (!existente) throw new NotFoundException(`Cliente ${id} no encontrado`);
+            await db.ordenMensual.deleteMany({ where: { cliente_id: id } });
+
+            // Delete related rentas and their detalles
+            const rentas = await db.renta.findMany({ where: { cliente_id: id }, select: { id: true } });
+            const rentaIds = rentas.map(r => r.id);
+            if (rentaIds.length > 0) {
+                await db.detallesRenta.deleteMany({ where: { renta_id: { in: rentaIds } } });
+                await db.renta.deleteMany({ where: { id: { in: rentaIds } } });
+            }
+
+            // Delete contratos
+            await db.contrato.deleteMany({ where: { cliente_id: id } });
+
+            // Unlink activos
+            await db.activo.updateMany({ where: { cliente_id: id }, data: { cliente_id: null, sitio_id: null } });
+
+            // Delete related sitios first to prevent relation violation
+            await db.sitio.deleteMany({ where: { cliente_id: id } });
+
+            // Now delete the cliente
+            await db.cliente.delete({ where: { id } });
+            return true;
+        } catch (error: any) {
+            this.logger.error(`Error en eliminarCliente: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async eliminarSitio(sitioId: string) {
+        try {
+            const db = this.getDb();
+            const existente = await db.sitio.findUnique({ where: { id: sitioId } });
+            if (!existente) throw new NotFoundException(`Sitio ${sitioId} no encontrado`);
+
+            await db.sitio.delete({ where: { id: sitioId } });
+            return true;
+        } catch (error: any) {
+            this.logger.error(`Error en eliminarSitio: ${error.message}`);
             throw error;
         }
     }
