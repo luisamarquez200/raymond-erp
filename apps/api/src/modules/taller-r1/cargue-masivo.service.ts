@@ -83,4 +83,16 @@ export class CargueMasivoService {
         // @ts-ignore
         return this.db.orden_base_cargue.deleteMany({});
     }
+
+    async getBySerial(serial: string) {
+        // @ts-ignore
+        return this.db.orden_base_cargue.findFirst({
+            where: {
+                OR: [
+                    { serial_number: serial },
+                    { serial_lot: serial }
+                ]
+            }
+        });
+    }
 }

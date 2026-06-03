@@ -110,5 +110,11 @@ export const cargueMasivoApi = {
     deleteAll: async () => {
         const response = await tallerApi.delete('/taller-r1/cargue-masivo/all');
         return response.data;
+    },
+
+    // Obtener por número de serie
+    getBySerial: async (serial: string) => {
+        const response = await tallerApi.get<any>(`/taller-r1/cargue-masivo/serial/${serial}`);
+        return response.data?.data || response.data;
     }
 };

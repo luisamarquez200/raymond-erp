@@ -35,4 +35,9 @@ export class CargueMasivoController {
     async delete(@Param('id') id: string) {
         return this.service.delete(Number(id));
     }
+
+    @Get('serial/:serial')
+    async getBySerial(@Param('serial') serial: string) {
+        return this.service.getBySerial(serial);
+    }
 }
