@@ -177,6 +177,9 @@ export class RentasService {
                 fecha_fin: new Date(dto.fecha_fin),
                 estado: 'VIGENTE',
                 origen: 'MANUAL',
+                condiciones: {
+                    plazo_meses: dto.plazo_meses ?? null
+                }
             },
         });
 
@@ -254,6 +257,13 @@ export class RentasService {
             ...(dto.descuento_dias_caidos !== undefined && { descuento_dias_caidos: dto.descuento_dias_caidos }),
             ...(dto.importe_recuperado !== undefined && { importe_recuperado: dto.importe_recuperado }),
         };
+
+        if (dto.renta_base !== undefined) {
+            await db.renta.update({
+                where: { id: rentaId },
+                data: { tarifa: dto.renta_base }
+            });
+        }
 
         if (existente) {
             return db.detallesRenta.update({ where: { renta_id: rentaId }, data });

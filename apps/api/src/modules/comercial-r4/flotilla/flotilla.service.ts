@@ -39,11 +39,11 @@ export class FlotillaService {
                     cuenta: activo.cuenta || '-',
                     adc: activo.adc || '-',
                     distribuidor: activo.distribuidor || '-',
-                    // Fechas
                     fechaIngreso: renta?.fecha_inicio ? new Date(renta.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
                     fechaVencimiento: renta?.fecha_fin ? new Date(renta.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
-                    plazo: renta?.condiciones?.plazo || '-',
+                    plazo: renta?.condiciones?.plazo_meses || renta?.condiciones?.plazo || '-',
                     fechaRecoleccion: '-',
+
                     // SMP
                     smp: 'Sin SMP', // Esto vendría de otra lógica de taller en el futuro
                     proxSmp: '-',

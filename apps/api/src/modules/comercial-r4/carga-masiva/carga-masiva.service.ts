@@ -45,7 +45,8 @@ export class CargaMasivaService {
             const headerRow = worksheet.getRow(1);
             const headers: string[] = [];
             headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                headers[colNumber] = (cell.value?.toString() || '').trim().toUpperCase();
+                // Normalize: trim + collapse multiple spaces into one
+                headers[colNumber] = (cell.value?.toString() || '').trim().toUpperCase().replace(/\s+/g, ' ');
             });
 
             if (headers.filter(Boolean).length === 0) {
@@ -75,6 +76,70 @@ export class CargaMasivaService {
                     return val.toString().trim() || null;
                 }
                 return null;
+            };
+
+            const getDateVal = (row: ExcelJS.Row, colNames: string[], defaultDate: Date): Date => {
+                for (const colName of colNames) {
+                    const upperName = colName.toUpperCase();
+                    let idx = headers.findIndex(h => h === upperName);
+                    if (idx < 0) idx = headers.findIndex(h => h && h.includes(upperName));
+                    if (idx > 0) {
+                        const cell = row.getCell(idx);
+                        const val = cell.value;
+                        if (val) {
+                            if (val instanceof Date) return val;
+                            const valStr = val.toString().trim();
+                            // Detect DD/MM/YY or DD/MM/YYYY
+                            if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(valStr)) {
+                                const parts = valStr.split(' ')[0].split('/');
+                                const year = parseInt(parts[2]) < 100 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+                                return new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0]));
+                            }
+                            const parsed = new Date(valStr);
+                            if (!isNaN(parsed.getTime())) return parsed;
+                        }
+                    }
+                }
+                return defaultDate;
+            };
+
+            const parseCurrency = (valStr: string | null | undefined): number | null => {
+                if (!valStr) return null;
+                let clean = valStr.trim().replace(/[$'\s]/g, '');
+                if (!clean) return null;
+
+                const hasDot = clean.includes('.');
+                const hasComma = clean.includes(',');
+
+                if (hasDot && hasComma) {
+                    const firstDot = clean.indexOf('.');
+                    const firstComma = clean.indexOf(',');
+                    if (firstDot < firstComma) {
+                        // Spanish format: 22.462,00 -> 22462.00
+                        clean = clean.replace(/\./g, '').replace(/,/g, '.');
+                    } else {
+                        // English format: 22,462.00 -> 22462.00
+                        clean = clean.replace(/,/g, '');
+                    }
+                } else if (hasComma) {
+                    // Only comma exists: e.g. 22462,00 or 22,462
+                    const parts = clean.split(',');
+                    if (parts.length === 2 && parts[1].length <= 2) {
+                        clean = clean.replace(/,/g, '.');
+                    } else {
+                        clean = clean.replace(/,/g, '');
+                    }
+                } else if (hasDot) {
+                    // Only dot exists: e.g. 22.462 or 22462.00
+                    const parts = clean.split('.');
+                    if (parts.length === 2 && parts[1].length === 3) {
+                        clean = clean.replace(/\./g, '');
+                    }
+                }
+
+                clean = clean.replace(/[^0-9.-]/g, '');
+                const parsed = parseFloat(clean);
+                return isNaN(parsed) ? null : parsed;
             };
 
             // Caches en memoria
@@ -191,7 +256,7 @@ export class CargaMasivaService {
                         renta = await db.renta.findFirst({ where: { activo_id: activo.id } });
                         const codRentaCli = getVal(row, 'CÓD RENTA CLI') || getVal(row, 'COD RENTA CLI') || `RENTA-${serie}`;
                         const tarifaStr = getVal(row, 'PRECIO RENTA CLIENTE') || getVal(row, 'RENTA') || getVal(row, 'TARIFA');
-                        const tarifaParsed = tarifaStr ? parseFloat(tarifaStr.replace(/[^0-9.-]+/g, '')) : null;
+                        const tarifaParsed = parseCurrency(tarifaStr);
                         
                         const rentaData = {
                             cuenta: getVal(row, 'CUENTA'),
@@ -201,6 +266,8 @@ export class CargaMasivaService {
                         };
 
                         if (!renta) {
+                            const defaultFin = new Date();
+                            defaultFin.setFullYear(defaultFin.getFullYear() + 1);
                             renta = await db.renta.create({
                                 data: {
                                     id: codRentaCli,
@@ -214,9 +281,10 @@ export class CargaMasivaService {
                                         codigo_renta_cli: codRentaCli,
                                         moneda: getVal(row, 'MONEDA'),
                                         tipo: getVal(row, 'TIPO'),
+                                        plazo_meses: getVal(row, 'PLAZO DE RENTA (MESES)'),
                                     },
-                                    fecha_inicio: new Date(),
-                                    fecha_fin: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+                                    fecha_inicio: getDateVal(row, ['FECHA ENTREGADO', 'FECHA INICIO', 'INICIO'], new Date()),
+                                    fecha_fin: getDateVal(row, ['FECHA VENCIMIENTO', 'FECHA FIN', 'FIN VIGENCIA', 'VENCIMIENTO'], defaultFin),
                                     detalles: {
                                         create: {
                                             renta_base: (!isNaN(tarifaParsed as any) ? tarifaParsed : null),
@@ -229,7 +297,23 @@ export class CargaMasivaService {
                         } else {
                             renta = await db.renta.update({
                                 where: { id: renta.id },
-                                data: rentaData
+                                data: {
+                                    ...rentaData,
+                                    detalles: {
+                                        upsert: {
+                                            create: {
+                                                renta_base: (!isNaN(tarifaParsed as any) ? tarifaParsed : null),
+                                                moneda: getVal(row, 'MONEDA') || 'MXN',
+                                                tipo_renta: getVal(row, 'TIPO') || 'MENSUAL'
+                                            },
+                                            update: {
+                                                renta_base: (!isNaN(tarifaParsed as any) ? tarifaParsed : null),
+                                                moneda: getVal(row, 'MONEDA') || 'MXN',
+                                                tipo_renta: getVal(row, 'TIPO') || 'MENSUAL'
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
                         rentaCache.set(activo.id, renta);
@@ -256,7 +340,7 @@ export class CargaMasivaService {
                         ordenesMensualesSet.add(cacheKeyM);
                         ordenesMensualesSet.add(cacheKeyB);
 
-                        const parsedMonto = monto ? parseFloat(monto.replace(/[^0-9.-]+/g, '')) : null;
+                        const parsedMonto = parseCurrency(monto);
                         const moneda = getVal(row, `MONEDA ${monthName}`);
                         const fechaOc = getVal(row, `FECHA OC ${monthName}`);
 
@@ -267,7 +351,7 @@ export class CargaMasivaService {
                             periodo: period,
                             po,
                             tarifa: (!isNaN(parsedMonto as any) ? parsedMonto : null),
-                            moneda: moneda || getVal(row, 'MONEDA'),
+                            moneda: (moneda || getVal(row, 'MONEDA') || 'MXN').toString().substring(0, 20),
                             estado: 'IMPORTADA',
                             condiciones: {
                                 fecha_oc: fechaOc,
@@ -294,7 +378,8 @@ export class CargaMasivaService {
             const chunkSize = 1000;
             for (let i = 0; i < ordenesMensualesParaInsertar.length; i += chunkSize) {
                 await db.ordenMensual.createMany({
-                    data: ordenesMensualesParaInsertar.slice(i, i + chunkSize)
+                    data: ordenesMensualesParaInsertar.slice(i, i + chunkSize),
+                    skipDuplicates: true,
                 });
             }
 

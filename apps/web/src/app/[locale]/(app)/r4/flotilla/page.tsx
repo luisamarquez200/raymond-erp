@@ -51,6 +51,9 @@ export default function Fleet() {
   const [isUploading, setIsUploading] = useState(false);
 
   const [selectedADC, setSelectedADC] = useState<string>("Todos");
+  const [selectedCliente, setSelectedCliente] = useState<string>("Todos");
+  const [selectedEstatus, setSelectedEstatus] = useState<string>("Todos");
+  const [selectedTipo, setSelectedTipo] = useState<string>("Todos");
 
   const fetchFlotilla = async () => {
     try {
@@ -122,9 +125,15 @@ export default function Fleet() {
   const uniqueSites = Array.from(new Set(baseAssets.map(a => getValidString(a.site)).filter(Boolean))).sort();
   const uniqueCuentas = Array.from(new Set(baseAssets.map(a => getValidString(a.cuenta)).filter(Boolean))).sort();
   const uniqueDistribuidores = Array.from(new Set(baseAssets.map(a => getValidString(a.distribuidor)).filter(Boolean))).sort();
+  const uniqueEstatus = Array.from(new Set(baseAssets.map(a => getValidString(a.estatus)).filter(Boolean))).sort();
+  const uniqueTipos = Array.from(new Set(baseAssets.map(a => getValidString(a.tipo)).filter(Boolean))).sort();
 
   const filteredAssets = baseAssets.filter((asset: any) => {
     if (selectedADC !== "Todos" && asset.adc !== selectedADC) return false;
+    if (selectedCliente !== "Todos" && asset.cliente !== selectedCliente) return false;
+    if (selectedEstatus !== "Todos" && asset.estatus !== selectedEstatus) return false;
+    if (selectedTipo !== "Todos" && asset.tipo !== selectedTipo) return false;
+    
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -310,22 +319,44 @@ export default function Fleet() {
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
-            <select className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0">
-              <option>Todos los clientes</option>
-              <option>Cliente A</option>
-              <option>Cliente B</option>
+            <select
+              value={selectedCliente}
+              onChange={(e) => {
+                setSelectedCliente(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0 cursor-pointer"
+            >
+              <option value="Todos">Todos los clientes</option>
+              {(uniqueClientes as string[]).map(cliente => (
+                <option key={cliente} value={cliente}>{cliente}</option>
+              ))}
             </select>
-            <select className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0">
-              <option>Estatus: Todos</option>
-              <option>Activo / En Renta</option>
-              <option>Disponible / Back Up</option>
-              <option>En Mantenimiento</option>
-              <option>Inactivo</option>
+            <select
+              value={selectedEstatus}
+              onChange={(e) => {
+                setSelectedEstatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0 cursor-pointer"
+            >
+              <option value="Todos">Estatus: Todos</option>
+              {(uniqueEstatus as string[]).map(estatus => (
+                <option key={estatus} value={estatus}>{estatus}</option>
+              ))}
             </select>
-            <select className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0">
-              <option>Tipo: Todos</option>
-              <option>Montacargas</option>
-              <option>Patín</option>
+            <select
+              value={selectedTipo}
+              onChange={(e) => {
+                setSelectedTipo(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0 cursor-pointer"
+            >
+              <option value="Todos">Tipo: Todos</option>
+              {(uniqueTipos as string[]).map(tipo => (
+                <option key={tipo} value={tipo}>{tipo}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -342,7 +373,9 @@ export default function Fleet() {
                   <th className="px-6 py-5 font-black">Estatus</th>
                   <th className="px-6 py-5 font-black">Cliente / Sitio</th>
                   <th className="px-6 py-5 font-black">ADC</th>
-                  <th className="px-6 py-5 font-black">Ingreso / Plazo / Vencimiento</th>
+                  <th className="px-6 py-5 font-black">Fecha Entregado</th>
+                  <th className="px-6 py-5 font-black">Plazo de Renta (Meses)</th>
+                  <th className="px-6 py-5 font-black">Fecha Vencimiento</th>
                   <th className="px-6 py-5 font-black text-right">Acciones</th>
                 </tr>
               </thead>
@@ -390,22 +423,14 @@ export default function Fleet() {
                         {asset.adc}
                       </span>
                     </td>
-                    
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ingreso:</span>
-                          <span className="text-xs font-medium text-slate-700">{asset.fechaIngreso}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Plazo:</span>
-                          <span className="text-xs font-bold text-slate-700">{asset.plazo}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vence:</span>
-                          <span className="text-xs font-medium text-slate-700">{asset.fechaVencimiento}</span>
-                        </div>
-                      </div>
+                    <td className="px-6 py-4 text-xs font-medium text-slate-700">
+                      {asset.fechaIngreso}
+                    </td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-700">
+                      {asset.plazo}
+                    </td>
+                    <td className="px-6 py-4 text-xs font-medium text-slate-700">
+                      {asset.fechaVencimiento}
                     </td>
 
                     <td className="px-6 py-4 text-right">
@@ -504,15 +529,15 @@ export default function Fleet() {
 
                 <div className="grid grid-cols-3 gap-2 border-t border-border pt-2 bg-secondary/10 p-2 rounded">
                   <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Ingreso</span>
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Entregado</span>
                     <p className="font-medium text-[11px] truncate">{asset.fechaIngreso}</p>
                   </div>
                   <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Plazo</span>
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Plazo (Meses)</span>
                     <p className="font-medium text-[11px] truncate">{asset.plazo}</p>
                   </div>
                   <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Vence</span>
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Vencimiento</span>
                     <p className="font-medium text-[11px] truncate text-primary">{asset.fechaVencimiento}</p>
                   </div>
                 </div>

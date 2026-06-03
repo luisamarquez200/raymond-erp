@@ -100,6 +100,9 @@ export class CreateRentaDto {
     @IsDateString()
     fecha_fin: string;
 
+    @IsOptional()
+    plazo_meses?: any;
+
     @ValidateNested()
     @Type(() => CreateDetallesRentaDto)
     @IsOptional()

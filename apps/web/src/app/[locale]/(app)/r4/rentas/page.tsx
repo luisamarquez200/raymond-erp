@@ -22,7 +22,7 @@ export default function R4RentasPage() {
   const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
   const [equiposDisponibles, setEquiposDisponibles] = useState<any[]>([]);
   const [newRentaFormData, setNewRentaFormData] = useState({
-    cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: ''
+    cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: ''
   });
   const [editRentaConfig, setEditRentaConfig] = useState<{ isOpen: boolean; id: string; formData: any }>({
     isOpen: false,
@@ -97,6 +97,7 @@ export default function R4RentasPage() {
         contrato_id: newRentaFormData.contrato_id || null,
         fecha_inicio: newRentaFormData.fecha_inicio,
         fecha_fin: newRentaFormData.fecha_fin,
+        plazo_meses: newRentaFormData.plazo_meses ? Number(newRentaFormData.plazo_meses) : null,
         detalles: {
           tipo_renta: newRentaFormData.tipo_renta,
           moneda: newRentaFormData.moneda,
@@ -110,7 +111,7 @@ export default function R4RentasPage() {
       toast.success('Renta creada correctamente');
       setIsNewRentaModalOpen(false);
       setNewRentaFormData({
-        cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: ''
+        cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: ''
       });
       fetchRentasYClientes();
     } catch (error: any) {
@@ -142,8 +143,22 @@ export default function R4RentasPage() {
   };
 
   const totalRentas = rentas.length;
-  const activas = rentas.filter(r => r.estado?.toLowerCase().includes('activo') || r.estado?.toLowerCase().includes('vigente')).length;
-  const porVencer = rentas.filter(r => r.estado?.toLowerCase().includes('vencer')).length;
+  const activas = rentas.filter(r => 
+    r.estado?.toUpperCase() === 'VIGENTE' || 
+    r.estado?.toUpperCase() === 'IMPORTADA' || 
+    r.estado?.toUpperCase() === 'RENOVADA' ||
+    r.estado?.toLowerCase().includes('activo')
+  ).length;
+
+  const hoy = new Date();
+  const en30Dias = new Date();
+  en30Dias.setDate(hoy.getDate() + 30);
+
+  const porVencer = rentas.filter(r => {
+    if (!r.fecha_fin) return false;
+    const fechaFin = new Date(r.fecha_fin);
+    return fechaFin > hoy && fechaFin <= en30Dias && r.estado?.toUpperCase() !== 'CANCELADA';
+  }).length;
 
   const filteredRentas = rentas.filter((renta: any) => {
     if (!searchTerm) return true;
@@ -232,7 +247,7 @@ export default function R4RentasPage() {
                 <th className="px-6 py-5 font-black">Equipos Asignados</th>
                 <th className="px-6 py-5 font-black">Fecha Inicio</th>
                 <th className="px-6 py-5 font-black">Fin Vigencia</th>
-                <th className="px-6 py-5 font-black">Tarifa Mensual</th>
+                <th className="px-6 py-5 font-black">Precio Renta Cliente</th>
                 <th className="px-6 py-5 font-black">Estado</th>
                 <th className="px-6 py-5 font-black text-right">Acciones</th>
               </tr>
@@ -263,7 +278,7 @@ export default function R4RentasPage() {
                   <td className="px-6 py-4 text-sm font-medium text-slate-500">{new Date(renta.fecha_inicio).toLocaleDateString()}</td>
                   <td className="px-6 py-4 text-sm font-bold text-slate-700">{new Date(renta.fecha_fin).toLocaleDateString()}</td>
                   <td className="px-6 py-4 font-black text-slate-800">
-                    ${(renta.detalles?.total_con_mantenimiento || renta.detalles?.renta_real || renta.detalles?.renta_base || 0).toLocaleString()} {renta.detalles?.moneda || 'MXN'}
+                    ${(renta.detalles?.total_con_mantenimiento || renta.detalles?.renta_real || renta.detalles?.renta_base || renta.tarifa || 0).toLocaleString()} {renta.detalles?.moneda || 'MXN'}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${renta.estado?.toLowerCase() === 'activo' || renta.estado?.toLowerCase() === 'vigente'
@@ -485,16 +500,55 @@ export default function R4RentasPage() {
                             <option value="USD">USD (Dólares)</option>
                           </select>
                         </div>
+                      </div>
 
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                         <div className="space-y-2">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Fecha Inicio</label>
                           <input
                             type="date"
                             value={newRentaFormData.fecha_inicio}
-                            onChange={e => setNewRentaFormData({ ...newRentaFormData, fecha_inicio: e.target.value })}
+                            onChange={e => {
+                              const inicio = e.target.value;
+                              let fin = newRentaFormData.fecha_fin;
+                              if (inicio && newRentaFormData.plazo_meses) {
+                                const date = new Date(inicio + 'T00:00:00');
+                                const months = parseInt(newRentaFormData.plazo_meses);
+                                if (!isNaN(months) && months > 0) {
+                                  date.setMonth(date.getMonth() + months);
+                                  fin = date.toISOString().split('T')[0];
+                                }
+                              }
+                              setNewRentaFormData({ ...newRentaFormData, fecha_inicio: inicio, fecha_fin: fin });
+                            }}
                             className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required
                           />
                         </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Plazo de Renta (Meses)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="Ej. 12, 24, 36"
+                            value={newRentaFormData.plazo_meses}
+                            onChange={e => {
+                              const plazo = e.target.value;
+                              let fin = newRentaFormData.fecha_fin;
+                              if (newRentaFormData.fecha_inicio && plazo) {
+                                const date = new Date(newRentaFormData.fecha_inicio + 'T00:00:00');
+                                const months = parseInt(plazo);
+                                if (!isNaN(months) && months > 0) {
+                                  date.setMonth(date.getMonth() + months);
+                                  fin = date.toISOString().split('T')[0];
+                                }
+                              }
+                              setNewRentaFormData({ ...newRentaFormData, plazo_meses: plazo, fecha_fin: fin });
+                            }}
+                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
+                          />
+                        </div>
+
                         <div className="space-y-2">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Fin de Vigencia</label>
                           <input
