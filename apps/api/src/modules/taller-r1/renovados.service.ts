@@ -2,6 +2,8 @@ import { PrismaClient as PrismaR1 } from '@prisma-r1';
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../database/prisma-dynamic.service';
 import { TallerR1MailService } from './mail.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface CreateRenovadoDto {
     serial_equipo: string;
@@ -11,6 +13,7 @@ export interface CreateRenovadoDto {
     meses_fuera: string; // 1-3, 4-6, 6-12, 12+
     tecnico_responsable?: string;
     id_estacion?: string;
+    comentarios?: string;
 }
 
 export interface AddRefaccionDto {
@@ -45,17 +48,198 @@ export class RenovadosService {
         'Pruebas funcionales'
     ];
 
+    // helper to get/set logs
+    private getTechLogsPath() {
+        const dir = path.join(process.cwd(), 'uploads', 'renovados');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        return path.join(dir, 'tech_logs.json');
+    }
+
+    private readTechLogs(): any[] {
+        const filePath = this.getTechLogsPath();
+        if (!fs.existsSync(filePath)) return [];
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            return JSON.parse(content);
+        } catch {
+            return [];
+        }
+    }
+
+    private writeTechLog(log: any) {
+        const filePath = this.getTechLogsPath();
+        const logs = this.readTechLogs();
+        logs.push({
+            id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            fecha: new Date().toISOString(),
+            ...log
+        });
+        fs.writeFileSync(filePath, JSON.stringify(logs, null, 2), 'utf-8');
+    }
+
+    private getPhaseEvidencePath() {
+        const dir = path.join(process.cwd(), 'uploads', 'renovados');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        return path.join(dir, 'phase_evidence.json');
+    }
+
+    private readPhaseEvidence(): Record<string, { comentarios?: string; foto_1?: string; foto_2?: string }> {
+        const filePath = this.getPhaseEvidencePath();
+        if (!fs.existsSync(filePath)) return {};
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            return JSON.parse(content);
+        } catch {
+            return {};
+        }
+    }
+
+    private writePhaseEvidence(faseId: string, data: { comentarios?: string; foto_1?: string; foto_2?: string }) {
+        const filePath = this.getPhaseEvidencePath();
+        const evidence = this.readPhaseEvidence();
+        evidence[faseId] = {
+            ...evidence[faseId],
+            ...data
+        };
+        fs.writeFileSync(filePath, JSON.stringify(evidence, null, 2), 'utf-8');
+    }
+
+    async getTechnicianLogs(idSolicitud: string) {
+        const logs = this.readTechLogs();
+        return logs
+            .filter((l: any) => l.id_solicitud === idSolicitud)
+            .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    }
+
+    async updateFaseEvidence(idFase: string, dto: { comentarios: string; foto_1?: string; foto_2?: string; }) {
+        this.writePhaseEvidence(idFase, dto);
+        return { success: true };
+    }
+
+    async repeatFase(idFase: string) {
+        const fase = await this.db.renovado_fase.findUnique({ where: { id_fase: idFase } });
+        if (!fase) throw new NotFoundException('Fase no encontrada');
+
+        // Clean evidence from JSON
+        const evidence = this.readPhaseEvidence();
+        delete evidence[idFase];
+        const filePath = this.getPhaseEvidencePath();
+        fs.writeFileSync(filePath, JSON.stringify(evidence, null, 2), 'utf-8');
+
+        return this.db.renovado_fase.update({
+            where: { id_fase: idFase },
+            data: {
+                completado: false,
+                fecha_inicio: null,
+                fecha_fin: null,
+                horas_registradas: 0,
+                tecnico: null
+            }
+        });
+    }
+
+    async changeTechnician(id: string, dto: { tecnicoNuevo: string; motivo: string; usuarioQueCambia: string; }) {
+        const solicitud = await this.db.renovado_solicitud.findUnique({ where: { id_solicitud: id } });
+        if (!solicitud) throw new NotFoundException('Solicitud no encontrada');
+
+        const tecnicoAnterior = solicitud.tecnico_responsable;
+
+        // Update the solicitud
+        const updated = await this.db.renovado_solicitud.update({
+            where: { id_solicitud: id },
+            data: { tecnico_responsable: dto.tecnicoNuevo }
+        });
+
+        // Write the log
+        this.writeTechLog({
+            id_solicitud: id,
+            tecnico_anterior: tecnicoAnterior,
+            tecnico_nuevo: dto.tecnicoNuevo,
+            motivo: dto.motivo,
+            usuario_que_cambia: dto.usuarioQueCambia
+        });
+
+        return updated;
+    }
+
+    async changeStation(id: string, dto: { estacionId: string; motivo: string; usuarioQueCambia: string; }) {
+        const solicitud = await this.db.renovado_solicitud.findUnique({ where: { id_solicitud: id } });
+        if (!solicitud) throw new NotFoundException('Solicitud no encontrada');
+
+        const estacionAnteriorId = solicitud.id_estacion;
+
+        return this.db.$transaction(async (tx) => {
+            // Free anterior station
+            if (estacionAnteriorId) {
+                await tx.taller_estacion.update({
+                    where: { id_estacion: estacionAnteriorId },
+                    data: { ocupada: false }
+                });
+            }
+
+            // Occupy new station
+            await tx.taller_estacion.update({
+                where: { id_estacion: dto.estacionId },
+                data: { ocupada: true }
+            });
+
+            // Update solicitud
+            return tx.renovado_solicitud.update({
+                where: { id_solicitud: id },
+                data: { id_estacion: dto.estacionId }
+            });
+        });
+    }
+
+    async startOrder(id: string) {
+        const solicitud = await this.db.renovado_solicitud.findUnique({ where: { id_solicitud: id } });
+        if (!solicitud) throw new NotFoundException('Solicitud no encontrada');
+
+        return this.db.renovado_solicitud.update({
+            where: { id_solicitud: id },
+            data: { estado: 'En Proceso' }
+        });
+    }
+
     async findAll() {
         try {
             console.log('[RenovadosService] Fetching all renovados...');
-            return await this.db.renovado_solicitud.findMany({
+            const records = await this.db.renovado_solicitud.findMany({
                 include: {
-                    fases: true,
+                    fases: { orderBy: { orden: 'asc' } },
                     _count: {
                         select: { incidencias: true }
                     }
                 },
                 orderBy: { created_at: 'desc' }
+            });
+
+            const evidenceMap = this.readPhaseEvidence();
+            return records.map((r: any) => {
+                const phasesWithEvidence = r.fases.map((f: any) => {
+                    const ev = evidenceMap[f.id_fase];
+                    let estado = 'Sin iniciar';
+                    if (f.completado) {
+                        estado = 'Finalizada';
+                    } else if (f.fecha_inicio) {
+                        estado = 'En proceso';
+                    }
+                    return {
+                        ...f,
+                        comentarios: ev?.comentarios || '',
+                        foto_1: ev?.foto_1 || null,
+                        foto_2: ev?.foto_2 || null,
+                        estado
+                    };
+                });
+                return {
+                    ...r,
+                    fases: phasesWithEvidence
+                };
             });
         } catch (error: any) {
             console.error('[RenovadosService] CRITICAL ERROR in findAll:', error);
@@ -120,7 +304,63 @@ export class RenovadosService {
             }
         });
         if (!renovado) throw new NotFoundException('Solicitud de renovado no encontrada');
-        return renovado;
+
+        // Dynamically attach phase evidence
+        const evidenceMap = this.readPhaseEvidence();
+        const phasesWithEvidence = renovado.fases.map((f: any) => {
+            const ev = evidenceMap[f.id_fase];
+            let estado = 'Sin iniciar';
+            if (f.completado) {
+                estado = 'Finalizada';
+            } else if (f.fecha_inicio) {
+                estado = 'En proceso';
+            }
+            return {
+                ...f,
+                comentarios: ev?.comentarios || '',
+                foto_1: ev?.foto_1 || null,
+                foto_2: ev?.foto_2 || null,
+                estado
+            };
+        });
+
+        let id_detalle = null;
+        let modelo = null;
+        let id_evaluacion = null;
+
+        try {
+            const eqUbi = await this.db.equipo_ubicacion.findFirst({
+                where: { serial_equipo: renovado.serial_equipo },
+                include: {
+                    rel_evaluacion: {
+                        include: {
+                            entrada_detalle: true
+                        }
+                    }
+                }
+            });
+
+            if (eqUbi) {
+                id_detalle = eqUbi.rel_evaluacion?.id_detalle || eqUbi.stock;
+                modelo = eqUbi.rel_evaluacion?.entrada_detalle?.modelo;
+                id_evaluacion = eqUbi.id_evaluacion;
+
+                if (!modelo && eqUbi.id_equipos) {
+                    const eq = await this.db.equipos.findUnique({ where: { id_equipos: eqUbi.id_equipos } });
+                    modelo = eq?.modelo;
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching detail and model in findOne:', err);
+        }
+
+        return {
+            ...renovado,
+            id_detalle,
+            modelo,
+            id_evaluacion,
+            fases: phasesWithEvidence
+        };
     }
 
     async create(dto: CreateRenovadoDto) {
@@ -208,14 +448,14 @@ export class RenovadosService {
         });
     }
 
-    async completeFase(idFase: string) {
+    async completeFase(idFase: string, nextPhase?: string) {
         const fase = await this.db.renovado_fase.findUnique({ where: { id_fase: idFase } });
         if (!fase || !fase.fecha_inicio) throw new BadRequestException('La fase no ha sido iniciada');
 
         const fechaFin = new Date();
         const horas = this.calcularHorasLaborales(fase.fecha_inicio, fechaFin);
 
-        return this.db.renovado_fase.update({
+        const updated = await this.db.renovado_fase.update({
             where: { id_fase: idFase },
             data: {
                 fecha_fin: fechaFin,
@@ -223,6 +463,33 @@ export class RenovadosService {
                 completado: true
             }
         });
+
+        // If nextPhase is supplied, check if there is a next phase with that name and automatically start it
+        if (nextPhase) {
+            try {
+                const nextFaseRecord = await this.db.renovado_fase.findFirst({
+                    where: {
+                        id_solicitud: fase.id_solicitud,
+                        nombre_fase: nextPhase,
+                        completado: false
+                    }
+                });
+                if (nextFaseRecord) {
+                    await this.db.renovado_fase.update({
+                        where: { id_fase: nextFaseRecord.id_fase },
+                        data: {
+                            fecha_inicio: new Date(),
+                            tecnico: fase.tecnico || updated.tecnico,
+                            completado: false
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('[RenovadosService] Failed to auto-start next phase:', err);
+            }
+        }
+
+        return updated;
     }
 
     async addRefaccion(idSolicitud: string, dto: AddRefaccionDto) {

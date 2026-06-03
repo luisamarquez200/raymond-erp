@@ -402,7 +402,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
         }
 
         // Security Check: Functional Tests Quality Control
-        const pruebasFase = solicitud.fases.find((f: any) => f.nombre_fase === 'Pruebas funcionales');
+        const pruebasFase = solicitud?.fases?.find((f: any) => f.nombre_fase === 'Pruebas funcionales');
         if (pruebasFase && pruebasFase.estado !== 'Sin iniciar') {
             const isApproved = pruebasFase.comentarios?.includes('[CALIDAD: APROBADO]');
             const isRejected = pruebasFase.comentarios?.includes('[CALIDAD: RECHAZADO]');

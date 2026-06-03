@@ -2,6 +2,8 @@ import { PrismaClient as PrismaR1 } from '@prisma/client-taller-r1';
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../database/prisma-dynamic.service';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface CreateEquipoUbicacionDto {
     id_equipos?: string;
@@ -292,5 +294,107 @@ export class EquipoUbicacionService {
             nombre_ubicacion_destino: m.id_ubicacion_destino ? ubiMap.get(m.id_ubicacion_destino) : 'N/D',
             nombre_sub_ubicacion_destino: m.id_sub_ubicacion_destino ? subUbiMap.get(m.id_sub_ubicacion_destino) : 'N/D',
         }));
+    }
+
+    // Helper to get/set refacciones catalogo
+    private getCatalogPath() {
+        const dir = path.join(process.cwd(), 'uploads', 'renovados');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        return path.join(dir, 'refacciones_catalogo.json');
+    }
+
+    private readCatalog(): any[] {
+        const filePath = this.getCatalogPath();
+        if (!fs.existsSync(filePath)) {
+            // Seed a few default catalog items if file doesn't exist
+            const defaults = [
+                { refaccion: 'Filtro de Aceite', descripcion: 'Filtro aceite motor principal', precio: 350 },
+                { refaccion: 'Filtro de Aire', descripcion: 'Filtro aire motor', precio: 450 },
+                { refaccion: 'Batería 12V', descripcion: 'Batería de arranque Raymond', precio: 2800 },
+                { refaccion: 'Horquillas Raymond', descripcion: 'Horquillas de carga estándar', precio: 8500 }
+            ];
+            fs.writeFileSync(filePath, JSON.stringify(defaults, null, 2), 'utf-8');
+            return defaults;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            return JSON.parse(content);
+        } catch {
+            return [];
+        }
+    }
+
+    private writeCatalog(catalog: any[]) {
+        const filePath = this.getCatalogPath();
+        fs.writeFileSync(filePath, JSON.stringify(catalog, null, 2), 'utf-8');
+    }
+
+    // Helper to get/set costos refacciones
+    private getCostsPath() {
+        const dir = path.join(process.cwd(), 'uploads', 'renovados');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        return path.join(dir, 'costos_refacciones.json');
+    }
+
+    private readCosts(): any[] {
+        const filePath = this.getCostsPath();
+        if (!fs.existsSync(filePath)) return [];
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            return JSON.parse(content);
+        } catch {
+            return [];
+        }
+    }
+
+    private writeCosts(costs: any[]) {
+        const filePath = this.getCostsPath();
+        fs.writeFileSync(filePath, JSON.stringify(costs, null, 2), 'utf-8');
+    }
+
+    // Exposed Service Methods
+    async getRefaccionesCatalogo() {
+        return this.readCatalog();
+    }
+
+    async createRefaccionCatalogo(dto: { refaccion: string; descripcion: string; precio: number }) {
+        const catalog = this.readCatalog();
+        const newItem = {
+            ...dto,
+            precio: Number(dto.precio || 0)
+        };
+        catalog.push(newItem);
+        this.writeCatalog(catalog);
+        return newItem;
+    }
+
+    async getCostosRefacciones(id_equipo_ubicacion: string) {
+        const costs = this.readCosts();
+        return costs.filter((c: any) => c.id_equipo_ubicacion === id_equipo_ubicacion);
+    }
+
+    async addCostoRefaccion(id_equipo_ubicacion: string, dto: { descripcion: string; precio: number; tipo: string; observaciones?: string }) {
+        const costs = this.readCosts();
+        const nextId = costs.length > 0 ? Math.max(...costs.map((c: any) => Number(c.id_costos_refacciones || 0))) + 1 : 1;
+        const newItem = {
+            id_costos_refacciones: nextId,
+            id_equipo_ubicacion,
+            ...dto,
+            precio: Number(dto.precio || 0)
+        };
+        costs.push(newItem);
+        this.writeCosts(costs);
+        return newItem;
+    }
+
+    async deleteCostoRefaccion(id: number) {
+        const costs = this.readCosts();
+        const filtered = costs.filter((c: any) => Number(c.id_costos_refacciones) !== Number(id));
+        this.writeCosts(filtered);
+        return { success: true };
     }
 }

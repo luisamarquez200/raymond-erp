@@ -41,4 +41,32 @@ export class EquipoUbicacionController {
     async getByDetailId(@Param('detailId') detailId: string) {
         return this.service.findByDetailId(detailId);
     }
+
+    @Get('refacciones/catalogo')
+    async getRefaccionesCatalogo() {
+        return this.service.getRefaccionesCatalogo();
+    }
+
+    @Post('refacciones/catalogo')
+    async createRefaccionCatalogo(@Body() dto: { refaccion: string; descripcion: string; precio: number }) {
+        return this.service.createRefaccionCatalogo(dto);
+    }
+
+    @Get(':id/costos-refacciones')
+    async getCostosRefacciones(@Param('id') id: string) {
+        return this.service.getCostosRefacciones(id);
+    }
+
+    @Post(':id/costos-refacciones')
+    async addCostoRefaccion(
+        @Param('id') id: string,
+        @Body() dto: { descripcion: string; precio: number; tipo: string; observaciones?: string }
+    ) {
+        return this.service.addCostoRefaccion(id, dto);
+    }
+
+    @Delete('costos-refacciones/:id')
+    async deleteCostoRefaccion(@Param('id') id: string) {
+        return this.service.deleteCostoRefaccion(Number(id));
+    }
 }

@@ -59,6 +59,7 @@ export interface CreateEntradaDto {
     firma_entrega?: string;
     firma_recibo?: string;
     nombre_entrega?: string;
+    bol?: string;
 }
 
 export interface UpdateEntradaDto {
