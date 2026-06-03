@@ -64,9 +64,12 @@ export default function R4DashboardPage() {
   }, []);
 
   // Derived values from metrics
-  const totalActivos = metrics?.flotillaStatus
-    ? Object.values(metrics.flotillaStatus).reduce((a: any, b: any) => a + b, 0)
-    : 0;
+  const totalActivos = Number(
+  metrics?.flotillaStatus
+    ? Object.values(metrics.flotillaStatus as Record<string, number>)
+        .reduce((a, b) => a + b, 0)
+    : 0
+  );
 
   const dynamicDonutData = [
     { name: 'En Renta / Activo', value: metrics?.flotillaStatus?.activosRentados || 0, color: '#dc2626' },

@@ -22,6 +22,8 @@ export default function SiteSelectionPage() {
             color: 'from-red-500 to-red-700',
             borderColor: 'border-red-100',
             bgLight: 'bg-red-50',
+            isUpcoming: false,
+
         },
         {
             id: 'r2',
@@ -32,6 +34,7 @@ export default function SiteSelectionPage() {
             color: 'from-blue-600 to-blue-800',
             borderColor: 'border-blue-100',
             bgLight: 'bg-blue-50',
+            isUpcoming: false,
         },
         {
             id: 'r3',
@@ -54,6 +57,8 @@ export default function SiteSelectionPage() {
             bgLight: 'bg-violet-50',
             path: '/es/comercial/dashboard',
             restrictedEmail: 'it@runsolutions.com',
+            isUpcoming: false,
+
         },
         {
             id: 'admin-comercial',
@@ -65,16 +70,17 @@ export default function SiteSelectionPage() {
             borderColor: 'border-amber-100',
             bgLight: 'bg-amber-50',
             path: '/es/r4/flotilla',
+            isUpcoming: false,
+
         },
     ];
 
     // Filter sites based on user permissions
     const userSites = user?.sitio ? user.sitio.split(',').map(s => s.trim().toUpperCase()) : ['R1'];
     const userRole = typeof user?.role === 'string' ? user.role : (user?.role as any)?.name;
-    const isAdmin = ['Admin', 'Administrador', 'Superadmin'].includes(userRole);
+    const isAdmin = ['Admin', 'Administrador', 'Superadmin', 'ADMIN_COMERCIAL'].includes(userRole);
 
     const availableOptions = siteOptions.filter(opt => {
-        if (opt.requiresAdmin && !isAdmin) return false;
         if (opt.code === 'ADMIN_COMERCIAL') return true;
 
         // Restriction: R2 only for it@runsolutions.com
@@ -155,7 +161,7 @@ export default function SiteSelectionPage() {
                         <button
                             key={site.id}
                             onClick={() => handleSelect(site)}
-                            disabled={site.isUpcoming}
+                            disabled={false}
                             className={cn(
                                 `group relative flex flex-col text-left bg-white rounded-3xl p-8 border ${site.borderColor} shadow-sm transition-all duration-300 ease-out overflow-hidden`,
                                 site.isUpcoming

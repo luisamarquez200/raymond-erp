@@ -60,7 +60,6 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
         evidencia_3: '',
         estado: 'Recibido – En espera evaluación',
         prioridad: 'Normal',
-        bol: '',
         distribuidor: '',
         cliente_origen: '',
         adc: '',

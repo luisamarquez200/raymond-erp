@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import renovadosService, { RenovadoSolicitud, RenovadoFase } from '@/services/taller-r1/renovados.service';
 import { equipoUbicacionApi } from '@/services/taller-r1/equipo-ubicacion.service';
-import { useTallerTecnicos, useCreateTallerTecnico } from '@/hooks/taller-r1/useTallerTecnicos';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { useTallerUsuarios, useCreateTallerUsuario } from '@/hooks/taller-r1/useTallerUsuarios';
+import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Scanner } from '@yudiel/react-qr-scanner';
@@ -26,8 +26,8 @@ interface Props {
 }
 
 export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: Props) => {
-    const { data: tecnicos = [] } = useTallerTecnicos();
-    const createTecnico = useCreateTallerTecnico();
+    const { data: usuarios = [] } = useTallerUsuarios();
+    const createUsuario = useCreateTallerUsuario();
     const [solicitud, setSolicitud] = useState<RenovadoSolicitud | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'fases' | 'refacciones' | 'incidencias' | 'historial' | 'estaciones'>('fases');
@@ -42,7 +42,11 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
     const [newTechData, setNewTechData] = useState({ tecnicoNuevo: '', motivo: '' });
     const [showQuickAddTech, setShowQuickAddTech] = useState(false);
     const [quickTechName, setQuickTechName] = useState('');
-    const [quickTechLevel, setQuickTechLevel] = useState('Junior');
+    const [quickTechEmail, setQuickTechEmail] = useState('');
+    const [quickTechRole, setQuickTechRole] = useState('Administrador');
+    const [quickTechSites, setQuickTechSites] = useState<string[]>(['R1']);
+    const [quickTechPassword, setQuickTechPassword] = useState('');
+    const [quickTechPasswordError, setQuickTechPasswordError] = useState('');
     
     // States for station change
     const [estaciones, setEstaciones] = useState<any[]>([]);
@@ -102,7 +106,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                 } catch (_) { /* silent */ }
             }
         } catch (error) {
-            toast.error(getErrorMessage(error, 'Error al cargar el detalle de la solicitud'));
+            toast.error('Error al cargar el detalle de la solicitud');
         } finally {
             setLoading(false);
         }
@@ -115,7 +119,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             loadDetalle();
             setShowScanner(false);
         } catch (error: any) {
-            toast.error(getErrorMessage(error, 'Error al iniciar la fase'));
+            toast.error(error.response?.data?.message || 'Error al iniciar la fase');
         }
     };
 
@@ -131,7 +135,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             setShowNextPhaseSelector(null);
             loadDetalle();
         } catch (error: any) {
-            toast.error(getErrorMessage(error, 'Error al completar la fase'));
+            toast.error(error.response?.data?.message || 'Error al completar la fase');
         }
     };
 
@@ -154,25 +158,56 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
         reader.readAsDataURL(file);
     };
 
+    const validateQuickPassword = (password: string) => {
+        const hasUpperCase = /[A-Z]/.test(password);
+        const hasNumber = /\d/.test(password);
+        if (!hasUpperCase || !hasNumber || password.length < 8) {
+            return false;
+        }
+        return true;
+    };
+
+    const handleQuickPasswordChange = (val: string) => {
+        setQuickTechPassword(val);
+        if (val.length > 0) {
+            if (!validateQuickPassword(val)) {
+                setQuickTechPasswordError("Mínimo 8 caracteres, 1 mayúscula y 1 número");
+            } else {
+                setQuickTechPasswordError("");
+            }
+        } else {
+            setQuickTechPasswordError("");
+        }
+    };
+
     const handleSaveQuickAddTech = async () => {
-        if (!quickTechName.trim() || !quickTechLevel) return;
+        if (!quickTechName.trim() || !quickTechEmail.trim() || !quickTechPassword || !!quickTechPasswordError || quickTechSites.length === 0) return;
         try {
             const data = {
-                nombre: quickTechName.trim(),
-                nivel_certificacion: quickTechLevel
+                Usuario: quickTechName.trim(),
+                Correo: quickTechEmail.trim(),
+                Rol: quickTechRole,
+                sitio: quickTechSites.join(','),
+                ContrasenaUsuario: quickTechPassword,
+                Status: 'APPROVED',
+                UsuarioBloqueado: false
             };
-            const result = await createTecnico.mutateAsync(data);
+            const result = await createUsuario.mutateAsync(data);
             
             // Set the new technician in selection
             setNewTechData(prev => ({
                 ...prev,
-                tecnicoNuevo: result.nombre || quickTechName.trim()
+                tecnicoNuevo: result.Usuario || quickTechName.trim()
             }));
             
             // Close quick add form and show success toast
             setShowQuickAddTech(false);
             setQuickTechName('');
-            setQuickTechLevel('Junior');
+            setQuickTechEmail('');
+            setQuickTechRole('Administrador');
+            setQuickTechSites(['R1']);
+            setQuickTechPassword('');
+            setQuickTechPasswordError('');
         } catch (error) {
             // Error is handled in the mutation hook (toast.error)
         }
@@ -238,7 +273,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             loadDetalle();
         } catch (error: any) {
             console.error('Error detallado:', error.response?.data || error.message);
-            toast.error(getErrorMessage(error, 'Error al agregar refacción'));
+            toast.error('Error al agregar refacción');
         }
     };
 
@@ -344,7 +379,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             setNewIncidencia({ tipo: 'SIN INCIDENCIAS', comentarios: '' });
             loadDetalle();
         } catch (error) {
-            toast.error(getErrorMessage(error, 'Error al registrar incidencia'));
+            toast.error('Error al registrar incidencia');
         }
     };
 
@@ -354,21 +389,20 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             toast.success('Incidencia cerrada');
             loadDetalle();
         } catch (error) {
-            toast.error(getErrorMessage(error, 'Error al cerrar incidencia'));
+            toast.error('Error al cerrar incidencia');
         }
     };
 
     const handleFinalize = async () => {
-        if (!solicitud) return;
         // Enforce that started phases (En proceso) must be completed before finalizing
-        const activePhases = solicitud.fases?.filter((f: any) => f.estado === 'En proceso');
+        const activePhases = solicitud?.fases?.filter((f: any) => f.estado === 'En proceso');
         if (activePhases && activePhases.length > 0) {
             toast.warning(`Aún hay fases activas sin finalizar: ${activePhases.map((f: any) => f.nombre_fase).join(', ')}`);
             return;
         }
 
         // Security Check: Functional Tests Quality Control
-        const pruebasFase = solicitud.fases?.find((f: any) => f.nombre_fase === 'Pruebas funcionales');
+        const pruebasFase = solicitud.fases.find((f: any) => f.nombre_fase === 'Pruebas funcionales');
         if (pruebasFase && pruebasFase.estado !== 'Sin iniciar') {
             const isApproved = pruebasFase.comentarios?.includes('[CALIDAD: APROBADO]');
             const isRejected = pruebasFase.comentarios?.includes('[CALIDAD: RECHAZADO]');
@@ -391,7 +425,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
             onSuccess();
             onClose();
         } catch (error) {
-            toast.error(getErrorMessage(error, 'Error al finalizar el proceso'));
+            toast.error('Error al finalizar el proceso');
         }
     };
 
@@ -431,8 +465,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                     {solicitud?.tecnico_responsable || 'Sin asignar'}
                                     <button 
                                         onClick={() => setShowChangeTech(true)}
-                                        disabled={solicitud?.estado === 'Finalizado'}
-                                        className="ml-2 p-1 hover:bg-red-50 text-red-600 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        className="ml-2 p-1 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
                                     >
                                         <History className="w-3 h-3" />
                                     </button>
@@ -442,8 +475,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                     Estación: {solicitud?.rel_estacion?.nombre || 'General'}
                                     <button 
                                         onClick={() => setShowChangeStation(true)}
-                                        disabled={solicitud?.estado === 'Finalizado'}
-                                        className="ml-2 p-1 hover:bg-neutral-50 text-neutral-600 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        className="ml-2 p-1 hover:bg-neutral-50 text-neutral-600 rounded-lg transition-colors"
                                     >
                                         <History className="w-3 h-3" />
                                     </button>
@@ -675,8 +707,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                         <div className="space-y-2">
                                                             <button
                                                                 onClick={() => handleCompleteFase(fase.id_fase)}
-                                                                disabled={solicitud?.estado === 'Finalizado'}
-                                                                className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-200 hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-200 hover:bg-red-700 transition-all"
                                                             >
                                                                 Finalizar Fase <CheckCircle2 className="w-4 h-4" />
                                                             </button>
@@ -684,8 +715,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                     ) : (
                                                         <button
                                                             onClick={() => handleStartFase(fase.id_fase, solicitud?.tecnico_responsable || 'Sin asignar')}
-                                                            disabled={solicitud?.estado === 'Finalizado'}
-                                                            className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-600 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-600 transition-all group/btn"
                                                         >
                                                             Iniciar Fase <Play className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" />
                                                         </button>
@@ -702,8 +732,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                     {fase.nombre_fase === 'Pruebas funcionales' && fase.comentarios?.includes('[CALIDAD: RECHAZADO]') && (
                                                         <button
                                                             onClick={() => handleRepeatFase(fase.id_fase)}
-                                                            disabled={solicitud?.estado === 'Finalizado'}
-                                                            className="w-full flex items-center justify-center gap-2 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-md active:scale-95 mt-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="w-full flex items-center justify-center gap-2 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-md active:scale-95 mt-1.5"
                                                         >
                                                             Repetir Fase <RotateCcw className="w-3.5 h-3.5" />
                                                         </button>
@@ -756,8 +785,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                             <div className="flex-1 space-y-2 w-full">
                                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Área</label>
                                                 <select
-                                                    disabled={solicitud?.estado === 'Finalizado'}
-                                                    className="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-sm outline-none focus:border-red-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                    className="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-sm outline-none focus:border-red-500"
                                                     value={newRefaccion.area}
                                                     onChange={(e) => setNewRefaccion({ ...newRefaccion, area: e.target.value })}
                                                 >
@@ -775,8 +803,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">No. Parte</label>
                                                     <button 
                                                         onClick={() => setShowCatalogModal(true)}
-                                                        disabled={solicitud?.estado === 'Finalizado'}
-                                                        className="p-1 bg-white border border-slate-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="p-1 bg-white border border-slate-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm"
                                                         title="Nueva refacción en catálogo"
                                                     >
                                                         <Plus className="w-3 h-3" />
@@ -784,9 +811,8 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                 </div>
                                                 <input
                                                     type="text"
-                                                    disabled={solicitud?.estado === 'Finalizado'}
                                                     list="catalogo-refacciones-list"
-                                                    className="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-sm outline-none focus:border-red-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                    className="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-sm outline-none focus:border-red-500"
                                                     value={newRefaccion.descripcion}
                                                     onChange={(e) => setNewRefaccion({ ...newRefaccion, descripcion: e.target.value })}
                                                     placeholder="Escribir número de parte..."
@@ -824,8 +850,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                 <input
                                                     type="number"
                                                     min="1"
-                                                    disabled={solicitud?.estado === 'Finalizado'}
-                                                    className="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-sm outline-none focus:border-red-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                    className="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-sm outline-none focus:border-red-500"
                                                     value={newRefaccion.cantidad || ''}
                                                     onChange={(e) => {
                                                         const val = e.target.value;
@@ -838,8 +863,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                             </div>
                                             <button
                                                 onClick={handleAddRefaccion}
-                                                disabled={solicitud?.estado === 'Finalizado'}
-                                                className="w-full xl:w-auto px-8 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-200 flex items-center justify-center gap-2 hover:bg-red-700 transition-all active:scale-95 h-[46px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="w-full xl:w-auto px-8 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-200 flex items-center justify-center gap-2 hover:bg-red-700 transition-all active:scale-95 h-[46px]"
                                             >
                                                 <Plus className="w-4 h-4" /> Agregar
                                             </button>
@@ -883,8 +907,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                     <div className="flex justify-end pt-4">
                                         <button
                                             onClick={handleSendEmail}
-                                            disabled={solicitud?.estado === 'Finalizado'}
-                                            className="px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-200 flex items-center justify-center gap-2 hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-200 flex items-center justify-center gap-2 hover:bg-slate-800 transition-all active:scale-95"
                                         >
                                             <Mail className="w-4 h-4" /> Enviar Lista por Correo
                                         </button>
@@ -909,8 +932,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                     <label className="text-[9px] font-black text-amber-600 uppercase tracking-widest ml-1">Descripción *</label>
                                                     <input
                                                         type="text"
-                                                        disabled={solicitud?.estado === 'Finalizado'}
-                                                        className="w-full px-4 py-3 bg-white border border-amber-100 rounded-xl font-bold text-sm outline-none focus:border-amber-400 disabled:bg-amber-50 disabled:cursor-not-allowed"
+                                                        className="w-full px-4 py-3 bg-white border border-amber-100 rounded-xl font-bold text-sm outline-none focus:border-amber-400"
                                                         placeholder="Ej: Servicio soldadura, Mano de obra..."
                                                         value={newCostoExterno.descripcion}
                                                         onChange={e => setNewCostoExterno(p => ({ ...p, descripcion: e.target.value }))}
@@ -923,8 +945,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                         <input
                                                             type="text"
                                                             inputMode="decimal"
-                                                            disabled={solicitud?.estado === 'Finalizado'}
-                                                            className="w-full pl-8 pr-4 py-3 bg-white border border-amber-100 rounded-xl font-bold text-sm outline-none focus:border-amber-400 disabled:bg-amber-50 disabled:cursor-not-allowed"
+                                                            className="w-full pl-8 pr-4 py-3 bg-white border border-amber-100 rounded-xl font-bold text-sm outline-none focus:border-amber-400"
                                                             placeholder="0.00"
                                                             value={newCostoExterno.precio}
                                                             onChange={e => {
@@ -938,8 +959,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                     <label className="text-[9px] font-black text-amber-600 uppercase tracking-widest ml-1">Observaciones</label>
                                                     <input
                                                         type="text"
-                                                        disabled={solicitud?.estado === 'Finalizado'}
-                                                        className="w-full px-4 py-3 bg-white border border-amber-100 rounded-xl font-bold text-sm outline-none focus:border-amber-400 disabled:bg-amber-50 disabled:cursor-not-allowed"
+                                                        className="w-full px-4 py-3 bg-white border border-amber-100 rounded-xl font-bold text-sm outline-none focus:border-amber-400"
                                                         placeholder="Opcional..."
                                                         value={newCostoExterno.observaciones}
                                                         onChange={e => setNewCostoExterno(p => ({ ...p, observaciones: e.target.value }))}
@@ -949,7 +969,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                             <div className="flex justify-end">
                                                 <button
                                                     onClick={handleAddCostoExterno}
-                                                    disabled={savingCosto || solicitud?.estado === 'Finalizado'}
+                                                    disabled={savingCosto}
                                                     className="px-8 h-11 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-amber-200 flex items-center gap-2 hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-60"
                                                 >
                                                     {savingCosto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -980,8 +1000,8 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                             <td className="px-6 py-4 text-center">
                                                                 <button
                                                                     onClick={() => handleDeleteCostoExterno(c.id_costos_refacciones)}
-                                                                    disabled={deletingCostoId === c.id_costos_refacciones || solicitud?.estado === 'Finalizado'}
-                                                                    className="p-2 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                                    disabled={deletingCostoId === c.id_costos_refacciones}
+                                                                    className="p-2 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded-lg transition-all"
                                                                     title="Eliminar"
                                                                 >
                                                                     {deletingCostoId === c.id_costos_refacciones
@@ -1019,8 +1039,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                         <div className="space-y-2">
                                             <label className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-1">Tipo de Paro</label>
                                             <select
-                                                disabled={solicitud?.estado === 'Finalizado'}
-                                                className="w-full px-4 py-3 bg-white border border-red-100 rounded-xl font-bold text-sm outline-none focus:border-red-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                className="w-full px-4 py-3 bg-white border border-red-100 rounded-xl font-bold text-sm outline-none focus:border-red-500"
                                                 value={newIncidencia.tipo}
                                                 onChange={(e) => setNewIncidencia({ ...newIncidencia, tipo: e.target.value })}
                                             >
@@ -1034,8 +1053,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                         <div className="md:col-span-2 space-y-2">
                                             <label className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-1">Descripción del problema</label>
                                             <textarea
-                                                disabled={solicitud?.estado === 'Finalizado'}
-                                                className="w-full px-4 py-3 bg-white border border-red-100 rounded-xl font-bold text-sm outline-none focus:border-red-500 custom-scrollbar h-[60px] disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                className="w-full px-4 py-3 bg-white border border-red-100 rounded-xl font-bold text-sm outline-none focus:border-red-500 custom-scrollbar h-[60px]"
                                                 placeholder="Describa el motivo del retraso..."
                                                 value={newIncidencia.comentarios}
                                                 onChange={(e) => setNewIncidencia({ ...newIncidencia, comentarios: e.target.value })}
@@ -1043,8 +1061,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                         </div>
                                         <button
                                             onClick={handleCreateIncidencia}
-                                            disabled={solicitud?.estado === 'Finalizado'}
-                                            className="mt-6 py-4 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-200 flex items-center justify-center gap-2 hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="mt-6 py-4 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-200 flex items-center justify-center gap-2 hover:bg-red-700 transition-all"
                                         >
                                             <AlertTriangle className="w-4 h-4" /> Reportar Paro
                                         </button>
@@ -1070,8 +1087,7 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                     ) : (
                                                         <button
                                                             onClick={() => handleCloseIncidencia(inc.id_incidencia)}
-                                                            disabled={solicitud?.estado === 'Finalizado'}
-                                                            className="px-6 py-2 bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="px-6 py-2 bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100"
                                                         >
                                                             Finalizar Paro
                                                         </button>
@@ -1274,16 +1290,80 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider ml-1">Nivel de Certificación</label>
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider ml-1">Correo Electrónico</label>
+                                            <input 
+                                                type="email"
+                                                placeholder="Ej: j.perez@raymond.com.mx"
+                                                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-red-500"
+                                                value={quickTechEmail}
+                                                onChange={(e) => setQuickTechEmail(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider ml-1">Rol del Usuario</label>
                                             <select
                                                 className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-red-500"
-                                                value={quickTechLevel}
-                                                onChange={(e) => setQuickTechLevel(e.target.value)}
+                                                value={quickTechRole}
+                                                onChange={(e) => setQuickTechRole(e.target.value)}
                                             >
-                                                {['Junior', 'Tech primer certificado', 'Senior', 'Externo'].map(level => (
-                                                    <option key={level} value={level}>{level}</option>
+                                                {['Administrador', 'Almacenista', 'Supervisor comercial', 'Comercial', 'Visitante'].map(rol => (
+                                                    <option key={rol} value={rol}>{rol}</option>
                                                 ))}
                                             </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider ml-1">Lugar Asignado (Múltiple)</label>
+                                            <div className="flex gap-2">
+                                                {['R1', 'R2', 'R3'].map((ub) => {
+                                                    const isSelected = quickTechSites.includes(ub);
+                                                    return (
+                                                        <button
+                                                            key={ub}
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                setQuickTechSites(prev =>
+                                                                    prev.includes(ub)
+                                                                        ? prev.filter(u => u !== ub)
+                                                                        : [...prev, ub]
+                                                                )
+                                                            }}
+                                                            className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all border ${isSelected
+                                                                ? 'bg-red-50 text-red-600 border-red-200 shadow-sm'
+                                                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                                                }`}
+                                                        >
+                                                            {ub}
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider ml-1">Contraseña</label>
+                                            <input 
+                                                type="password"
+                                                placeholder="Contraseña"
+                                                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-red-500"
+                                                value={quickTechPassword}
+                                                onChange={(e) => handleQuickPasswordChange(e.target.value)}
+                                            />
+                                            {quickTechPassword && (
+                                                <div className="mt-1.5 ml-1 space-y-0.5">
+                                                    <div className={`flex items-center gap-1.5 text-[8px] font-black uppercase tracking-tighter ${quickTechPassword.length >= 8 ? 'text-green-500' : 'text-gray-400'}`}>
+                                                        <div className={`w-1 h-1 rounded-full ${quickTechPassword.length >= 8 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                                        Mínimo 8 caracteres
+                                                    </div>
+                                                    <div className={`flex items-center gap-1.5 text-[8px] font-black uppercase tracking-tighter ${/\d/.test(quickTechPassword) ? 'text-green-500' : 'text-gray-400'}`}>
+                                                        <div className={`w-1 h-1 rounded-full ${/\d/.test(quickTechPassword) ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                                        Al menos un número
+                                                    </div>
+                                                    <div className={`flex items-center gap-1.5 text-[8px] font-black uppercase tracking-tighter ${/[A-Z]/.test(quickTechPassword) ? 'text-green-500' : 'text-gray-400'}`}>
+                                                        <div className={`w-1 h-1 rounded-full ${/[A-Z]/.test(quickTechPassword) ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                                        Al menos una mayúscula
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex gap-2 pt-1">
                                             <button
@@ -1291,7 +1371,11 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                                 onClick={() => {
                                                     setShowQuickAddTech(false);
                                                     setQuickTechName('');
-                                                    setQuickTechLevel('Junior');
+                                                    setQuickTechEmail('');
+                                                    setQuickTechRole('Administrador');
+                                                    setQuickTechSites(['R1']);
+                                                    setQuickTechPassword('');
+                                                    setQuickTechPasswordError('');
                                                 }}
                                                 className="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
                                             >
@@ -1300,10 +1384,10 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                             <button
                                                 type="button"
                                                 onClick={handleSaveQuickAddTech}
-                                                disabled={!quickTechName.trim() || !quickTechLevel || createTecnico.isPending}
+                                                disabled={!quickTechName.trim() || !quickTechEmail.trim() || !quickTechPassword || !!quickTechPasswordError || quickTechSites.length === 0 || createUsuario.isPending}
                                                 className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                                             >
-                                                {createTecnico.isPending ? (
+                                                {createUsuario.isPending ? (
                                                     <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                                 ) : 'Guardar'}
                                             </button>
@@ -1328,8 +1412,8 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                             onChange={(e) => setNewTechData({...newTechData, tecnicoNuevo: e.target.value})}
                                         >
                                             <option value="">Seleccionar técnico...</option>
-                                            {tecnicos.map(t => (
-                                                <option key={t.id_tecnico} value={t.nombre}>{t.nombre}</option>
+                                            {usuarios.map(u => (
+                                                <option key={u.IDUsuarios} value={u.Usuario}>{u.Usuario}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -1353,7 +1437,11 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                                         setShowChangeTech(false);
                                         setShowQuickAddTech(false);
                                         setQuickTechName('');
-                                        setQuickTechLevel('Junior');
+                                        setQuickTechEmail('');
+                                        setQuickTechRole('Administrador');
+                                        setQuickTechSites(['R1']);
+                                        setQuickTechPassword('');
+                                        setQuickTechPasswordError('');
                                     }}
                                     className="flex-1 py-4 bg-slate-100 text-slate-400 hover:text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
                                 >
