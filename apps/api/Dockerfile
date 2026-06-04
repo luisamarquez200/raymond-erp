@@ -53,13 +53,15 @@ WORKDIR /app/apps/api
 RUN (npx prisma@5.19.1 generate --schema=./prisma/schema.prisma && \
      npx prisma@5.19.1 generate --schema=./prisma/schemas/taller-r1.prisma && \
      npx prisma@5.19.1 generate --schema=./prisma/schemas/frontera.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma) || \
+     npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma && \
+     npx prisma@5.19.1 generate --schema=./prisma/schemas/comercial-r4.prisma) || \
     (echo "⚠️ Prisma generate falló, reintentando..." && \
      sleep 5 && \
      npx prisma@5.19.1 generate --schema=./prisma/schema.prisma && \
      npx prisma@5.19.1 generate --schema=./prisma/schemas/taller-r1.prisma && \
      npx prisma@5.19.1 generate --schema=./prisma/schemas/frontera.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma)
+     npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma && \
+     npx prisma@5.19.1 generate --schema=./prisma/schemas/comercial-r4.prisma)
 RUN pnpm build
 
 FROM base AS runner
@@ -72,43 +74,26 @@ ENV NODE_OPTIONS="--openssl-legacy-provider"
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nestjs
 
-# Copiar archivos necesarios para instalar dependencias
-# Copiar estructura completa del monorepo para que pnpm funcione correctamente
-COPY --from=builder --chown=nestjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=nestjs:nodejs /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/package.json
-COPY --from=builder --chown=nestjs:nodejs /app/packages ./packages
+# Copiar node_modules completo desde builder (ya tiene todos los clientes Prisma generados)
+# Esto evita reinstalar y perder los clientes Prisma generados (@prisma/client-comercial, etc.)
+COPY --from=builder /app/node_modules ./node_modules
 
-# Instalar solo dependencias de producción
-# Usar --shamefully-hoist para crear estructura plana (similar a npm)
-RUN pnpm install --prod --shamefully-hoist --fetch-timeout=600000
-
-# Copiar archivos de la aplicación
+# Copiar archivos de la aplicación compilados
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder --chown=nestjs:nodejs /app/packages ./packages
 
-# Instalar prisma CLI como dev dependency y regenerar Prisma Client
-RUN pnpm add -D -w prisma@5.19.1 --fetch-timeout=600000
-
-# Regenerar Prisma Clients desde el directorio raíz
-RUN cd /app && \
-    echo "Generating all Prisma Clients..." && \
-    (npx prisma@5.19.1 generate --schema=./apps/api/prisma/schema.prisma && \
-     npx prisma@5.19.1 generate --schema=./apps/api/prisma/schemas/taller-r1.prisma && \
-     npx prisma@5.19.1 generate --schema=./apps/api/prisma/schemas/frontera.prisma && \
-     npx prisma@5.19.1 generate --schema=./apps/api/prisma/schemas/naves.prisma) && \
-    echo "✅ All Prisma Clients generated"
-
-# Verificar que el cliente se generó y contiene ProjectStatus
-RUN echo "📦 Verifying @prisma/client..." && \
-    test -d ./node_modules/@prisma/client || (echo "❌ @prisma/client directory not found!" && exit 1) && \
-    test -f ./node_modules/@prisma/client/index.js || (echo "❌ @prisma/client/index.js not found!" && exit 1) && \
-    node -e "const pc = require('./node_modules/@prisma/client'); const ProjectStatus = pc.ProjectStatus || (pc.Prisma && pc.Prisma.ProjectStatus); if (!ProjectStatus || !ProjectStatus.PLANNING) { console.error('❌ ProjectStatus.PLANNING not found!'); console.log('Direct exports:', Object.keys(pc).filter(k => k.includes('Status') || k.includes('Project')).slice(0, 10)); if (pc.Prisma) console.log('Prisma namespace:', Object.keys(pc.Prisma).filter(k => k.includes('Status') || k.includes('Project')).slice(0, 10)); process.exit(1); } console.log('✅ ProjectStatus.PLANNING found:', ProjectStatus.PLANNING);" && \
-    echo "✅ @prisma/client verified with ProjectStatus"
-
-# Asegurar permisos correctos
+# Asegurar permisos correctos sobre todos los clientes Prisma generados
 RUN chown -R nestjs:nodejs ./node_modules/@prisma 2>/dev/null || true
+
+# Verificar que todos los clientes Prisma están presentes
+RUN echo "📦 Verifying Prisma clients..." && \
+    test -d ./node_modules/@prisma/client || (echo "❌ @prisma/client NOT found!" && exit 1) && \
+    test -d ./node_modules/@prisma/client-taller-r1 || (echo "❌ @prisma/client-taller-r1 NOT found!" && exit 1) && \
+    test -d ./node_modules/@prisma/client-frontera || (echo "❌ @prisma/client-frontera NOT found!" && exit 1) && \
+    test -d ./node_modules/@prisma/client-naves || (echo "❌ @prisma/client-naves NOT found!" && exit 1) && \
+    test -d ./node_modules/@prisma/client-comercial || (echo "❌ @prisma/client-comercial NOT found!" && exit 1) && \
+    echo "✅ All Prisma clients verified"
 
 # Asegurar que NODE_PATH incluya el directorio correcto
 ENV NODE_PATH=/app/node_modules
