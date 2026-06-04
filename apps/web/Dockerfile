@@ -34,60 +34,69 @@ RUN pnpm install --frozen-lockfile --fetch-timeout=600000 || \
 FROM base AS builder
 WORKDIR /app
 
-# Copiar dependencias
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages ./packages
+# Copiar archivos de configuración del monorepo
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/config/package.json ./packages/config/
+COPY packages/types/package.json ./packages/types/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/hooks/package.json ./packages/hooks/
+COPY apps/web/package.json ./apps/web/
 
-# Copiar código fuente y archivos de configuración de la raíz
-# Necesario para turbo: package.json, pnpm-workspace.yaml, pnpm-lock.yaml
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+# Reinstalar con --shamefully-hoist para crear estructura PLANA (sin symlinks)
+# Esto es NECESARIO: los symlinks de pnpm se rompen entre stages Docker
+RUN pnpm install --shamefully-hoist --fetch-timeout=600000
+
+# Copiar código fuente
 COPY apps/web ./apps/web
 COPY packages ./packages
 COPY turbo.json tsconfig.json ./
 
-# Build de la aplicación usando el script de build de Next.js
-# Mantener WORKDIR en /app (raíz del monorepo) para que pnpm resuelva workspaces
+# Variables de entorno para el build
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Construir Next.js desde el directorio de web
-# Cambiar al directorio y ejecutar el build directamente
+# Verificar que next está disponible antes de buildear
+RUN find /app/node_modules/.bin/next /app/apps/web/node_modules/.bin/next -maxdepth 0 2>/dev/null | head -1 | grep -q next && \
+    echo "✅ next CLI found" || (echo "❌ next CLI NOT found!" && exit 1)
+
+# Build de Next.js
 WORKDIR /app/apps/web
+RUN NODE_ENV=production node_modules/.bin/next build
 
-# Ejecutar el build de Next.js con las variables de entorno necesarias
-RUN NEXT_PRIVATE_SKIP_TURBO=1 NODE_ENV=production pnpm exec next build || \
-    (echo "❌ Error en build de Next.js" && \
-     echo "Verificando estructura..." && \
-     echo "PWD: $(pwd)" && \
-     echo "Contenido actual:" && ls -la && \
-     echo "Verificando node_modules:" && \
-     test -d /app/node_modules && echo "✅ /app/node_modules existe" || echo "❌ /app/node_modules NO existe" && \
-     test -d /app/apps/web/node_modules && echo "✅ /app/apps/web/node_modules existe" || echo "❌ /app/apps/web/node_modules NO existe" && \
-     test -d node_modules && echo "✅ node_modules local existe" || echo "❌ node_modules local NO existe" && \
-     echo "Verificando packages:" && \
-     test -d /app/packages && echo "✅ /app/packages existe" || echo "❌ /app/packages NO existe" && \
-     exit 1)
-
-# Volver a la raíz
 WORKDIR /app
 
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV NODE_OPTIONS="--openssl-legacy-provider"
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Crear usuario no root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copiar archivos necesarios
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+# Copiar archivos de configuración para reinstalar prod deps
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder /app/packages/config/package.json ./packages/config/package.json
+COPY --from=builder /app/packages/types/package.json ./packages/types/package.json
+COPY --from=builder /app/packages/ui/package.json ./packages/ui/package.json
+COPY --from=builder /app/packages/hooks/package.json ./packages/hooks/package.json
+
+# Instalar solo dependencias de producción con estructura plana
+RUN pnpm install --prod --shamefully-hoist --fetch-timeout=600000
+
+# Copiar archivos compilados de Next.js
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next ./apps/web/.next
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/package.json ./apps/web/
+COPY --from=builder --chown=nextjs:nodejs /app/packages ./packages
+
+# Verificar que next está disponible para el start
+RUN test -f node_modules/.bin/next && echo "✅ next binary ready" || \
+    (echo "❌ next binary NOT found in runner!" && exit 1)
 
 USER nextjs
 
@@ -96,6 +105,4 @@ EXPOSE 8000
 ENV PORT=8000
 ENV HOSTNAME="0.0.0.0"
 
-# Comando de inicio
-CMD ["node", "apps/web/server.js"]
-
+CMD ["node_modules/.bin/next", "start", "--port", "8000", "-H", "0.0.0.0"]
