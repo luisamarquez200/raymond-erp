@@ -25,11 +25,11 @@ COPY packages/types/package.json ./packages/types/
 # Instalar dependencias con retry en caso de error de red
 RUN pnpm install --frozen-lockfile --fetch-timeout=600000 || \
     (echo "⚠️ Primera instalación falló, reintentando..." && \
-     sleep 5 && \
-     pnpm install --frozen-lockfile --fetch-timeout=600000) || \
+    sleep 5 && \
+    pnpm install --frozen-lockfile --fetch-timeout=600000) || \
     (echo "⚠️ Segunda instalación falló, último intento..." && \
-     sleep 10 && \
-     pnpm install --frozen-lockfile --fetch-timeout=600000)
+    sleep 10 && \
+    pnpm install --frozen-lockfile --fetch-timeout=600000)
 
 FROM base AS builder
 WORKDIR /app
@@ -51,17 +51,17 @@ COPY turbo.json tsconfig.json ./
 WORKDIR /app/apps/api
 # Generar todos los clientes de Prisma antes del build (con retry para errores de red)
 RUN (npx prisma@5.19.1 generate --schema=./prisma/schema.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/taller-r1.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/frontera.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/comercial-r4.prisma) || \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/taller-r1.prisma && \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/frontera.prisma && \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma && \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/comercial-r4.prisma) || \
     (echo "⚠️ Prisma generate falló, reintentando..." && \
-     sleep 5 && \
-     npx prisma@5.19.1 generate --schema=./prisma/schema.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/taller-r1.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/frontera.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma && \
-     npx prisma@5.19.1 generate --schema=./prisma/schemas/comercial-r4.prisma)
+    sleep 5 && \
+    npx prisma@5.19.1 generate --schema=./prisma/schema.prisma && \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/taller-r1.prisma && \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/frontera.prisma && \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/naves.prisma && \
+    npx prisma@5.19.1 generate --schema=./prisma/schemas/comercial-r4.prisma)
 RUN pnpm build
 
 FROM base AS runner
@@ -74,19 +74,33 @@ ENV NODE_OPTIONS="--openssl-legacy-provider"
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nestjs
 
-# Copiar node_modules completo desde builder (ya tiene todos los clientes Prisma generados)
-# Esto evita reinstalar y perder los clientes Prisma generados (@prisma/client-comercial, etc.)
-COPY --from=builder /app/node_modules ./node_modules
+# Copiar archivos de configuración del monorepo
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder /app/packages ./packages
+
+# Instalar dependencias de PRODUCCIÓN con estructura plana
+# --shamefully-hoist crea node_modules plano (resuelve @nestjs/core, etc.)
+# Esto es NECESARIO porque los symlinks de pnpm se rompen entre stages Docker
+RUN pnpm install --prod --shamefully-hoist --fetch-timeout=600000
 
 # Copiar archivos de la aplicación compilados
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
-COPY --from=builder --chown=nestjs:nodejs /app/packages ./packages
 
-# Asegurar permisos correctos sobre todos los clientes Prisma generados
-RUN chown -R nestjs:nodejs ./node_modules/@prisma 2>/dev/null || true
+RUN pnpm add -D -w prisma@5.19.1 --shamefully-hoist --fetch-timeout=600000
 
-# Verificar que todos los clientes Prisma están presentes
+RUN echo "🔧 Generating all Prisma clients..." && \
+    npx prisma@5.19.1 generate --schema=./apps/api/prisma/schema.prisma && \
+    npx prisma@5.19.1 generate --schema=./apps/api/prisma/schemas/taller-r1.prisma && \
+    npx prisma@5.19.1 generate --schema=./apps/api/prisma/schemas/frontera.prisma && \
+    npx prisma@5.19.1 generate --schema=./apps/api/prisma/schemas/naves.prisma && \
+    npx prisma@5.19.1 generate --schema=./apps/api/prisma/schemas/comercial-r4.prisma && \
+    echo "✅ All Prisma clients generated"
+
+# Verificar que TODOS los clientes Prisma están accesibles
 RUN echo "📦 Verifying Prisma clients..." && \
     test -d ./node_modules/@prisma/client || (echo "❌ @prisma/client NOT found!" && exit 1) && \
     test -d ./node_modules/@prisma/client-taller-r1 || (echo "❌ @prisma/client-taller-r1 NOT found!" && exit 1) && \
@@ -95,13 +109,19 @@ RUN echo "📦 Verifying Prisma clients..." && \
     test -d ./node_modules/@prisma/client-comercial || (echo "❌ @prisma/client-comercial NOT found!" && exit 1) && \
     echo "✅ All Prisma clients verified"
 
-# Asegurar que NODE_PATH incluya el directorio correcto
+# Verificar que NestJS también está disponible
+RUN node -e "require('@nestjs/core'); console.log('✅ @nestjs/core accessible')"
+
+# Asegurar permisos correctos
+RUN chown -R nestjs:nodejs ./node_modules/.cache 2>/dev/null || true
+RUN chown -R nestjs:nodejs ./node_modules/@prisma 2>/dev/null || true
+
+# NODE_PATH para resolución de módulos
 ENV NODE_PATH=/app/node_modules
 
 USER nestjs
 
 EXPOSE 8001
 
-# Comando de inicio
 CMD ["node", "dist/src/main.js"]
 
