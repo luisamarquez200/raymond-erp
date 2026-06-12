@@ -286,13 +286,13 @@ export default function Fleet() {
 
   // ADC Visual Filtering Logic
   // Bypass filter for the generic "comercial.admin2" testing account
-  const isTestingAdmin = user?.email === 'comercial.admin2@run.com' || user?.username === 'Administrador';
+  const isTestingAdmin = user?.email === 'comercial.admin2@run.com' || (user as any)?.username === 'Administrador';
   
   const baseAssets = (isAdc && !isTestingAdmin)
     ? fleetAssets.filter(a => {
         const adcLower = a.adc?.toLowerCase() || '';
         const userLower = loggedInAdcName.toLowerCase();
-        const usernameLower = user?.username?.toLowerCase() || '';
+        const usernameLower = (user as any)?.username?.toLowerCase() || '';
         const emailLower = user?.email?.toLowerCase() || '';
         return adcLower === userLower || 
                userLower.includes(adcLower) || 
