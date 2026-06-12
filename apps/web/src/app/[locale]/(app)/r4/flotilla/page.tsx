@@ -6,6 +6,7 @@ import {
   Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ShieldCheck, MapPin, Truck, HardDrive, Info
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '@/lib/api';
@@ -21,6 +22,14 @@ const statusColors = {
   'Inactivo con Cliente': 'bg-amber-50 text-amber-700 border-amber-100',
   'En Taller': 'bg-amber-50 text-amber-700 border-amber-100',
   'Mantenimiento': 'bg-amber-50 text-amber-700 border-amber-100',
+};
+
+const formatFilterText = (str: string) => {
+  if (!str) return '-';
+  if (str === str.toUpperCase() && str.length > 3) {
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  }
+  return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
 export default function Fleet() {
@@ -302,17 +311,25 @@ export default function Fleet() {
       })
     : fleetAssets;
 
-  const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
-  const uniqueADCs = Array.from(new Set(baseAssets.map(a => getValidString(a.adc)).filter((v): v is string => !!v))).sort();
-  const uniqueClientes = Array.from(new Set(baseAssets.map(a => getValidString(a.cliente)).filter((v): v is string => !!v))).sort();
-  const uniqueSites = Array.from(new Set(baseAssets.map(a => getValidString(a.site)).filter((v): v is string => !!v))).sort();
-  const uniqueDistribuidores = Array.from(new Set(baseAssets.map(a => getValidString(a.distribuidor)).filter((v): v is string => !!v))).sort();
-  const uniqueEstatus = Array.from(new Set(baseAssets.map(a => getValidString(a.estatus)).filter((v): v is string => !!v))).sort();
-  const uniqueTipos = Array.from(new Set(baseAssets.map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort();
-  const uniqueModelos = Array.from(new Set(baseAssets.map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort();
-  const uniqueClases = Array.from(new Set(baseAssets.map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort();
+  const normalizedAssets = baseAssets.map(a => {
+    let estatus = a.estatus;
+    if (typeof estatus === 'string' && estatus.toUpperCase().includes('INACTIVO')) {
+      estatus = 'Inactivo';
+    }
+    return { ...a, estatus };
+  });
 
-  const filteredAssets = baseAssets.filter((asset: any) => {
+  const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
+  const uniqueADCs = Array.from(new Set(normalizedAssets.map(a => getValidString(a.adc)).filter((v): v is string => !!v))).sort();
+  const uniqueClientes = Array.from(new Set(normalizedAssets.map(a => getValidString(a.cliente)).filter((v): v is string => !!v))).sort();
+  const uniqueSites = Array.from(new Set(normalizedAssets.map(a => getValidString(a.site)).filter((v): v is string => !!v))).sort();
+  const uniqueDistribuidores = Array.from(new Set(normalizedAssets.map(a => getValidString(a.distribuidor)).filter((v): v is string => !!v))).sort();
+  const uniqueEstatus = Array.from(new Set(normalizedAssets.map(a => getValidString(a.estatus)).filter((v): v is string => !!v))).sort();
+  const uniqueTipos = Array.from(new Set(normalizedAssets.map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort();
+  const uniqueModelos = Array.from(new Set(normalizedAssets.map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort();
+  const uniqueClases = Array.from(new Set(normalizedAssets.map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort();
+
+  const filteredAssets = normalizedAssets.filter((asset: any) => {
     if (selectedADC !== 'Todos' && asset.adc !== selectedADC) return false;
     if (selectedCliente !== 'Todos' && asset.cliente !== selectedCliente) return false;
     if (selectedEstatus !== 'Todos' && asset.estatus !== selectedEstatus) return false;
@@ -526,77 +543,77 @@ export default function Fleet() {
           </div>
 
           {!isAdc && (
-            <div className="relative group">
-              <select
-                value={selectedADC}
-                onChange={(e) => { setSelectedADC(e.target.value); setCurrentPage(1); }}
-                className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
-              >
-                <option value="Todos">Ejecutivo (ADC): Todos</option>
-                {uniqueADCs.map(adc => <option key={adc} value={adc}>{adc}</option>)}
-              </select>
-              <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <div className="relative group flex-1 min-w-[160px]">
+              <Select value={selectedADC} onValueChange={(val) => { setSelectedADC(val); setCurrentPage(1); }}>
+                <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                  <SelectValue placeholder="Ejecutivo (ADC): Todos" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
+                  <SelectItem value="Todos" className="text-xs font-bold">Ejecutivo (ADC): Todos</SelectItem>
+                  {uniqueADCs.map(adc => <SelectItem key={adc} value={adc} className="text-xs">{formatFilterText(adc)}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
-          <div className="relative group">
-            <select
-              value={selectedCliente}
-              onChange={(e) => { setSelectedCliente(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
-            >
-              <option value="Todos">Cliente: Todos</option>
-              {uniqueClientes.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <div className="relative group flex-1 min-w-[160px]">
+            <Select value={selectedCliente} onValueChange={(val) => { setSelectedCliente(val); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                <SelectValue placeholder="Cliente: Todos" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
+                <SelectItem value="Todos" className="text-xs font-bold">Cliente: Todos</SelectItem>
+                {uniqueClientes.map(c => <SelectItem key={c} value={c} className="text-xs">{formatFilterText(c)}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="relative group">
-            <select
-              value={selectedEstatus}
-              onChange={(e) => { setSelectedEstatus(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
-            >
-              <option value="Todos">Estatus: Todos</option>
-              {uniqueEstatus.map(e => <option key={e} value={e}>{e}</option>)}
-            </select>
-            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <div className="relative group flex-1 min-w-[160px]">
+            <Select value={selectedEstatus} onValueChange={(val) => { setSelectedEstatus(val); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                <SelectValue placeholder="Estatus: Todos" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
+                <SelectItem value="Todos" className="text-xs font-bold">Estatus: Todos</SelectItem>
+                {uniqueEstatus.map(e => <SelectItem key={e} value={e} className="text-xs">{formatFilterText(e)}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="relative group">
-            <select
-              value={selectedModelo}
-              onChange={(e) => { setSelectedModelo(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
-            >
-              <option value="Todos">Modelo: Todos</option>
-              {uniqueModelos.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <div className="relative group flex-1 min-w-[160px]">
+            <Select value={selectedModelo} onValueChange={(val) => { setSelectedModelo(val); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                <SelectValue placeholder="Modelo: Todos" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
+                <SelectItem value="Todos" className="text-xs font-bold">Modelo: Todos</SelectItem>
+                {uniqueModelos.map(m => <SelectItem key={m} value={m} className="text-xs">{formatFilterText(m)}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="relative group">
-            <select
-              value={selectedClase}
-              onChange={(e) => { setSelectedClase(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
-            >
-              <option value="Todos">Clase: Todas</option>
-              {uniqueClases.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <div className="relative group flex-1 min-w-[160px]">
+            <Select value={selectedClase} onValueChange={(val) => { setSelectedClase(val); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                <SelectValue placeholder="Clase: Todas" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
+                <SelectItem value="Todos" className="text-xs font-bold">Clase: Todas</SelectItem>
+                {uniqueClases.map(c => <SelectItem key={c} value={c} className="text-xs">{formatFilterText(c)}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="relative group">
-            <select
-              value={selectedDistribuidor}
-              onChange={(e) => { setSelectedDistribuidor(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
-            >
-              <option value="Todos">Distribuidor: Todos</option>
-              {uniqueDistribuidores.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <div className="relative group flex-1 min-w-[160px]">
+            <Select value={selectedDistribuidor} onValueChange={(val) => { setSelectedDistribuidor(val); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                <SelectValue placeholder="Distribuidor: Todos" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
+                <SelectItem value="Todos" className="text-xs font-bold">Distribuidor: Todos</SelectItem>
+                {uniqueDistribuidores.map(d => <SelectItem key={d} value={d} className="text-xs">{formatFilterText(d)}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex gap-2">

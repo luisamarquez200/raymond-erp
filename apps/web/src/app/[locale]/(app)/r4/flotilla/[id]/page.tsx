@@ -67,12 +67,16 @@ export default function AssetCarnetPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 flex flex-col items-center gap-6 max-w-sm w-full animate-pulse">
-          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-            <Truck className="w-8 h-8 text-slate-400" />
+        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col items-center gap-6 max-w-sm w-full animate-in fade-in zoom-in duration-500">
+          <div className="relative w-24 h-24">
+             <div className="absolute inset-0 border-4 border-red-50 rounded-full"></div>
+             <div className="absolute inset-0 border-4 border-[#E1000F] rounded-full border-t-transparent animate-spin"></div>
+             <Truck className="absolute inset-0 m-auto w-10 h-10 text-[#E1000F] animate-pulse" />
           </div>
-          <div className="h-4 bg-slate-200 rounded w-2/3"></div>
-          <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+          <div className="text-center">
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Cargando detalles</h2>
+            <p className="text-sm font-medium text-slate-500 mt-1">Obteniendo información del equipo...</p>
+          </div>
         </div>
       </div>
     );

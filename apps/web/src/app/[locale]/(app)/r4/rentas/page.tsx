@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from "motion/react";
 
 export default function R4RentasPage() {
   const { user } = useAuthStore();
-  const isAdc = user?.role?.toLowerCase() === 'administrador';
+  const isAdc = user?.role?.toLowerCase() !== 'administrador';
   const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
 
   const [rentas, setRentas] = useState<any[]>([]);
@@ -343,9 +343,17 @@ export default function R4RentasPage() {
     );
   });
 
+  // Apply pagination
+  const totalItems = filteredRentas.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const paginatedRentas = filteredRentas.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   // Group by client
   const groupedRentas: Record<string, any[]> = {};
-  filteredRentas.forEach(renta => {
+  paginatedRentas.forEach(renta => {
     const clienteNombre = renta.cliente?.razonSocial || 'Sin Cliente';
     if (!groupedRentas[clienteNombre]) {
       groupedRentas[clienteNombre] = [];
@@ -500,6 +508,31 @@ export default function R4RentasPage() {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50 rounded-b-[2rem]">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+              Página {currentPage} de {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors uppercase tracking-widest"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors uppercase tracking-widest"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Registro OC MODAL */}
