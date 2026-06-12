@@ -64,7 +64,7 @@ export class RentasService {
         };
     }
 
-    async obtenerRentas() {
+    async obtenerRentas(role?: string, adcName?: string) {
         try {
             const db = this.getDb();
             const rentas = await db.renta.findMany({
@@ -79,7 +79,21 @@ export class RentasService {
                 },
                 orderBy: { created_at: 'desc' },
             });
-            return rentas.map(r => this.mapRenta(r));
+            
+            let mapped = rentas.map(r => this.mapRenta(r));
+
+            if (role?.toUpperCase() === 'ADMINISTRADOR' && adcName) {
+                const target = adcName.toLowerCase();
+                mapped = mapped.filter(r => {
+                    const rAdc = (r.adc || '').toLowerCase();
+                    const clientComercial = (r.cliente?.datos_comerciales as any) || {};
+                    const clientAdc = (clientComercial.adc || '').toLowerCase();
+                    const siteAdc = (r.sitio?.adc || '').toLowerCase();
+                    return rAdc.includes(target) || clientAdc.includes(target) || siteAdc.includes(target) || target.includes(rAdc) || target.includes(clientAdc);
+                });
+            }
+
+            return mapped;
         } catch (error: any) {
             this.logger.error(`Error en obtenerRentas: ${error.message}`);
             throw error;

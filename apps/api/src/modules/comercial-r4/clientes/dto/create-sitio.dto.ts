@@ -19,4 +19,20 @@ export class CreateSitioDto {
     @IsString()
     @IsOptional()
     responsable?: string;
+
+    @IsString()
+    @IsOptional()
+    distribuidor?: string;
+
+    @IsString()
+    @IsOptional()
+    distribuidor_contacto_nombre?: string;
+
+    @IsString()
+    @IsOptional()
+    distribuidor_contacto_telefono?: string;
+
+    @IsString()
+    @IsOptional()
+    distribuidor_contacto_correo?: string;
 }

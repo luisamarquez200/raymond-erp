@@ -2,13 +2,19 @@
 
 import { 
   Search, FileSpreadsheet, Building2, MapPin, Truck, ChevronRight,
-  Filter, Plus, User, Phone, Mail, FileText, Settings, Shield, X, Map, Trash
+  Filter, Plus, User, Phone, Mail, FileText, Settings, Shield, X, Map, Trash, Download
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth.store";
+
 
 export default function ClientesSitios() {
+  const { user } = useAuthStore();
+  const isReadOnly = user?.role?.toUpperCase() === 'ADMINISTRADOR';
+
+  const [activeTab, setActiveTab] = useState<'clientes' | 'directorio'>('clientes');
   const [clientes, setClientes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -27,7 +33,8 @@ export default function ClientesSitios() {
   // Modal Sitio
   const [isNewSitioModalOpen, setIsNewSitioModalOpen] = useState(false);
   const [newSitioFormData, setNewSitioFormData] = useState({
-    nombre: '', direccion: '', region: '', no_totvs: '', responsable: ''
+    nombre: '', direccion: '', region: '', no_totvs: '', responsable: '',
+    distribuidor: '', distribuidor_contacto_nombre: '', distribuidor_contacto_telefono: '', distribuidor_contacto_correo: ''
   });
   const [isSubmittingSitio, setIsSubmittingSitio] = useState(false);
 
@@ -45,7 +52,7 @@ export default function ClientesSitios() {
       const res = await api.get('/r4/clientes');
       const dataArray = res.data?.data || res.data || [];
       setClientes(Array.isArray(dataArray) ? dataArray : []);
-      if (dataArray.length > 0) {
+      if (dataArray.length > 0 && !selectedClienteId) {
         setSelectedClienteId(dataArray[0].id);
       }
     } catch (error) {
@@ -62,6 +69,10 @@ export default function ClientesSitios() {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      toast.error('No tienes permisos para crear clientes.');
+      return;
+    }
     if (!newClientFormData.razon_social || !newClientFormData.rfc) {
       toast.error('Razón Social y RFC son obligatorios');
       return;
@@ -104,6 +115,10 @@ export default function ClientesSitios() {
 
   const handleCreateSitio = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      toast.error('No tienes permisos para agregar sitios.');
+      return;
+    }
     if (!selectedClienteId) return;
     if (!newSitioFormData.nombre) {
       toast.error('Nombre del sitio es obligatorio');
@@ -114,7 +129,10 @@ export default function ClientesSitios() {
       await api.post(`/r4/clientes/${selectedClienteId}/sitios`, newSitioFormData);
       toast.success('Sitio agregado correctamente');
       setIsNewSitioModalOpen(false);
-      setNewSitioFormData({ nombre: '', direccion: '', region: '', no_totvs: '', responsable: '' });
+      setNewSitioFormData({ 
+        nombre: '', direccion: '', region: '', no_totvs: '', responsable: '',
+        distribuidor: '', distribuidor_contacto_nombre: '', distribuidor_contacto_telefono: '', distribuidor_contacto_correo: ''
+      });
       fetchClientes();
     } catch (error: any) {
       console.error(error);
@@ -124,8 +142,21 @@ export default function ClientesSitios() {
     }
   };
 
-  const requestDeleteCliente = (id: string, name: string, sitiosCount?: number) => setDeleteModalConfig({ isOpen: true, type: 'cliente', id, name, sitiosCount });
-  const requestDeleteSitio = (id: string, name: string) => setDeleteModalConfig({ isOpen: true, type: 'sitio', id, name });
+  const requestDeleteCliente = (id: string, name: string, sitiosCount?: number) => {
+    if (isReadOnly) {
+      toast.error('No tienes permisos para eliminar clientes.');
+      return;
+    }
+    setDeleteModalConfig({ isOpen: true, type: 'cliente', id, name, sitiosCount });
+  };
+  
+  const requestDeleteSitio = (id: string, name: string) => {
+    if (isReadOnly) {
+      toast.error('No tienes permisos para eliminar sitios.');
+      return;
+    }
+    setDeleteModalConfig({ isOpen: true, type: 'sitio', id, name });
+  };
 
   const confirmDelete = async () => {
     if (!deleteModalConfig) return;
@@ -145,6 +176,26 @@ export default function ClientesSitios() {
       toast.error(error.response?.data?.message || `Error al eliminar ${deleteModalConfig.type}`);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      toast.info('Generando Excel...');
+      const response = await api.get('/r4/clientes/exportar/excel', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Directorio_Clientes_y_Distribuidores.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Directorio exportado a Excel con éxito');
+    } catch (error) {
+      console.error(error);
+      toast.error('Error al descargar el archivo Excel');
     }
   };
 
@@ -171,12 +222,29 @@ export default function ClientesSitios() {
 
   const selectedCliente = clientes.find(c => c.id === selectedClienteId) || null;
 
+  // Flatten all sites for Directory Tab
+  const allSites = clientes.flatMap((cliente: any) => 
+    (cliente.sitios || []).map((sitio: any) => ({
+      ...sitio,
+      clienteId: cliente.id,
+      clienteRazonSocial: cliente.razonSocial,
+      clienteRfc: cliente.rfc,
+      clienteEstatus: cliente.estatus
+    }))
+  );
+
+  // Calculate unique distributors dynamically from the database, starting with a base list
+  const loadedDistribuidores = allSites.map((site: any) => site.distribuidor).filter(Boolean);
+  const baseDistribuidores = ['Raymond GDL', 'Raymond Monterrey', 'Raymond Centro', 'Raymond Bajío', 'Raymond Norte', 'Raymond Occidente'];
+  
+  const uniqueDistribuidores = Array.from(new Set([...baseDistribuidores, ...loadedDistribuidores])).sort();
+
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
       
       {/* HEADER SECTION */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
+        <div className="absolute top-0 left-0 w-1 h-full bg-[#E5222D]"></div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="p-3 bg-red-50 text-red-600 rounded-2xl">
@@ -188,17 +256,22 @@ export default function ClientesSitios() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-4 py-2.5 bg-white border-2 border-slate-100 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-all shadow-sm">
-              <Filter className="w-4 h-4" />
-              Filtros
-            </button>
             <button 
-              onClick={() => setIsNewClientModalOpen(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200"
+              onClick={handleDownloadExcel}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold text-sm transition-all shadow-sm border border-emerald-200"
             >
-              <Plus className="w-4 h-4" />
-              Nuevo Cliente
+              <FileSpreadsheet className="w-4 h-4" />
+              Descargar Excel
             </button>
+            {!isReadOnly && (
+              <button 
+                onClick={() => setIsNewClientModalOpen(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo Cliente
+              </button>
+            )}
           </div>
         </div>
 
@@ -213,7 +286,7 @@ export default function ClientesSitios() {
           </div>
           
           <div className="bg-red-50/50 border border-red-100 rounded-2xl p-5 flex flex-col justify-between">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600 mb-2 flex items-center gap-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E5222D] mb-2 flex items-center gap-2">
               <MapPin className="w-3 h-3"/> SITIOS ACTIVOS
             </p>
             <h3 className="text-4xl font-black text-red-900">{totalSitios}</h3>
@@ -222,297 +295,382 @@ export default function ClientesSitios() {
         </div>
       </div>
 
-      {/* TWO COLUMN LAYOUT */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        
-        {/* LEFT COLUMN: DIRECTORIO */}
-        <div className="w-full lg:w-1/3 flex flex-col gap-4">
-          <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-4">
-            
-            <div className="relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
-              <input
-                type="text"
-                placeholder="Buscar cliente o RFC"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-medium focus:border-red-100 focus:bg-white focus:outline-none transition-all"
-              />
-            </div>
+      {/* TABS SELECTOR */}
+      <div className="flex border-b border-slate-200 bg-white p-2 rounded-2xl shadow-sm border">
+        <button
+          onClick={() => setActiveTab('clientes')}
+          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
+            activeTab === 'clientes'
+              ? 'bg-[#E5222D] text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Clientes y Sitios
+        </button>
+        <button
+          onClick={() => setActiveTab('directorio')}
+          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
+            activeTab === 'directorio'
+              ? 'bg-[#E5222D] text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Directorio de Distribuidores
+        </button>
+      </div>
 
-            <div className="flex bg-slate-100 p-1 rounded-2xl">
-              <button 
-                onClick={() => {setStatusFilter("todos"); setCurrentPage(1);}}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${statusFilter === 'todos' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Todos ({totalClientes})
-              </button>
-              <button 
-                onClick={() => {setStatusFilter("activos"); setCurrentPage(1);}}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${statusFilter === 'activos' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Activos ({activos.length})
-              </button>
-              <button 
-                onClick={() => {setStatusFilter("inactivos"); setCurrentPage(1);}}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${statusFilter === 'inactivos' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Inactivos ({inactivos.length})
-              </button>
-            </div>
-            
-            <div className="flex items-center justify-between mt-2 px-1">
-              <h3 className="text-sm font-black text-slate-800">Directorio</h3>
-              <span className="text-xs font-bold text-slate-400">{filteredClientes.length} resultados</span>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {loading ? (
-                <div className="py-16 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
-                  <div className="relative w-12 h-12">
-                     <div className="absolute inset-0 border-4 border-red-50 rounded-full"></div>
-                     <div className="absolute inset-0 border-4 border-[#E1000F] rounded-full border-t-transparent animate-spin"></div>
-                     <Building2 className="absolute inset-0 m-auto w-5 h-5 text-[#E1000F] animate-pulse" />
-                  </div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando directorio...</p>
-                </div>
-              ) : paginatedClientes.length === 0 ? (
-                 <div className="py-12 text-center text-slate-400 font-bold text-sm">No hay clientes.</div>
-              ) : paginatedClientes.map((cliente) => (
-                <div 
-                  key={cliente.id} 
-                  onClick={() => setSelectedClienteId(cliente.id)}
-                  className={`p-4 rounded-2xl cursor-pointer transition-all border-2 flex flex-col gap-3 ${
-                    selectedClienteId === cliente.id 
-                      ? 'border-red-100 bg-red-50/30 shadow-sm' 
-                      : 'border-slate-50 bg-white hover:border-slate-100 hover:shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex flex-col">
-                      <h4 className="font-black text-slate-900 line-clamp-1">{cliente.razonSocial}</h4>
-                      <p className="text-xs text-slate-500 font-medium mt-0.5">{cliente.rfc}</p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${
-                      cliente.estatus?.toLowerCase() === 'activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}>
-                      {cliente.estatus}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                      <MapPin className="w-3 h-3 text-slate-400" />
-                      {cliente.sitiosCount || 0} sitios
-                      <span className="text-red-600 ml-1">Raymond GDL</span>
-                    </div>
-                    <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded">MXN</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex justify-between items-center pt-2 px-1">
-                 <button 
-                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="text-[10px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 disabled:opacity-30"
-                 >Anterior</button>
-                 <span className="text-xs font-bold text-slate-400">{currentPage} / {totalPages}</span>
-                 <button 
-                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="text-[10px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 disabled:opacity-30"
-                 >Siguiente</button>
+      {activeTab === 'clientes' ? (
+        /* TWO COLUMN LAYOUT */
+        <div className="flex flex-col lg:flex-row gap-6 animate-in fade-in duration-300">
+          
+          {/* LEFT COLUMN: DIRECTORIO */}
+          <div className="w-full lg:w-1/3 flex flex-col gap-4">
+            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-4">
+              
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
+                <input
+                  type="text"
+                  placeholder="Buscar cliente o RFC"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-medium focus:border-red-100 focus:bg-white focus:outline-none transition-all"
+                />
               </div>
+
+              <div className="flex bg-slate-100 p-1 rounded-2xl">
+                <button 
+                  onClick={() => {setStatusFilter("todos"); setCurrentPage(1);}}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${statusFilter === 'todos' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Todos ({totalClientes})
+                </button>
+                <button 
+                  onClick={() => {setStatusFilter("activos"); setCurrentPage(1);}}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${statusFilter === 'activos' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Activos ({activos.length})
+                </button>
+                <button 
+                  onClick={() => {setStatusFilter("inactivos"); setCurrentPage(1);}}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${statusFilter === 'inactivos' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Inactivos ({inactivos.length})
+                </button>
+              </div>
+              
+              <div className="flex items-center justify-between mt-2 px-1">
+                <h3 className="text-sm font-black text-slate-800">Clientes</h3>
+                <span className="text-xs font-bold text-slate-400">{filteredClientes.length} resultados</span>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {loading ? (
+                  <div className="py-16 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+                    <div className="relative w-12 h-12">
+                       <div className="absolute inset-0 border-4 border-red-50 rounded-full"></div>
+                       <div className="absolute inset-0 border-4 border-[#E5222D] rounded-full border-t-transparent animate-spin"></div>
+                       <Building2 className="absolute inset-0 m-auto w-5 h-5 text-[#E5222D] animate-pulse" />
+                    </div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando directorio...</p>
+                  </div>
+                ) : paginatedClientes.length === 0 ? (
+                   <div className="py-12 text-center text-slate-400 font-bold text-sm">No hay clientes.</div>
+                ) : paginatedClientes.map((cliente) => (
+                  <div 
+                    key={cliente.id} 
+                    onClick={() => setSelectedClienteId(cliente.id)}
+                    className={`p-4 rounded-2xl cursor-pointer transition-all border-2 flex flex-col gap-3 ${
+                      selectedClienteId === cliente.id 
+                        ? 'border-red-100 bg-red-50/30 shadow-sm' 
+                        : 'border-slate-50 bg-white hover:border-slate-100 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col">
+                        <h4 className="font-black text-slate-900 line-clamp-1">{cliente.razonSocial}</h4>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">{cliente.rfc}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${
+                        cliente.estatus?.toLowerCase() === 'activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}>
+                        {cliente.estatus}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        {cliente.sitiosCount || 0} sitios
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{cliente.moneda}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center pt-2 px-1">
+                   <button 
+                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="text-[10px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                   >Anterior</button>
+                   <span className="text-xs font-bold text-slate-400">{currentPage} / {totalPages}</span>
+                   <button 
+                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="text-[10px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                   >Siguiente</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: DETALLE DEL CLIENTE */}
+          <div className="w-full lg:w-2/3 flex flex-col gap-6">
+            {!selectedCliente ? (
+              <div className="bg-white rounded-3xl p-12 border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center h-full min-h-[400px]">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                  <Building2 className="w-8 h-8 text-slate-300" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800">Ningún cliente seleccionado</h3>
+                <p className="text-slate-500 font-medium mt-2 max-w-sm">Selecciona un cliente del directorio para ver su información completa, distribuidores y sitios de operación.</p>
+              </div>
+            ) : (
+              <>
+                {/* Header Card */}
+                <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div className="flex gap-5 items-center">
+                      <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center shrink-0 border border-red-100">
+                        <Building2 className="w-8 h-8 text-red-500" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-slate-900">{selectedCliente.razonSocial}</h2>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-sm font-bold text-slate-500">ID: {selectedCliente.id?.slice(-6) || '1'}</span>
+                          <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${
+                            selectedCliente.estatus?.toLowerCase() === 'activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {selectedCliente.estatus}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {!isReadOnly && (
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => requestDeleteCliente(selectedCliente.id, selectedCliente.razonSocial, selectedCliente.sitiosCount)}
+                          className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-red-100 hover:border-red-200 hover:bg-red-50 text-red-600 rounded-xl font-bold text-xs transition-all shadow-sm"
+                        >
+                          <Trash className="w-3.5 h-3.5" />
+                          Eliminar
+                        </button>
+                        <button className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-sm">
+                          <Settings className="w-3.5 h-3.5" />
+                          Editar Info
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8 pt-8 border-t border-slate-100">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">RFC</p>
+                      <p className="text-sm font-bold text-slate-800">{selectedCliente.rfc}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Moneda Preferida</p>
+                      <p className="text-sm font-bold text-slate-800 flex items-center gap-1.5"><Map className="w-3.5 h-3.5 text-slate-400"/> {selectedCliente.moneda || 'MXN'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ciudad / Estado</p>
+                      <p className="text-sm font-bold text-slate-800">{selectedCliente.ciudad || '-'}, {selectedCliente.estado_fiscal || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Clave ADC</p>
+                      <p className="text-sm font-bold text-slate-800 bg-slate-100 inline-block px-2 py-0.5 rounded">{selectedCliente.adc || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sitios de Operación */}
+                <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm flex flex-col gap-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-red-500"/>
+                      Sitios de Operación ({selectedCliente.sitios?.length || 0})
+                    </h3>
+                    {!isReadOnly && (
+                      <button 
+                        onClick={() => setIsNewSitioModalOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E5222D] text-white hover:bg-[#CC1E28] rounded-xl font-bold text-xs transition-all shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Agregar Sitio
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedCliente.sitios?.length > 0 ? selectedCliente.sitios.map((sitio: any, idx: number) => (
+                      <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
+                        <div className="p-5 border-l-4 border-l-[#E5222D] flex-1 space-y-3">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-black text-slate-900 text-lg">{sitio.nombre}</h4>
+                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">TOTVS: {sitio.no_totvs || '-'}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!isReadOnly && (
+                                <button
+                                  onClick={() => requestDeleteSitio(sitio.id, sitio.nombre)}
+                                  className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100"
+                                  title="Eliminar sitio"
+                                >
+                                  <Trash className="w-4 h-4" />
+                                </button>
+                              )}
+                              <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-center min-w-[60px]">
+                                <p className="text-sm font-black text-slate-900">{sitio.activosCount || 0}</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">activos</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <p className="text-sm text-slate-600 font-medium leading-relaxed">{sitio.direccion || 'Sin dirección registrada'}</p>
+                          
+                          {/* Distribuidor Info Block */}
+                          <div className="bg-slate-50/80 border border-slate-100 p-3.5 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Distribuidor</span>
+                              <span className="text-xs font-bold text-[#E5222D] flex items-center gap-1"><Truck className="w-3.5 h-3.5"/> {sitio.distribuidor || 'No asignado'}</span>
+                            </div>
+                            {sitio.distribuidor_contacto_nombre && sitio.distribuidor_contacto_nombre !== '-' && (
+                              <div className="pt-2 border-t border-slate-200/50 space-y-1.5">
+                                <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                  <User className="w-3 h-3 text-slate-400"/> {sitio.distribuidor_contacto_nombre}
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-[11px] text-slate-500 font-medium">
+                                  <span className="flex items-center gap-1"><Phone className="w-3 h-3"/> {sitio.distribuidor_contacto_telefono || '-'}</span>
+                                  <span className="flex items-center gap-1"><Mail className="w-3 h-3"/> {sitio.distribuidor_contacto_correo || '-'}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-between items-center px-5 text-xs font-bold text-slate-600">
+                          <p className="flex items-center gap-2">
+                            <User className="w-3.5 h-3.5 text-slate-400"/> 
+                            {sitio.responsable && sitio.responsable !== '-' ? sitio.responsable : 'Sin responsable'}
+                          </p>
+                          <span className="bg-slate-200/50 text-slate-700 px-2 py-0.5 rounded text-[10px]">{sitio.region || 'Sin región'}</span>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="col-span-2 py-8 text-center text-slate-500 font-medium bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                        Este cliente aún no tiene sitios registrados.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
-
-        {/* RIGHT COLUMN: DETALLE DEL CLIENTE */}
-        <div className="w-full lg:w-2/3 flex flex-col gap-6">
-          {!selectedCliente ? (
-            <div className="bg-white rounded-3xl p-12 border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center h-full min-h-[400px]">
-              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                <Building2 className="w-8 h-8 text-slate-300" />
-              </div>
-              <h3 className="text-xl font-black text-slate-800">Ningún cliente seleccionado</h3>
-              <p className="text-slate-500 font-medium mt-2 max-w-sm">Selecciona un cliente del directorio para ver su información completa, distribuidores y sitios de operación.</p>
+      ) : (
+        /* TAB 2: DIRECTORIO DE DISTRIBUIDORES */
+        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm animate-in fade-in duration-300 space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">Directorio Unificado de Distribuidores</h2>
+              <p className="text-slate-500 text-sm mt-1">Listado completo de clientes, sitios de operación y sus distribuidores de servicio técnico asignados.</p>
             </div>
-          ) : (
-            <>
-              {/* Header Card */}
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm">
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                  <div className="flex gap-5 items-center">
-                    <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center shrink-0 border border-red-100">
-                      <Building2 className="w-8 h-8 text-red-500" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-black text-slate-900">{selectedCliente.razonSocial}</h2>
-                      <div className="flex items-center gap-3 mt-2">
-                        <span className="text-sm font-bold text-slate-500">CLI-00{selectedCliente.id?.slice(-2) || '1'}</span>
-                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${
-                          selectedCliente.estatus?.toLowerCase() === 'activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                          {selectedCliente.estatus}
-                        </span>
+            <button
+              onClick={handleDownloadExcel}
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm transition-all shadow-md shadow-emerald-100 self-start sm:self-auto"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Descargar Excel Completo
+            </button>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-100">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
+                  <th className="p-4">Cliente</th>
+                  <th className="p-4">Sitio / Sucursal</th>
+                  <th className="p-4">Región / Responsable</th>
+                  <th className="p-4">Distribuidor Asignado</th>
+                  <th className="p-4">Contacto Técnico</th>
+                  <th className="p-4">Estatus</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
+                {allSites.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-12 text-center text-slate-400">
+                      No se encontraron sitios o distribuidores registrados.
+                    </td>
+                  </tr>
+                ) : allSites.map((site: any) => (
+                  <tr key={site.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-900">{site.clienteRazonSocial}</span>
+                        <span className="text-xs text-slate-400">{site.clienteRfc}</span>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => requestDeleteCliente(selectedCliente.id, selectedCliente.razonSocial, selectedCliente.sitiosCount)}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-red-100 hover:border-red-200 hover:bg-red-50 text-red-600 rounded-xl font-bold text-xs transition-all shadow-sm"
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                      Eliminar
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-sm">
-                      <Settings className="w-3.5 h-3.5" />
-                      Editar Info
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8 pt-8 border-t border-slate-100">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">RFC</p>
-                    <p className="text-sm font-bold text-slate-800">{selectedCliente.rfc}</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Cuenta Asociada</p>
-                    <p className="text-sm font-bold text-slate-800">Cuenta Estratégica A</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">País y Moneda</p>
-                    <p className="text-sm font-bold text-slate-800 flex items-center gap-1.5"><Map className="w-3.5 h-3.5 text-slate-400"/> México • MXN</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Clave ADC</p>
-                    <p className="text-sm font-bold text-slate-800 bg-slate-100 inline-block px-2 py-0.5 rounded">ADC-001</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><User className="w-3 h-3"/> Contacto Principal</p>
-                    <p className="text-sm font-bold text-slate-800">Ing. Roberto Guzmán</p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-                     <p className="text-xs font-bold text-slate-600 flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-slate-400"/> +52 33 1234-5678</p>
-                     <p className="text-xs font-bold text-red-600 flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-red-400"/> contacto@grupoindustrial.mx</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Distribuidor Card */}
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm flex flex-col gap-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-red-500"/>
-                    Distribuidor de Mantenimiento (Nivel Cliente)
-                  </h3>
-                  <button className="text-[11px] font-black text-red-600 hover:text-red-700 transition-colors uppercase tracking-wider">
-                    Cambiar asignación
-                  </button>
-                </div>
-                
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 bg-white border-2 border-slate-100 rounded-2xl p-5 shadow-sm">
-                     <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="text-lg font-black text-slate-900">Raymond GDL</h4>
-                          <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-700 border-red-100 mt-1">Región Occidente</span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-800">{site.nombre}</span>
+                        <span className="text-xs text-slate-500 truncate max-w-[200px]" title={site.direccion}>{site.direccion || '-'}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-800">{site.region || '-'}</span>
+                        <span className="text-xs text-slate-400">Resp: {site.responsable || '-'}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-bold">
+                        <Truck className="w-3.5 h-3.5"/>
+                        {site.distribuidor || 'No asignado'}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      {site.distribuidor_contacto_nombre && site.distribuidor_contacto_nombre !== '-' ? (
+                        <div className="flex flex-col text-xs">
+                          <span className="font-bold text-slate-800">{site.distribuidor_contacto_nombre}</span>
+                          <span className="text-slate-500">{site.distribuidor_contacto_telefono || '-'}</span>
+                          <span className="text-red-500">{site.distribuidor_contacto_correo || '-'}</span>
                         </div>
-                        <span className="flex items-center gap-1 text-xs font-bold text-slate-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100"><span className="text-amber-500">★</span> 4.7</span>
-                     </div>
-                     <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-slate-50">
-                        <p className="text-xs font-bold text-slate-600 flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-slate-400"/> 33 1234 5678</p>
-                        <p className="text-xs font-bold text-slate-600 flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-slate-400"/> soporte@raymondgdl.mx</p>
-                     </div>
-                  </div>
-                  <div className="w-full md:w-64 bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col gap-4">
-                     <div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Tipo de Cobertura</p>
-                       <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5"><Shield className="w-3 h-3"/> Mantenimiento Total (Full Service)</p>
-                     </div>
-                     <div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Asignación</p>
-                       <p className="text-sm font-bold text-slate-800">15 Ene 2025</p>
-                       <p className="text-[10px] text-slate-500 font-medium mt-0.5">Por: Admin Sistema</p>
-                     </div>
-                     <button className="text-[10px] font-bold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1 mt-auto">
-                        <FileText className="w-3 h-3"/> Ver historial de cambios
-                     </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sitios de Operación */}
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm flex flex-col gap-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-red-500"/>
-                    Sitios de Operación ({selectedCliente.sitios?.length || 0})
-                  </h3>
-                  <button 
-                    onClick={() => setIsNewSitioModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition-all shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Agregar Sitio
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedCliente.sitios?.length > 0 ? selectedCliente.sitios.map((sitio: any, idx: number) => (
-                    <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
-                      <div className="p-5 border-l-4 border-l-red-500 flex-1">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-black text-slate-900 text-lg">{sitio.nombre}</h4>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => requestDeleteSitio(sitio.id, sitio.nombre)}
-                              className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100"
-                              title="Eliminar sitio"
-                            >
-                              <Trash className="w-4 h-4" />
-                            </button>
-                            <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-center min-w-[60px]">
-                              <p className="text-sm font-black text-slate-900">{sitio.activosCount || 12}</p>
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">activos</p>
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-xs font-bold text-slate-500 mb-4">SIT-00{idx+1} • Región {idx===0?'Occidente':'Norte'} • Tienda TOTVS: TD-01{idx}</p>
-                        <p className="text-sm text-slate-600 font-medium leading-relaxed">{sitio.direccion || 'Av. Periférico Nte 123, Guadalajara, JAL'}</p>
-                      </div>
-                      <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-between items-center px-5">
-                        <p className="text-xs font-bold text-slate-600 flex items-center gap-2">
-                          <User className="w-3.5 h-3.5 text-slate-400"/> 
-                          {sitio.responsable && sitio.responsable !== '-' ? sitio.responsable : 'Sin responsable asignado'}
-                        </p>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-1.5"><Truck className="w-3.5 h-3.5"/> Raymond {idx===0?'GDL':'MTY'}</p>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="col-span-2 py-8 text-center text-slate-500 font-medium bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
-                      Este cliente aún no tiene sitios registrados.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </>
-          )}
+                      ) : (
+                        <span className="text-slate-400 text-xs italic">Sin contacto registrado</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${
+                        site.clienteEstatus?.toLowerCase() === 'activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}>
+                        {site.clienteEstatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* MODAL ALTA DE NUEVO CLIENTE */}
       {isNewClientModalOpen && (
@@ -665,8 +823,39 @@ export default function ClientesSitios() {
                 <input type="text" value={newSitioFormData.no_totvs} onChange={e => setNewSitioFormData({...newSitioFormData, no_totvs: e.target.value})} placeholder="Escribe el número TOTVS" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-black text-slate-700">Responsable</label>
-                <input type="text" value={newSitioFormData.responsable} onChange={e => setNewSitioFormData({...newSitioFormData, responsable: e.target.value})} placeholder="Escribe el responsable" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                <label className="text-xs font-black text-slate-700">Responsable de Operación</label>
+                <input type="text" value={newSitioFormData.responsable} onChange={e => setNewSitioFormData({...newSitioFormData, responsable: e.target.value})} placeholder="Escribe el responsable de operación" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+              </div>
+
+              <hr className="border-slate-100 my-4" />
+              <h3 className="text-xs font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
+                <Truck className="w-4 h-4"/> Asignación de Distribuidor
+              </h3>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700">Distribuidor que atiende</label>
+                <select value={newSitioFormData.distribuidor} onChange={e => setNewSitioFormData({...newSitioFormData, distribuidor: e.target.value})} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all">
+                  <option value="">Seleccionar Distribuidor</option>
+                  {uniqueDistribuidores.map(d => (
+                    <option key={String(d)} value={String(d)}>{String(d)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700">Contacto de Distribuidor (Nombre)</label>
+                <input type="text" value={newSitioFormData.distribuidor_contacto_nombre} onChange={e => setNewSitioFormData({...newSitioFormData, distribuidor_contacto_nombre: e.target.value})} placeholder="Nombre del contacto del distribuidor" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-700">Teléfono</label>
+                  <input type="text" value={newSitioFormData.distribuidor_contacto_telefono} onChange={e => setNewSitioFormData({...newSitioFormData, distribuidor_contacto_telefono: e.target.value})} placeholder="Teléfono" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-700">Correo</label>
+                  <input type="email" value={newSitioFormData.distribuidor_contacto_correo} onChange={e => setNewSitioFormData({...newSitioFormData, distribuidor_contacto_correo: e.target.value})} placeholder="Correo" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                </div>
               </div>
             </div>
 
@@ -690,6 +879,7 @@ export default function ClientesSitios() {
           </div>
         </div>
       )}
+
       {/* MODAL CONFIRMAR ELIMINACIÓN */}
       {deleteModalConfig?.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">

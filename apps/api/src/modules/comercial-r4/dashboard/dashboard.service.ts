@@ -14,78 +14,240 @@ export class DashboardService {
     async obtenerMetricas() {
         const db = this.getDb();
         try {
-            // Órdenes mensuales totales
-            const ordenesGeneradas = await db.ordenMensual.count();
-            
-            // PO Activas (Distintas PO que no sean null/vacías en las órdenes)
-            // Ya que Prisma no soporta COUNT DISTINCT fácilmente, lo agrupamos
-            const poGroup = await db.ordenMensual.groupBy({
-                by: ['po'],
-                where: { po: { not: null, notIn: [''] } }
+            // 1. (Eliminado: Órdenes mensuales totales)
+
+            // 2. Pedidos Generados (Totvs)
+            const rentasConTotvs = await db.renta.findMany({
+                where: {
+                    no_registro_totvs: { not: null, notIn: [''] }
+                },
+                include: {
+                    detalles: true
+                }
             });
-            const poActivas = poGroup.length;
+            const pedidosGeneradosCount = rentasConTotvs.length;
 
-            // Órdenes del mes actual (usaremos el mes más reciente registrado o el mes actual)
-            const currentYearMonth = new Date().toISOString().substring(0, 7); // e.g. "2026-06"
-            
-            // Para asegurar que mostramos datos si el mes actual no tiene (por datos viejos),
-            // buscamos el último periodo registrado si el actual es 0.
-            let ordenesMesActualCount = await db.ordenMensual.count({ where: { periodo: currentYearMonth } });
-            let montoMesActual = 0;
-            let targetPeriod = currentYearMonth;
-
-            if (ordenesMesActualCount === 0 && ordenesGeneradas > 0) {
-                const lastOrder = await db.ordenMensual.findFirst({
-                    orderBy: { periodo: 'desc' }
-                });
-                if (lastOrder) {
-                    targetPeriod = lastOrder.periodo;
-                    ordenesMesActualCount = await db.ordenMensual.count({ where: { periodo: targetPeriod } });
+            let importePedidosTotvsMXN = 0;
+            let importePedidosTotvsUSD = 0;
+            for (const renta of rentasConTotvs) {
+                const moneda = renta.detalles?.moneda || 'MXN';
+                const monto = renta.detalles?.renta_base ?? renta.tarifa ?? 0;
+                if (moneda.toUpperCase() === 'USD') {
+                    importePedidosTotvsUSD += monto;
+                } else {
+                    importePedidosTotvsMXN += monto;
                 }
             }
 
-            const ordenesDelMes = await db.ordenMensual.findMany({ where: { periodo: targetPeriod } });
-            montoMesActual = ordenesDelMes.reduce((sum, ord) => sum + (ord.tarifa || 0), 0);
+            // 3. Resumen de Órdenes (total de OC registradas y pedidos Totvs registrados)
+            const ocGroup = await db.renta.groupBy({
+                by: ['orden_compra'],
+                where: { orden_compra: { not: null, notIn: [''] } }
+            });
+            const totalOcRegistradas = ocGroup.length;
 
-            // Historial de Facturación para el BarChart / LineChart
-            const historialAgrupado = await db.ordenMensual.groupBy({
-                by: ['periodo'],
-                _sum: { tarifa: true },
-                orderBy: { periodo: 'asc' }
+            const totvsGroup = await db.renta.groupBy({
+                by: ['no_registro_totvs'],
+                where: { no_registro_totvs: { not: null, notIn: [''] } }
+            });
+            const totalPedidosTotvsRegistrados = totvsGroup.length;
+
+            // 4. Resumen de presupuesto por ADC por cliente, en MXN y USD (Equipos activos)
+            const activosActivos = await db.activo.findMany({
+                where: {
+                    estatus_operativo: { in: ['ACTIVO', 'Activo', 'EN RENTA', 'En Renta'] }
+                },
+                include: {
+                    cliente: true,
+                    sitio: true,
+                    rentas: {
+                        where: {
+                            estado: { in: ['VIGENTE', 'IMPORTADA'] }
+                        },
+                        include: {
+                            detalles: true
+                        }
+                    }
+                }
             });
 
-            const historialFacturacion = historialAgrupado
-                .map(h => ({
-                    month: this.formatMonthName(h.periodo),
-                    periodo: h.periodo,
-                    facturado: h._sum.tarifa ?? 0,
-                    presupuesto: (h._sum.tarifa ?? 0) * 0.95
-                }))
-                .filter(h => h.facturado > 0); // Only show months with data
+            const presupuestoPorAdcClienteMap: Record<string, {
+                adc: string;
+                cliente: string;
+                mxn: number;
+                usd: number;
+                equiposCount: number;
+            }> = {};
 
-            // Stats adicionales de flotilla para la dona
+            for (const activo of activosActivos) {
+                const rentaActiva = activo.rentas?.[0];
+                const adc = activo.adc || rentaActiva?.adc || activo.sitio?.adc || 'Sin ADC';
+                const clienteNombre = activo.cliente?.razon_social || rentaActiva?.cliente?.razon_social || 'Sin Cliente';
+                const key = `${adc}||${clienteNombre}`;
+
+                if (!presupuestoPorAdcClienteMap[key]) {
+                    presupuestoPorAdcClienteMap[key] = {
+                        adc,
+                        cliente: clienteNombre,
+                        mxn: 0,
+                        usd: 0,
+                        equiposCount: 0
+                    };
+                }
+
+                const claseLimpia = (activo.clase || '').trim().toUpperCase();
+                const esClaseValida = ['I', 'II', 'III', 'IV', 'V', 'CLASE I', 'CLASE II', 'CLASE III', 'CLASE IV', 'CLASE V', 'CLASE_I', 'CLASE_II', 'CLASE_III', 'CLASE_IV', 'CLASE_V'].some(c => claseLimpia.includes(c));
+                if (esClaseValida) {
+                    presupuestoPorAdcClienteMap[key].equiposCount += 1;
+                }
+
+                if (rentaActiva) {
+                    const moneda = rentaActiva.detalles?.moneda || 'MXN';
+                    const monto = rentaActiva.detalles?.renta_base ?? rentaActiva.tarifa ?? 0;
+                    if (moneda.toUpperCase() === 'USD') {
+                        presupuestoPorAdcClienteMap[key].usd += monto;
+                    } else {
+                        presupuestoPorAdcClienteMap[key].mxn += monto;
+                    }
+                }
+            }
+            const presupuestoAdcCliente = Object.values(presupuestoPorAdcClienteMap);
+
+            // 5. Avance de cumplimiento de cobro de rentas
+            const rentasParaCobro = await db.renta.findMany({
+                where: {
+                    estado: { not: 'CANCELADA' }
+                },
+                include: {
+                    detalles: true,
+                    cliente: true
+                }
+            });
+
+            const cumplimientoMap: Record<string, {
+                periodo: string;
+                mes: string;
+                esperadoMXN: number;
+                recuperadoMXN: number;
+                esperadoUSD: number;
+                recuperadoUSD: number;
+            }> = {};
+
+            for (const renta of rentasParaCobro) {
+                const period = renta.fecha_inicio ? renta.fecha_inicio.toISOString().substring(0, 7) : 'Sin Periodo';
+                if (period === 'Sin Periodo') continue;
+
+                if (!cumplimientoMap[period]) {
+                    cumplimientoMap[period] = {
+                        periodo: period,
+                        mes: this.formatMonthName(period),
+                        esperadoMXN: 0,
+                        recuperadoMXN: 0,
+                        esperadoUSD: 0,
+                        recuperadoUSD: 0
+                    };
+                }
+
+                const moneda = renta.detalles?.moneda || 'MXN';
+                const esperado = renta.detalles?.renta_real ?? renta.tarifa ?? 0;
+                const recuperado = renta.detalles?.importe_recuperado ?? 0;
+
+                if (moneda.toUpperCase() === 'USD') {
+                    cumplimientoMap[period].esperadoUSD += esperado;
+                    cumplimientoMap[period].recuperadoUSD += recuperado;
+                } else {
+                    cumplimientoMap[period].esperadoMXN += esperado;
+                    cumplimientoMap[period].recuperadoMXN += recuperado;
+                }
+            }
+
+            const cumplimientoCobro = Object.values(cumplimientoMap)
+                .sort((a, b) => a.periodo.localeCompare(b.periodo))
+                .map(c => ({
+                    ...c,
+                    porcentajeMXN: c.esperadoMXN > 0 ? (c.recuperadoMXN / c.esperadoMXN) * 100 : 0,
+                    porcentajeUSD: c.esperadoUSD > 0 ? (c.recuperadoUSD / c.esperadoUSD) * 100 : 0
+                }));
+
+            // 6. Recuperación de rentas de meses anteriores (meses menores al mes actual)
+            const currentPeriod = new Date().toISOString().substring(0, 7); // e.g. "2026-06"
+            const recuperacionAnteriorMap: Record<string, {
+                periodo: string;
+                mes: string;
+                esperadoMXN: number;
+                recuperadoMXN: number;
+                esperadoUSD: number;
+                recuperadoUSD: number;
+            }> = {};
+
+            for (const renta of rentasParaCobro) {
+                const period = renta.fecha_inicio ? renta.fecha_inicio.toISOString().substring(0, 7) : 'Sin Periodo';
+                if (period === 'Sin Periodo' || period >= currentPeriod) continue;
+
+                if (!recuperacionAnteriorMap[period]) {
+                    recuperacionAnteriorMap[period] = {
+                        periodo: period,
+                        mes: this.formatMonthName(period),
+                        esperadoMXN: 0,
+                        recuperadoMXN: 0,
+                        esperadoUSD: 0,
+                        recuperadoUSD: 0
+                    };
+                }
+
+                const moneda = renta.detalles?.moneda || 'MXN';
+                const esperado = renta.detalles?.renta_real ?? renta.tarifa ?? 0;
+                const recuperado = renta.detalles?.importe_recuperado ?? 0;
+
+                if (moneda.toUpperCase() === 'USD') {
+                    recuperacionAnteriorMap[period].esperadoUSD += esperado;
+                    recuperacionAnteriorMap[period].recuperadoUSD += recuperado;
+                } else {
+                    recuperacionAnteriorMap[period].esperadoMXN += esperado;
+                    recuperacionAnteriorMap[period].recuperadoMXN += recuperado;
+                }
+            }
+
+            const recuperacionMesesAnteriores = Object.values(recuperacionAnteriorMap)
+                .sort((a, b) => a.periodo.localeCompare(b.periodo))
+                .map(c => ({
+                    ...c,
+                    porcentajeMXN: c.esperadoMXN > 0 ? (c.recuperadoMXN / c.esperadoMXN) * 100 : 0,
+                    porcentajeUSD: c.esperadoUSD > 0 ? (c.recuperadoUSD / c.esperadoUSD) * 100 : 0
+                }));
+
+            // (Eliminados: PO Activas, ordenesMesActual, historialFacturacion)
+
+            // Stats adicionales de flotilla para la dona (mantenidas por compatibilidad)
             const activosRentados = await db.activo.count({ where: { estatus_operativo: { in: ['ACTIVO', 'EN RENTA'] } } });
             const inactivos = await db.activo.count({ where: { estatus_operativo: 'INACTIVO' } });
             const backUp = await db.activo.count({ where: { estatus_operativo: { in: ['DISPONIBLE', 'BACK UP'] } } });
             const mantenimiento = await db.activo.count({ where: { estatus_operativo: { in: ['MANTENIMIENTO', 'EN TALLER', 'INACTIVO CON CLIENTE'] } } });
 
-            // Si todos son cero porque el excel puso "OPERATIVO", contamos todo como "ACTIVO" si tiene renta
             const totalActivos = await db.activo.count();
             const fallBackRentados = totalActivos > 0 && activosRentados === 0 ? totalActivos : activosRentados;
 
             return {
-                ordenesGeneradas,
-                poActivas,
-                ordenesMesActual: ordenesMesActualCount,
-                montoMesActual,
-                periodoActual: targetPeriod,
-                historialFacturacion,
+                // Se removieron: ordenesGeneradas, poActivas, ordenesMesActual, montoMesActual, periodoActual, historialFacturacion
                 flotillaStatus: {
                     activosRentados: fallBackRentados,
                     inactivos,
                     backUp,
                     mantenimiento
-                }
+                },
+                // Nuevas métricas
+                pedidosGenerados: pedidosGeneradosCount,
+                importePedidosTotvs: {
+                    mxn: importePedidosTotvsMXN,
+                    usd: importePedidosTotvsUSD
+                },
+                resumenOrdenes: {
+                    totalOc: totalOcRegistradas,
+                    totalPedidosTotvs: totalPedidosTotvsRegistrados
+                },
+                presupuestoAdcCliente,
+                cumplimientoCobro,
+                recuperacionMesesAnteriores
             };
         } catch (error: any) {
             this.logger.error(`Error en obtenerMetricas: ${error.message}`);

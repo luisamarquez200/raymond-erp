@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, ConflictException } from '@nestj
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 import { CreateClienteDto, UpdateClienteDto } from './dto/create-cliente.dto';
 import { CreateSitioDto } from './dto/create-sitio.dto';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class ClientesService {
@@ -53,6 +54,10 @@ export class ClientesService {
                             no_totvs: s.no_totvs,
                             region: contacto.region || '-',
                             responsable: contacto.responsable || '-',
+                            distribuidor: s.distribuidor || '-',
+                            distribuidor_contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
+                            distribuidor_contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
+                            distribuidor_contacto_correo: contacto.distribuidor_contacto_correo || '-',
                             activosCount: s.activos?.length || 0
                         };
                     })
@@ -109,6 +114,10 @@ export class ClientesService {
                         no_totvs: s.no_totvs,
                         region: contacto.region || '-',
                         responsable: contacto.responsable || '-',
+                        distribuidor: s.distribuidor || '-',
+                        distribuidor_contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
+                        distribuidor_contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
+                        distribuidor_contacto_correo: contacto.distribuidor_contacto_correo || '-',
                         activosCount: s.activos?.length || 0
                     };
                 })
@@ -165,9 +174,13 @@ export class ClientesService {
                             nombre: sitioDto.nombre,
                             direccion: sitioDto.direccion || null,
                             no_totvs: sitioDto.no_totvs || null,
+                            distribuidor: sitioDto.distribuidor || null,
                             contacto_operativo: {
                                 region: sitioDto.region || null,
                                 responsable: sitioDto.responsable || null,
+                                distribuidor_contacto_nombre: sitioDto.distribuidor_contacto_nombre || null,
+                                distribuidor_contacto_telefono: sitioDto.distribuidor_contacto_telefono || null,
+                                distribuidor_contacto_correo: sitioDto.distribuidor_contacto_correo || null,
                             },
                         }
                     });
@@ -245,9 +258,13 @@ export class ClientesService {
                     nombre: dto.nombre,
                     direccion: dto.direccion || null,
                     no_totvs: dto.no_totvs || null,
+                    distribuidor: dto.distribuidor || null,
                     contacto_operativo: {
                         region: dto.region || null,
                         responsable: dto.responsable || null,
+                        distribuidor_contacto_nombre: dto.distribuidor_contacto_nombre || null,
+                        distribuidor_contacto_telefono: dto.distribuidor_contacto_telefono || null,
+                        distribuidor_contacto_correo: dto.distribuidor_contacto_correo || null,
                     },
                 }
             });
@@ -263,6 +280,10 @@ export class ClientesService {
                 no_totvs: sitio.no_totvs,
                 region: contacto.region || '-',
                 responsable: contacto.responsable || '-',
+                distribuidor: sitio.distribuidor || '-',
+                distribuidor_contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
+                distribuidor_contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
+                distribuidor_contacto_correo: contacto.distribuidor_contacto_correo || '-',
             };
         } catch (error: any) {
             this.logger.error(`Error en agregarSitio: ${error.message}`);
@@ -290,10 +311,14 @@ export class ClientesService {
                     ...(dto.nombre && { nombre: dto.nombre }),
                     ...(dto.direccion !== undefined && { direccion: dto.direccion }),
                     ...(dto.no_totvs !== undefined && { no_totvs: dto.no_totvs }),
+                    ...(dto.distribuidor !== undefined && { distribuidor: dto.distribuidor }),
                     contacto_operativo: {
                         ...contactoActual,
                         ...(dto.region !== undefined && { region: dto.region }),
                         ...(dto.responsable !== undefined && { responsable: dto.responsable }),
+                        ...(dto.distribuidor_contacto_nombre !== undefined && { distribuidor_contacto_nombre: dto.distribuidor_contacto_nombre }),
+                        ...(dto.distribuidor_contacto_telefono !== undefined && { distribuidor_contacto_telefono: dto.distribuidor_contacto_telefono }),
+                        ...(dto.distribuidor_contacto_correo !== undefined && { distribuidor_contacto_correo: dto.distribuidor_contacto_correo }),
                     },
                 }
             });
@@ -307,6 +332,10 @@ export class ClientesService {
                 no_totvs: sitio.no_totvs,
                 region: contacto.region || '-',
                 responsable: contacto.responsable || '-',
+                distribuidor: sitio.distribuidor || '-',
+                distribuidor_contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
+                distribuidor_contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
+                distribuidor_contacto_correo: contacto.distribuidor_contacto_correo || '-',
             };
         } catch (error: any) {
             this.logger.error(`Error en actualizarSitio: ${error.message}`);
@@ -359,5 +388,93 @@ export class ClientesService {
             this.logger.error(`Error en eliminarSitio: ${error.message}`);
             throw error;
         }
+    }
+
+    async exportarExcel() {
+        const db = this.getDb();
+        const clientes = await db.cliente.findMany({
+            include: {
+                sitios: {
+                    include: { activos: true }
+                },
+                activos: true
+            },
+            orderBy: { razon_social: 'asc' }
+        });
+
+        const workbook = new ExcelJS.Workbook();
+        const sheetClientes = workbook.addWorksheet('Clientes');
+        sheetClientes.columns = [
+            { header: 'ID Cliente', key: 'id', width: 25 },
+            { header: 'Razón Social', key: 'razonSocial', width: 35 },
+            { header: 'RFC', key: 'rfc', width: 20 },
+            { header: 'Estatus', key: 'estatus', width: 15 },
+            { header: 'Clave ADC', key: 'adc', width: 15 },
+            { header: 'Moneda Preferida', key: 'moneda', width: 15 },
+            { header: 'Ciudad', key: 'ciudad', width: 20 },
+            { header: 'Estado', key: 'estado_fiscal', width: 20 },
+            { header: 'Total Sitios', key: 'sitiosCount', width: 15 },
+            { header: 'Total Activos', key: 'activosCount', width: 15 },
+        ];
+
+        clientes.forEach(c => {
+            const comercial = (c.datos_comerciales as any) || {};
+            const fiscal = (c.datos_fiscales as any) || {};
+            sheetClientes.addRow({
+                id: c.id,
+                razonSocial: c.razon_social,
+                rfc: c.rfc || '-',
+                estatus: c.estado || 'ACTIVO',
+                adc: comercial.adc || '-',
+                moneda: comercial.moneda || 'MXN',
+                ciudad: fiscal.ciudad || '-',
+                estado_fiscal: fiscal.estado || '-',
+                sitiosCount: c.sitios?.length || 0,
+                activosCount: c.activos?.length || 0,
+            });
+        });
+
+        const sheetDistribuidores = workbook.addWorksheet('Distribuidores y Sitios');
+        sheetDistribuidores.columns = [
+            { header: 'Cliente', key: 'cliente', width: 30 },
+            { header: 'Sitio', key: 'sitio', width: 25 },
+            { header: 'No. TOTVS', key: 'no_totvs', width: 15 },
+            { header: 'Dirección', key: 'direccion', width: 35 },
+            { header: 'Responsable', key: 'responsable', width: 25 },
+            { header: 'Distribuidor', key: 'distribuidor', width: 25 },
+            { header: 'Contacto Distribuidor', key: 'contacto_nombre', width: 25 },
+            { header: 'Tel. Distribuidor', key: 'contacto_telefono', width: 20 },
+            { header: 'Correo Distribuidor', key: 'contacto_correo', width: 25 },
+        ];
+
+        clientes.forEach(c => {
+            c.sitios?.forEach(s => {
+                const contacto = (s.contacto_operativo as any) || {};
+                sheetDistribuidores.addRow({
+                    cliente: c.razon_social,
+                    sitio: s.nombre,
+                    no_totvs: s.no_totvs || '-',
+                    direccion: s.direccion || '-',
+                    responsable: contacto.responsable || '-',
+                    distribuidor: s.distribuidor || '-',
+                    contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
+                    contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
+                    contacto_correo: contacto.distribuidor_contacto_correo || '-',
+                });
+            });
+        });
+
+        // Style headers
+        [sheetClientes, sheetDistribuidores].forEach(sheet => {
+            sheet.getRow(1).font = { bold: true };
+            sheet.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFE5222D' }, // Red theme
+            };
+            sheet.getRow(1).font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        });
+
+        return workbook;
     }
 }

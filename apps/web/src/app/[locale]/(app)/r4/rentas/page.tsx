@@ -1,24 +1,43 @@
 "use client";
 
 import {
-  Search, Receipt, Calendar, CalendarDays, Plus, Filter, Download, X, Pencil, Check, ChevronsUpDown
+  Search, Receipt, Calendar, CalendarDays, Plus, Filter, Download, X, Pencil, Check, ChevronsUpDown, FileText, Building2, MapPin, Truck, FileSpreadsheet
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Link } from "@/i18n/routing";
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState, useEffect, Fragment } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth.store";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function R4RentasPage() {
+  const { user } = useAuthStore();
+  const isAdc = user?.role?.toLowerCase() === 'administrador';
+  const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
+
   const [rentas, setRentas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isNewRentaModalOpen, setIsNewRentaModalOpen] = useState(false);
 
-  // NEW STATE
+  // Registro OC Modal State
+  const [isFichaOcModalOpen, setIsFichaOcModalOpen] = useState(false);
+  const [selectedFichaClienteId, setSelectedFichaClienteId] = useState("");
+  const [selectedFichaSitioId, setSelectedFichaSitioId] = useState("");
+  const [fichaFolioOc, setFichaFolioOc] = useState("");
+  const [fichaPedidoTotvs, setFichaPedidoTotvs] = useState("");
+  const [fichaFechaTotvs, setFichaFechaTotvs] = useState("");
+  const [fichaMesCobro, setFichaMesCobro] = useState("");
+  const [fichaPdfFile, setFichaPdfFile] = useState<File | null>(null);
+  const [fichaSeriesGrid, setFichaSeriesGrid] = useState<any[]>([]); // Array of { assetId, serie, modelo, clase, checked, renta_base, dias_caidos, descuento, renta_final }
+  const [isSubmittingFicha, setIsSubmittingFicha] = useState(false);
+
+  const [openFichaCliente, setOpenFichaCliente] = useState(false);
+  const [openFichaSitio, setOpenFichaSitio] = useState(false);
+
+  // NEW STATE FOR STANDALONE RENTA
   const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
   const [equiposDisponibles, setEquiposDisponibles] = useState<any[]>([]);
   const [newRentaFormData, setNewRentaFormData] = useState({
@@ -51,7 +70,7 @@ export default function R4RentasPage() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 15;
 
   const fetchRentasYClientes = async () => {
     try {
@@ -80,6 +99,60 @@ export default function R4RentasPage() {
   useEffect(() => {
     fetchRentasYClientes();
   }, []);
+
+  // Filter series based on selected site in Ficha OC
+  useEffect(() => {
+    if (!selectedFichaSitioId) {
+      setFichaSeriesGrid([]);
+      return;
+    }
+
+    // Find all assets assigned to this site
+    const siteAssets = equiposDisponibles.filter(e => e.sitio_id === selectedFichaSitioId);
+    
+    const gridData = siteAssets.map(asset => {
+      // Find if this asset has an active renta
+      const activeRenta = rentas.find(r => r.activo?.id === asset.id && r.estado !== 'CANCELADA');
+      const basePrice = activeRenta?.detalles?.renta_base || activeRenta?.tarifa || 0;
+      
+      return {
+        assetId: asset.id,
+        serie: asset.serie,
+        modelo: asset.modelo || '-',
+        clase: asset.clase || '-',
+        checked: false,
+        renta_base: basePrice,
+        dias_caidos: 0,
+        descuento: 0,
+        renta_final: basePrice,
+        existingRenta: activeRenta || null
+      };
+    });
+
+    setFichaSeriesGrid(gridData);
+  }, [selectedFichaSitioId, equiposDisponibles, rentas]);
+
+  // Recalculate discount when pricing or dias caidos change
+  const handleGridFieldChange = (index: number, field: 'checked' | 'renta_base' | 'dias_caidos', value: any) => {
+    const updated = [...fichaSeriesGrid];
+    const item = { ...updated[index] };
+    
+    if (field === 'checked') {
+      item.checked = value;
+    } else if (field === 'renta_base') {
+      item.renta_base = Number(value) || 0;
+    } else if (field === 'dias_caidos') {
+      item.dias_caidos = Number(value) || 0;
+    }
+
+    // discount = (base / 30) * dias_caidos
+    const calculatedDiscount = (item.renta_base / 30) * item.dias_caidos;
+    item.descuento = Math.round(calculatedDiscount * 100) / 100;
+    item.renta_final = Math.max(0, Math.round((item.renta_base - item.descuento) * 100) / 100);
+
+    updated[index] = item;
+    setFichaSeriesGrid(updated);
+  };
 
   const handleCreateRenta = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,8 +215,106 @@ export default function R4RentasPage() {
     }
   };
 
-  const totalRentas = rentas.length;
-  const activas = rentas.filter(r => 
+  const handleCreateFichaOc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const selectedItems = fichaSeriesGrid.filter(item => item.checked);
+    if (selectedItems.length === 0) {
+      toast.error("Debes seleccionar al menos una serie.");
+      return;
+    }
+    if (!fichaFolioOc) {
+      toast.error("El Folio OC Cliente es obligatorio.");
+      return;
+    }
+
+    try {
+      setIsSubmittingFicha(true);
+      toast.info("Procesando registro de OC simplificada...");
+
+      for (const item of selectedItems) {
+        let rentaId = '';
+        
+        if (item.existingRenta) {
+          rentaId = item.existingRenta.id;
+          // Update existing renta
+          await api.patch(`/r4/rentas/${rentaId}`, {
+            no_registro_totvs: fichaPedidoTotvs || undefined,
+            fecha_pedido_totvs: fichaFechaTotvs || undefined,
+          });
+
+          await api.patch(`/r4/rentas/${rentaId}/detalles`, {
+            oc_cliente: fichaFolioOc,
+            mes_cobro: fichaMesCobro || undefined,
+            descuento_dias_caidos: item.descuento,
+            renta_base: item.renta_base,
+            renta_real: item.renta_final
+          });
+        } else {
+          // Create new renta
+          const payload = {
+            cliente_id: selectedFichaClienteId,
+            sitio_id: selectedFichaSitioId,
+            activo_id: item.assetId,
+            fecha_inicio: new Date().toISOString().split('T')[0], // Default today
+            fecha_fin: new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0], // Default 1 year
+            no_registro_totvs: fichaPedidoTotvs || null,
+            fecha_pedido_totvs: fichaFechaTotvs || null,
+            detalles: {
+              oc_cliente: fichaFolioOc,
+              mes_cobro: fichaMesCobro || null,
+              descuento_dias_caidos: item.descuento,
+              renta_base: item.renta_base,
+              renta_real: item.renta_final,
+              moneda: 'MXN'
+            }
+          };
+
+          const createRes = await api.post('/r4/rentas', payload);
+          rentaId = createRes.data?.data?.id || createRes.data?.id;
+        }
+
+        // Upload PDF if loaded
+        if (fichaPdfFile && rentaId) {
+          const fileData = new FormData();
+          fileData.append('file', fichaPdfFile);
+          await api.post(`/r4/rentas/${rentaId}/documentos`, fileData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+        }
+      }
+
+      toast.success("Registro OC guardada con éxito.");
+      setIsFichaOcModalOpen(false);
+      // Clean form
+      setSelectedFichaClienteId("");
+      setSelectedFichaSitioId("");
+      setFichaFolioOc("");
+      setFichaPedidoTotvs("");
+      setFichaFechaTotvs("");
+      setFichaMesCobro("");
+      setFichaPdfFile(null);
+      fetchRentasYClientes();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.response?.data?.message || "Error al registrar la Ficha de OC.");
+    } finally {
+      setIsSubmittingFicha(false);
+    }
+  };
+
+  // ADC Visual Filtering Logic
+  const baseRentas = isAdc
+    ? rentas.filter(r => {
+        const adcLower = r.adc?.toLowerCase() || '';
+        const userLower = loggedInAdcName.toLowerCase();
+        return adcLower === userLower || userLower.includes(adcLower) || adcLower.includes(user?.firstName?.toLowerCase() || '');
+      })
+    : rentas;
+
+  const totalRentas = baseRentas.length;
+  const activas = baseRentas.filter(r => 
     r.estado?.toUpperCase() === 'VIGENTE' || 
     r.estado?.toUpperCase() === 'IMPORTADA' || 
     r.estado?.toUpperCase() === 'RENOVADA' ||
@@ -154,29 +325,37 @@ export default function R4RentasPage() {
   const en30Dias = new Date();
   en30Dias.setDate(hoy.getDate() + 30);
 
-  const porVencer = rentas.filter(r => {
+  const porVencer = baseRentas.filter(r => {
     if (!r.fecha_fin) return false;
     const fechaFin = new Date(r.fecha_fin);
     return fechaFin > hoy && fechaFin <= en30Dias && r.estado?.toUpperCase() !== 'CANCELADA';
   }).length;
 
-  const filteredRentas = rentas.filter((renta: any) => {
+  const filteredRentas = baseRentas.filter((renta: any) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
       renta.id?.toLowerCase().includes(term) ||
-      renta.cliente?.razonSocial?.toLowerCase().includes(term)
+      renta.cliente?.razonSocial?.toLowerCase().includes(term) ||
+      renta.activo?.serie?.toLowerCase().includes(term) ||
+      renta.orden_compra?.toLowerCase().includes(term) ||
+      renta.detalles?.oc_cliente?.toLowerCase().includes(term)
     );
   });
 
-  const totalPages = Math.ceil(filteredRentas.length / itemsPerPage);
-  const paginatedRentas = filteredRentas.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  // Group by client
+  const groupedRentas: Record<string, any[]> = {};
+  filteredRentas.forEach(renta => {
+    const clienteNombre = renta.cliente?.razonSocial || 'Sin Cliente';
+    if (!groupedRentas[clienteNombre]) {
+      groupedRentas[clienteNombre] = [];
+    }
+    groupedRentas[clienteNombre].push(renta);
+  });
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
+      
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col -gap-1">
@@ -186,8 +365,15 @@ export default function R4RentasPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setIsFichaOcModalOpen(true)}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-100"
+          >
+            <FileText className="w-4 h-4" />
+            Registro OC
+          </button>
+          <button
             onClick={() => setIsNewRentaModalOpen(true)}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-amber-100"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg"
           >
             <Plus className="w-4 h-4" />
             Nueva Renta
@@ -197,12 +383,11 @@ export default function R4RentasPage() {
 
       {/* Summary Cards */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-
         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-amber-100 hover:shadow-md transition-all">
           <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
             <Receipt className="w-24 h-24 text-amber-600" />
           </div>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total de Rentas</p>
+          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total de Rentas {isAdc && '(Mi ADC)'}</p>
           <h3 className="text-3xl font-black text-amber-600">{totalRentas}</h3>
         </div>
 
@@ -217,116 +402,411 @@ export default function R4RentasPage() {
         </div>
       </div>
 
+      {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row gap-3 items-center">
         <div className="relative group flex-1 w-full max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
           <input
             type="text"
-            placeholder="Buscar por ID, Cliente"
+            placeholder="Buscar por cliente, serie, folio OC"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setCurrentPage(1); // Reset page on search
+              setCurrentPage(1);
             }}
-            className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium focus:border-amber-500 focus:outline-none transition-all shadow-sm"
+            className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all shadow-sm"
           />
-        </div>
-        <div className="flex gap-2">
-          <button className="flex items-center justify-center p-3 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl border-2 border-slate-100 transition-all shadow-sm"><Filter className="w-4 h-4" /></button>
-          <button className="flex items-center justify-center p-3 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl border-2 border-slate-100 transition-all shadow-sm"><Download className="w-4 h-4" /></button>
         </div>
       </div>
 
+      {/* Grouped Table */}
       <div className="bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm overflow-hidden animate-in fade-in duration-300">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
+          <table className="w-full text-left text-sm whitespace-nowrap border-collapse">
             <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-widest border-b-2 border-slate-100">
               <tr>
-                <th className="px-6 py-5 font-black">PO / ID Renta</th>
-                <th className="px-6 py-5 font-black">Cliente</th>
-                <th className="px-6 py-5 font-black">Equipos Asignados</th>
-                <th className="px-6 py-5 font-black">Fecha Inicio</th>
-                <th className="px-6 py-5 font-black">Fin Vigencia</th>
-                <th className="px-6 py-5 font-black">Precio Renta Cliente</th>
-                <th className="px-6 py-5 font-black">Estado</th>
-                <th className="px-6 py-5 font-black text-right">Acciones</th>
+                <th className="px-4 py-4 font-black">Cuenta</th>
+                <th className="px-4 py-4 font-black">Site</th>
+                <th className="px-4 py-4 font-black">Tipo</th>
+                <th className="px-4 py-4 font-black">Clase</th>
+                <th className="px-4 py-4 font-black">Modelo</th>
+                <th className="px-4 py-4 font-black">Folio OC</th>
+                <th className="px-4 py-4 font-black">Serie</th>
+                <th className="px-4 py-4 font-black">Precio Renta</th>
+                <th className="px-4 py-4 font-black">Moneda</th>
+                <th className="px-4 py-4 font-black">Póliza</th>
+                <th className="px-4 py-4 font-black">Distribuidor</th>
+                <th className="px-4 py-4 font-black">Costo Póliza</th>
+                <th className="px-4 py-4 font-black">Moneda Pago</th>
+                <th className="px-4 py-4 font-black text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando rentas...</td></tr>
-              ) : filteredRentas.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron rentas.</td></tr>
-              ) : paginatedRentas.map((renta) => (
-                <tr key={renta.id} className="hover:bg-slate-50 transition-colors group cursor-pointer">
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-900 group-hover:text-amber-600 transition-colors">
-                        {renta.orden_compra || renta.detalles?.oc_cliente || renta.id.substring(0, 8).toUpperCase()}
+                <tr><td colSpan={14} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando rentas...</td></tr>
+              ) : Object.keys(groupedRentas).length === 0 ? (
+                <tr><td colSpan={14} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron rentas.</td></tr>
+              ) : Object.entries(groupedRentas).map(([clienteNombre, clientRentas]) => (
+                <Fragment key={clienteNombre}>
+                  {/* Group header */}
+                  <tr className="bg-slate-50/80 font-black text-slate-800 border-y border-slate-100">
+                    <td colSpan={14} className="px-4 py-3 text-xs flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-[#E5222D]" />
+                      {clienteNombre}
+                      <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded border ml-2">
+                        {clientRentas.length} renta{clientRentas.length > 1 ? 's' : ''}
                       </span>
-                      {!(renta.orden_compra || renta.detalles?.oc_cliente) && (
-                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">ID Sistema</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-bold text-slate-700">{renta.cliente?.razonSocial || 'Sin cliente'}</td>
-                  <td className="px-6 py-4">
-                    <span className="bg-slate-100 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase text-slate-500 border border-slate-200">
-                      1 Activo
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-slate-500">{new Date(renta.fecha_inicio).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-slate-700">{new Date(renta.fecha_fin).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 font-black text-slate-800">
-                    ${(renta.detalles?.total_con_mantenimiento || renta.detalles?.renta_real || renta.detalles?.renta_base || renta.tarifa || 0).toLocaleString()} {renta.detalles?.moneda || 'MXN'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${renta.estado?.toLowerCase() === 'activo' || renta.estado?.toLowerCase() === 'vigente'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                        : 'bg-amber-50 text-amber-700 border-amber-100'
-                      }`}>
-                      {renta.estado}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openEditModal(renta); }}
-                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-colors"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
+                  {clientRentas.map((renta) => {
+                    const cond = renta.condiciones || {};
+                    const detalles = renta.detalles || {};
+                    return (
+                      <tr key={renta.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-4 py-3.5 font-semibold text-slate-900">{renta.cuenta || '-'}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{renta.sitio?.nombre || '-'}</td>
+                        <td className="px-4 py-3.5 text-slate-500">
+                          {renta.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas'}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-500">{renta.activo?.clase || '-'}</td>
+                        <td className="px-4 py-3.5 text-slate-700">{renta.activo?.modelo || '-'}</td>
+                        <td className="px-4 py-3.5 font-bold text-[#E5222D]">
+                          {renta.orden_compra || detalles.oc_cliente || '-'}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-xs text-slate-800">{renta.activo?.serie || '-'}</td>
+                        <td className="px-4 py-3.5 font-bold text-slate-800">
+                          ${(detalles.renta_base || renta.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-500">{detalles.moneda || 'MXN'}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{cond.tipo_poliza || 'SMP'}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{renta.distribuidor || '-'}</td>
+                        <td className="px-4 py-3.5 text-slate-600">
+                          ${(cond.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-500">{cond.moneda_pago_distribuidor || 'MXN'}</td>
+                        <td className="px-4 py-3.5 text-right">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openEditModal(renta); }}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
               ))}
             </tbody>
           </table>
         </div>
-
-        {/* Table Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t-2 border-slate-50 bg-slate-50/50">
-            <span className="text-sm font-bold text-slate-500">
-              Página {currentPage} de {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all"
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Registro OC MODAL */}
+      <AnimatePresence>
+        {isFichaOcModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsFichaOcModalOpen(false)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <form onSubmit={handleCreateFichaOc} className="flex flex-col h-full overflow-hidden">
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-red-50 text-[#E5222D] rounded-2xl">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-slate-900">Registro OC</h2>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Registrar Orden de Compra Cliente</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsFichaOcModalOpen(false)}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* Cliente select */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente *</label>
+                      <Popover open={openFichaCliente} onOpenChange={setOpenFichaCliente}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-all"
+                          >
+                            <span className="truncate">
+                              {selectedFichaClienteId
+                                ? clientesDisponibles.find((c) => c.id === selectedFichaClienteId)?.razonSocial
+                                : "Seleccionar Cliente..."}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
+                          <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
+                            <CommandInput placeholder="Buscar cliente" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
+                            <CommandList>
+                              <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún cliente.</CommandEmpty>
+                              <CommandGroup className="p-1.5">
+                                {clientesDisponibles.map((c) => (
+                                  <CommandItem
+                                    key={c.id}
+                                    value={c.razonSocial}
+                                    onSelect={() => {
+                                      setSelectedFichaClienteId(c.id);
+                                      setSelectedFichaSitioId('');
+                                      setOpenFichaCliente(false);
+                                    }}
+                                    className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-[#E5222D]"
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4 shrink-0 text-[#E5222D]", selectedFichaClienteId === c.id ? "opacity-100" : "opacity-0")} />
+                                    {c.razonSocial}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* Sitio select */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio *</label>
+                      <Popover open={openFichaSitio} onOpenChange={setOpenFichaSitio}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!selectedFichaClienteId}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-all disabled:opacity-50"
+                          >
+                            <span className="truncate">
+                              {selectedFichaSitioId
+                                ? clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
+                                : "Seleccionar Sitio..."}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
+                          <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
+                            <CommandInput placeholder="Buscar sitio" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
+                            <CommandList>
+                              <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún sitio.</CommandEmpty>
+                              <CommandGroup className="p-1.5">
+                                {clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.map((s: any) => (
+                                  <CommandItem
+                                    key={s.id}
+                                    value={s.nombre}
+                                    onSelect={() => {
+                                      setSelectedFichaSitioId(s.id);
+                                      setOpenFichaSitio(false);
+                                    }}
+                                    className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-[#E5222D]"
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4 shrink-0 text-[#E5222D]", selectedFichaSitioId === s.id ? "opacity-100" : "opacity-0")} />
+                                    {s.nombre}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* Folio OC */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Folio OC Cliente *</label>
+                      <input
+                        type="text"
+                        value={fichaFolioOc}
+                        onChange={e => setFichaFolioOc(e.target.value)}
+                        placeholder="Escribe el folio de la OC"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
+                        required
+                      />
+                    </div>
+
+                    {/* Folio Pedido Totvs */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Folio Pedido TOTVS</label>
+                      <input
+                        type="text"
+                        value={fichaPedidoTotvs}
+                        onChange={e => setFichaPedidoTotvs(e.target.value)}
+                        placeholder="Escribe el folio de pedido registrado en Totvs"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
+                      />
+                    </div>
+
+                    {/* Fecha Registro Totvs */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Fecha Registro TOTVS</label>
+                      <input
+                        type="date"
+                        value={fichaFechaTotvs}
+                        onChange={e => setFichaFechaTotvs(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
+                      />
+                    </div>
+
+                    {/* Mes de Cobro */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes de Cobro</label>
+                      <input
+                        type="text"
+                        value={fichaMesCobro}
+                        onChange={e => setFichaMesCobro(e.target.value)}
+                        placeholder="Ej. Junio 2026"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
+                      />
+                    </div>
+
+                    {/* PDF Upload */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cargar PDF de la OC del Cliente</label>
+                      <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center hover:border-red-400 transition-all bg-slate-50/50">
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          id="fichaPdfUpload"
+                          className="hidden"
+                          onChange={e => {
+                            if (e.target.files && e.target.files[0]) {
+                              setFichaPdfFile(e.target.files[0]);
+                            }
+                          }}
+                        />
+                        <label htmlFor="fichaPdfUpload" className="cursor-pointer flex flex-col items-center justify-center gap-1.5">
+                          <FileText className="w-8 h-8 text-slate-400" />
+                          <span className="text-sm font-bold text-slate-700">
+                            {fichaPdfFile ? fichaPdfFile.name : "Seleccionar Archivo PDF..."}
+                          </span>
+                          <span className="text-xs text-slate-400">PDF máximo 10MB</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grid of Series & Days Discount Calculator */}
+                  {selectedFichaSitioId && (
+                    <div className="space-y-4 pt-4 border-t border-slate-100">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <Truck className="w-4 h-4 text-red-500" />
+                          Equipos del Sitio y Descuento por Días Caídos
+                        </h3>
+                        <span className="text-xs text-slate-400 font-bold">{fichaSeriesGrid.length} equipos encontrados</span>
+                      </div>
+
+                      <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                        <table className="w-full text-left text-xs whitespace-nowrap">
+                          <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-wider border-b border-slate-100">
+                            <tr>
+                              <th className="p-3 w-10">Select</th>
+                              <th className="p-3">Serie</th>
+                              <th className="p-3">Clase / Modelo</th>
+                              <th className="p-3 w-28">Tarifa Renta</th>
+                              <th className="p-3 w-24">Días Caídos</th>
+                              <th className="p-3 w-28">Descuento</th>
+                              <th className="p-3 w-28 font-black text-[#E5222D]">Tarifa Final</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {fichaSeriesGrid.map((item, index) => (
+                              <tr key={item.assetId} className={cn("hover:bg-slate-50/50 transition-colors", item.checked && "bg-red-50/10")}>
+                                <td className="p-3 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.checked}
+                                    onChange={e => handleGridFieldChange(index, 'checked', e.target.checked)}
+                                    className="w-4.5 h-4.5 rounded text-red-600 focus:ring-red-500 cursor-pointer"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <div className="font-bold text-slate-800">{item.serie}</div>
+                                  {item.existingRenta && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-50 border border-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded mt-0.5 inline-block">Renta Activa</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-slate-600">
+                                  <div>Clase {item.clase}</div>
+                                  <div className="text-[10px] text-slate-400 font-medium">{item.modelo}</div>
+                                </td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={item.renta_base || ""}
+                                    onChange={e => handleGridFieldChange(index, 'renta_base', e.target.value)}
+                                    placeholder="0"
+                                    className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="30"
+                                    value={item.dias_caidos || ""}
+                                    onChange={e => handleGridFieldChange(index, 'dias_caidos', e.target.value)}
+                                    placeholder="0"
+                                    className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold"
+                                  />
+                                </td>
+                                <td className="p-3 font-semibold text-slate-500">
+                                  ${item.descuento.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="p-3 font-black text-slate-900 text-sm">
+                                  ${item.renta_final.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 rounded-b-[2rem]">
+                  <button
+                    type="button"
+                    onClick={() => setIsFichaOcModalOpen(false)}
+                    className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingFicha}
+                    className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-md shadow-red-200 flex items-center gap-2 animate-pulse-subtle"
+                  >
+                    <Check className="w-4 h-4" />
+                    {isSubmittingFicha ? 'Guardando...' : 'Registrar Ficha'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* NEW RENTA MODAL */}
       <AnimatePresence>
@@ -348,7 +828,7 @@ export default function R4RentasPage() {
               <form onSubmit={handleCreateRenta} className="flex flex-col h-full overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                    <div className="p-2 bg-slate-100 text-slate-600 rounded-xl">
                       <Receipt className="w-5 h-5" />
                     </div>
                     <div>
@@ -367,7 +847,6 @@ export default function R4RentasPage() {
 
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
                   <div className="space-y-8">
-
                     {/* SECCIÓN: DATOS GENERALES */}
                     <div>
                       <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 mb-4 flex items-center gap-2">
@@ -381,7 +860,7 @@ export default function R4RentasPage() {
                             <PopoverTrigger asChild>
                               <button
                                 type="button"
-                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-amber-500 transition-colors"
+                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-colors"
                               >
                                 <span className="truncate">
                                   {newRentaFormData.cliente_id
@@ -405,9 +884,9 @@ export default function R4RentasPage() {
                                           setNewRentaFormData({ ...newRentaFormData, cliente_id: c.id, sitio_id: '' });
                                           setOpenCliente(false);
                                         }}
-                                        className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-amber-50 aria-selected:text-amber-700"
+                                        className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-red-700"
                                       >
-                                        <Check className={cn("mr-2 h-4 w-4 shrink-0 text-amber-600", newRentaFormData.cliente_id === c.id ? "opacity-100" : "opacity-0")} />
+                                        <Check className={cn("mr-2 h-4 w-4 shrink-0 text-red-600", newRentaFormData.cliente_id === c.id ? "opacity-100" : "opacity-0")} />
                                         {c.razonSocial}
                                       </CommandItem>
                                     ))}
@@ -425,7 +904,7 @@ export default function R4RentasPage() {
                               <button
                                 type="button"
                                 disabled={!newRentaFormData.cliente_id}
-                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-amber-500 transition-colors disabled:opacity-50"
+                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
                               >
                                 <span className="truncate">
                                   {newRentaFormData.sitio_id
@@ -449,9 +928,9 @@ export default function R4RentasPage() {
                                           setNewRentaFormData({ ...newRentaFormData, sitio_id: s.id });
                                           setOpenSitio(false);
                                         }}
-                                        className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-amber-50 aria-selected:text-amber-700"
+                                        className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-red-700"
                                       >
-                                        <Check className={cn("mr-2 h-4 w-4 shrink-0 text-amber-600", newRentaFormData.sitio_id === s.id ? "opacity-100" : "opacity-0")} />
+                                        <Check className={cn("mr-2 h-4 w-4 shrink-0 text-red-600", newRentaFormData.sitio_id === s.id ? "opacity-100" : "opacity-0")} />
                                         {s.nombre}
                                       </CommandItem>
                                     ))}
@@ -460,17 +939,6 @@ export default function R4RentasPage() {
                               </Command>
                             </PopoverContent>
                           </Popover>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Código de Contrato</label>
-                          <input
-                            type="text"
-                            value={newRentaFormData.contrato_id}
-                            onChange={e => setNewRentaFormData({ ...newRentaFormData, contrato_id: e.target.value })}
-                            placeholder="Escribe el código"
-                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
-                          />
                         </div>
                       </div>
                     </div>
@@ -485,7 +953,7 @@ export default function R4RentasPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         <div className="space-y-2">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tipo de Renta</label>
-                          <select value={newRentaFormData.tipo_renta} onChange={e => setNewRentaFormData({ ...newRentaFormData, tipo_renta: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors">
+                          <select value={newRentaFormData.tipo_renta} onChange={e => setNewRentaFormData({ ...newRentaFormData, tipo_renta: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors">
                             <option value="Mensual">Mensual</option>
                             <option value="Bimestral">Bimestral</option>
                             <option value="Trimestral">Trimestral</option>
@@ -495,7 +963,7 @@ export default function R4RentasPage() {
 
                         <div className="space-y-2">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Moneda</label>
-                          <select value={newRentaFormData.moneda} onChange={e => setNewRentaFormData({ ...newRentaFormData, moneda: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors">
+                          <select value={newRentaFormData.moneda} onChange={e => setNewRentaFormData({ ...newRentaFormData, moneda: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors">
                             <option value="MXN">MXN (Pesos Mexicanos)</option>
                             <option value="USD">USD (Dólares)</option>
                           </select>
@@ -521,16 +989,16 @@ export default function R4RentasPage() {
                               }
                               setNewRentaFormData({ ...newRentaFormData, fecha_inicio: inicio, fecha_fin: fin });
                             }}
-                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors" required
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Plazo de Renta (Meses)</label>
+                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Plazo (Meses)</label>
                           <input
                             type="number"
                             min="1"
-                            placeholder="Ej. 12, 24, 36"
+                            placeholder="Ej. 12"
                             value={newRentaFormData.plazo_meses}
                             onChange={e => {
                               const plazo = e.target.value;
@@ -545,7 +1013,7 @@ export default function R4RentasPage() {
                               }
                               setNewRentaFormData({ ...newRentaFormData, plazo_meses: plazo, fecha_fin: fin });
                             }}
-                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
                           />
                         </div>
 
@@ -555,71 +1023,63 @@ export default function R4RentasPage() {
                             type="date"
                             value={newRentaFormData.fecha_fin}
                             onChange={e => setNewRentaFormData({ ...newRentaFormData, fecha_fin: e.target.value })}
-                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors" required
                           />
                         </div>
                       </div>
 
                       <div className="space-y-2 mb-4">
-                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Asignar Equipo (ID / Serie)</label>
-                        <div className="flex gap-2">
-                          <Popover open={openEquipo} onOpenChange={setOpenEquipo}>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="flex-1 w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-amber-500 transition-colors"
-                              >
-                                <span className="truncate">
-                                  {newRentaFormData.activo_id
-                                    ? (equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.serie + (equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.modelo ? ` - ${equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.modelo}` : ''))
-                                    : "Seleccionar Equipo..."}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
-                              <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
-                                <CommandInput placeholder="Buscar equipo (ID o Serie)" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
-                                <CommandList>
-                                  <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún equipo.</CommandEmpty>
-                                  <CommandGroup className="p-1.5">
-                                    {equiposDisponibles.map((e) => (
-                                      <CommandItem
-                                        key={e.id}
-                                        value={`${e.serie} ${e.modelo || ''}`}
-                                        onSelect={() => {
-                                          setNewRentaFormData({ ...newRentaFormData, activo_id: e.id });
-                                          setOpenEquipo(false);
-                                        }}
-                                        className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-amber-50 aria-selected:text-amber-700"
-                                      >
-                                        <Check className={cn("mr-2 h-4 w-4 shrink-0 text-amber-600", newRentaFormData.activo_id === e.id ? "opacity-100" : "opacity-0")} />
-                                        {e.serie} {e.modelo ? `- ${e.modelo}` : ''}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Asignar Equipo (Serie)</label>
+                        <Popover open={openEquipo} onOpenChange={setOpenEquipo}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-colors"
+                            >
+                              <span className="truncate">
+                                {newRentaFormData.activo_id
+                                  ? (equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.serie + (equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.modelo ? ` - ${equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.modelo}` : ''))
+                                  : "Seleccionar Equipo..."}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
+                            <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
+                              <CommandInput placeholder="Buscar equipo" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
+                              <CommandList>
+                                <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún equipo.</CommandEmpty>
+                                <CommandGroup className="p-1.5">
+                                  {equiposDisponibles.map((e) => (
+                                    <CommandItem
+                                      key={e.id}
+                                      value={`${e.serie} ${e.modelo || ''}`}
+                                      onSelect={() => {
+                                        setNewRentaFormData({ ...newRentaFormData, activo_id: e.id });
+                                        setOpenEquipo(false);
+                                      }}
+                                      className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-red-700"
+                                    >
+                                      <Check className={cn("mr-2 h-4 w-4 shrink-0 text-red-600", newRentaFormData.activo_id === e.id ? "opacity-100" : "opacity-0")} />
+                                      {e.serie} {e.modelo ? `- ${e.modelo}` : ''}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tarifa Mensual por Equipo</label>
-                          <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">$</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={newRentaFormData.renta_base}
-                              onChange={e => setNewRentaFormData({ ...newRentaFormData, renta_base: e.target.value })}
-                              placeholder="0.00"
-                              className="w-full pl-8 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
-                            />
-                          </div>
-                        </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tarifa Renta</label>
+                        <input
+                          type="number"
+                          value={newRentaFormData.renta_base}
+                          onChange={e => setNewRentaFormData({ ...newRentaFormData, renta_base: e.target.value })}
+                          placeholder="0.00"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                        />
                       </div>
                     </div>
 
@@ -630,42 +1090,19 @@ export default function R4RentasPage() {
                         Adicionales
                       </h3>
                       <div className="space-y-4">
-                        <label className="flex items-center gap-3 p-4 border-2 border-slate-100 rounded-xl cursor-pointer hover:border-amber-500 transition-colors bg-white">
-                          <input type="checkbox" checked={newRentaFormData.mantenimiento} onChange={e => setNewRentaFormData({ ...newRentaFormData, mantenimiento: e.target.checked })} className="w-5 h-5 rounded text-amber-600 focus:ring-amber-500" />
+                        <label className="flex items-center gap-3 p-4 border-2 border-slate-100 rounded-xl cursor-pointer hover:border-red-500 transition-colors bg-white">
+                          <input type="checkbox" checked={newRentaFormData.mantenimiento} onChange={e => setNewRentaFormData({ ...newRentaFormData, mantenimiento: e.target.checked })} className="w-5 h-5 rounded text-red-600 focus:ring-red-500" />
                           <span className="text-sm font-bold text-slate-700">Incluye Mantenimiento Preventivo (SMP)</span>
                         </label>
-
                         <div className="space-y-2">
-                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Notas o Cláusulas Adicionales</label>
+                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Comentarios</label>
                           <textarea
                             rows={3}
                             value={newRentaFormData.comentarios}
                             onChange={e => setNewRentaFormData({ ...newRentaFormData, comentarios: e.target.value })}
-                            placeholder="Escribe aquí cualquier condición especial del contrato"
-                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors resize-none"
+                            placeholder="Cláusulas especiales..."
+                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors resize-none"
                           ></textarea>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* SECCIÓN: RESUMEN */}
-                    <div className="bg-slate-50 border-2 border-slate-100 rounded-[1.5rem] p-6">
-                      <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
-                        <Receipt className="w-4 h-4 text-slate-400" />
-                        Resumen de la Renta
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-500 font-bold">Equipos Asignados:</span>
-                          <span className="text-slate-900 font-black">{newRentaFormData.activo_id ? '1' : '0'}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-500 font-bold">Tarifa Base:</span>
-                          <span className="text-slate-900 font-black">$0.00</span>
-                        </div>
-                        <div className="pt-3 border-t-2 border-slate-200 border-dashed flex justify-between">
-                          <span className="text-slate-700 font-black uppercase tracking-widest text-xs mt-1">Total Estimado</span>
-                          <span className="text-2xl font-black text-amber-600">${newRentaFormData.renta_base ? Number(newRentaFormData.renta_base).toFixed(2) : '0.00'}</span>
                         </div>
                       </div>
                     </div>
@@ -676,17 +1113,16 @@ export default function R4RentasPage() {
                   <button
                     type="button"
                     onClick={() => setIsNewRentaModalOpen(false)}
-                    className="px-6 py-3 bg-white border-2 border-slate-200 text-slate-600 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-slate-50 hover:border-slate-300 transition-all"
+                    className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmittingRenta}
-                    className="px-6 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-amber-200 hover:shadow-amber-300 transition-all flex items-center gap-2"
+                    className="px-6 py-3 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all"
                   >
-                    <Plus className="w-4 h-4" />
-                    {isSubmittingRenta ? 'Creando...' : 'Crear Renta'}
+                    Crear Renta
                   </button>
                 </div>
               </form>
@@ -732,8 +1168,6 @@ export default function R4RentasPage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white">
-                  
-                  {/* Información General */}
                   <div className="space-y-4">
                     <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
                       <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[10px] text-amber-600">1</span>
@@ -742,7 +1176,7 @@ export default function R4RentasPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Orden de Compra / PO Vigente</label>
-                        <div className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-600 flex items-center justify-between">
+                        <div className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-600">
                           {editRentaConfig.formData.po}
                         </div>
                       </div>
@@ -751,90 +1185,68 @@ export default function R4RentasPage() {
                         <select
                           value={editRentaConfig.formData.estado}
                           onChange={e => setEditRentaConfig({ ...editRentaConfig, formData: { ...editRentaConfig.formData, estado: e.target.value } })}
-                          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required>
-                          <option value="IMPORTADA">IMPORTADA</option>
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required
+                        >
                           <option value="VIGENTE">VIGENTE</option>
+                          <option value="IMPORTADA">IMPORTADA</option>
+                          <option value="RENOVADA">RENOVADA</option>
                           <option value="CANCELADA">CANCELADA</option>
                         </select>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[10px] text-amber-600">2</span>
+                      Tarifas y Monedas
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tarifa Base</label>
-                        <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">$</span>
-                          <input type="number" step="0.01" min="0" placeholder="0.00"
-                            value={editRentaConfig.formData.renta_base}
-                            onChange={e => setEditRentaConfig({ ...editRentaConfig, formData: { ...editRentaConfig.formData, renta_base: e.target.value } })}
-                            className="w-full pl-8 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required />
-                        </div>
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tarifa Base Renta</label>
+                        <input
+                          type="number"
+                          value={editRentaConfig.formData.renta_base}
+                          onChange={e => setEditRentaConfig({ ...editRentaConfig, formData: { ...editRentaConfig.formData, renta_base: e.target.value } })}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
+                        />
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Moneda</label>
                         <select
                           value={editRentaConfig.formData.moneda}
                           onChange={e => setEditRentaConfig({ ...editRentaConfig, formData: { ...editRentaConfig.formData, moneda: e.target.value } })}
-                          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required>
-                          <option value="MXN">MXN (Pesos Mexicanos)</option>
-                          <option value="USD">USD (Dólares)</option>
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
+                        >
+                          <option value="MXN">MXN</option>
+                          <option value="USD">USD</option>
                         </select>
                       </div>
                     </div>
                   </div>
-
-                  {/* Órdenes Mensuales */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[10px] text-amber-600">2</span>
-                      Órdenes Mensuales
-                    </h3>
-                    
-                    {editRentaConfig.formData.ordenes && editRentaConfig.formData.ordenes.length > 0 ? (
-                      <div className="overflow-x-auto rounded-xl border-2 border-slate-100">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                          <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-widest border-b-2 border-slate-100">
-                            <tr>
-                              <th className="px-4 py-3 font-black">Periodo</th>
-                              <th className="px-4 py-3 font-black">PO</th>
-                              <th className="px-4 py-3 font-black text-right">Monto</th>
-                              <th className="px-4 py-3 font-black text-center">Estado</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {editRentaConfig.formData.ordenes.map((orden: any) => (
-                              <tr key={orden.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-4 py-3 font-black text-slate-700">{orden.periodo}</td>
-                                <td className="px-4 py-3 font-bold text-slate-600">{orden.po || 'N/A'}</td>
-                                <td className="px-4 py-3 font-black text-slate-900 text-right">
-                                  {orden.tarifa ? `$${Number(orden.tarifa).toFixed(2)} ${orden.moneda || ''}` : 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-black tracking-widest uppercase rounded-lg border border-amber-200">
-                                    {orden.estado}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-50 border-2 border-slate-100 border-dashed rounded-xl p-8 text-center">
-                        <p className="text-sm font-bold text-slate-400">No hay órdenes mensuales registradas para esta renta.</p>
-                      </div>
-                    )}
-                  </div>
-                  
                 </div>
 
-                <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
-                  <button type="button" onClick={() => setEditRentaConfig({ ...editRentaConfig, isOpen: false })} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">Cancelar</button>
-                  <button type="submit" disabled={isSubmittingRenta} className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-black tracking-wide transition-colors disabled:opacity-50">Guardar Cambios</button>
+                <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 rounded-b-[2rem]">
+                  <button
+                    type="button"
+                    onClick={() => setEditRentaConfig({ ...editRentaConfig, isOpen: false })}
+                    className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingRenta}
+                    className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all"
+                  >
+                    Guardar Cambios
+                  </button>
                 </div>
               </form>
             </motion.div>
           </>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

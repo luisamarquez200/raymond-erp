@@ -108,7 +108,12 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
             {/* Navigation */}
             <nav className="flex-1 overflow-y-auto py-4">
                 <ul className="space-y-1 px-2">
-                    {menuItems.map((item) => {
+                    {menuItems.filter(item => {
+                        if (item.label === 'Rentas' && user?.role?.toUpperCase() === 'GERENCIA') {
+                            return false;
+                        }
+                        return true;
+                    }).map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
 

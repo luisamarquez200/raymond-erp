@@ -1,46 +1,37 @@
-"use client";
+'use client';
 
 import { 
   Search, Filter, Download, Grid3x3, List, Plus, Eye, Edit, 
   FileText, Clock, CheckCircle, Upload, X, FileSpreadsheet, 
   Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ShieldCheck, MapPin, Truck, HardDrive, Info
-} from "lucide-react";
-import { Link } from "@/i18n/routing"; // Next-intl custom link
-import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import api from "@/lib/api";
-import { toast } from "sonner";
-
-// Mock user since useAppUser from RootLayout might not exist in exactly the same way here
-const useAppUser = () => {
-  return { role: "admin", adcAsignado: "Juan Pérez" };
-};
+} from 'lucide-react';
+import { Link } from '@/i18n/routing';
+import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import api from '@/lib/api';
+import { toast } from 'sonner';
+import { useAuthStore } from '@/store/auth.store';
 
 const statusColors = {
-  "Activo": "bg-emerald-50 text-emerald-700 border-emerald-100",
-  "En Renta": "bg-blue-50 text-blue-700 border-blue-100",
-  "Inactivo": "bg-gray-50 text-gray-600 border-gray-200",
-  "Disponible": "bg-blue-50 text-blue-700 border-blue-100",
-  "Back Up": "bg-blue-50 text-blue-700 border-blue-100",
-  "Inactivo con cliente": "bg-amber-50 text-amber-700 border-amber-100",
-  "En Taller": "bg-amber-50 text-amber-700 border-amber-100",
-  "Mantenimiento": "bg-amber-50 text-amber-700 border-amber-100",
-};
-
-const smpColors = {
-  "Al día": "text-emerald-700 bg-emerald-50 border-emerald-100",
-  "Pendiente": "text-amber-700 bg-amber-50 border-amber-100",
-  "Vencido": "text-red-700 bg-red-50 border-red-100",
-  "Sin SMP": "text-gray-600 bg-gray-50 border-gray-200",
+  'Activo': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  'En Renta': 'bg-blue-50 text-blue-700 border-blue-100',
+  'Inactivo': 'bg-gray-50 text-gray-600 border-gray-200',
+  'Disponible': 'bg-blue-50 text-blue-700 border-blue-100',
+  'Back Up': 'bg-blue-50 text-blue-700 border-blue-100',
+  'Inactivo con Cliente': 'bg-amber-50 text-amber-700 border-amber-100',
+  'En Taller': 'bg-amber-50 text-amber-700 border-amber-100',
+  'Mantenimiento': 'bg-amber-50 text-amber-700 border-amber-100',
 };
 
 export default function Fleet() {
-  const { role, adcAsignado } = useAppUser();
-  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const { user } = useAuthStore();
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [fleetAssets, setFleetAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [showApprovalsTab, setShowApprovalsTab] = useState(false);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -50,10 +41,43 @@ export default function Fleet() {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const [selectedADC, setSelectedADC] = useState<string>("Todos");
-  const [selectedCliente, setSelectedCliente] = useState<string>("Todos");
-  const [selectedEstatus, setSelectedEstatus] = useState<string>("Todos");
-  const [selectedTipo, setSelectedTipo] = useState<string>("Todos");
+  const [selectedADC, setSelectedADC] = useState<string>('Todos');
+  const [selectedCliente, setSelectedCliente] = useState<string>('Todos');
+  const [selectedEstatus, setSelectedEstatus] = useState<string>('Todos');
+  const [selectedTipo, setSelectedTipo] = useState<string>('Todos');
+  const [selectedModelo, setSelectedModelo] = useState<string>('Todos');
+  const [selectedClase, setSelectedClase] = useState<string>('Todos');
+  const [selectedDistribuidor, setSelectedDistribuidor] = useState<string>('Todos');
+
+  // New Asset Form State
+  const [isNewAssetModalOpen, setIsNewAssetModalOpen] = useState(false);
+  const [newAssetTipo, setNewAssetTipo] = useState('Montacargas');
+  const [newAssetSerie, setNewAssetSerie] = useState('');
+  const [newAssetModelo, setNewAssetModelo] = useState('');
+  const [newAssetClase, setNewAssetClase] = useState('Clase I');
+  const [newAssetEstatus, setNewAssetEstatus] = useState('Activo');
+  const [newAssetOach, setNewAssetOach] = useState('');
+  const [newAssetAltura, setNewAssetAltura] = useState('');
+  const [newAssetBc, setNewAssetBc] = useState('');
+  const [newAssetCliente, setNewAssetCliente] = useState('');
+  const [newAssetSitio, setNewAssetSitio] = useState('');
+  const [newAssetDistribuidor, setNewAssetDistribuidor] = useState('');
+  const [newAssetAdc, setNewAssetAdc] = useState('');
+
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editingData, setEditingData] = useState<any>({});
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Transfer Modal State
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [selectedAssetForTransfer, setSelectedAssetForTransfer] = useState<any>(null);
+  const [transferDestinationSite, setTransferDestinationSite] = useState('');
+  const [allSites, setAllSites] = useState<any[]>([]);
+
+  // User Profile Identification
+  const userRole = user?.role?.toLowerCase() || 'administrador';
+  const isAdc = userRole === 'administrador';
+  const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
 
   const fetchFlotilla = async () => {
     try {
@@ -69,21 +93,61 @@ export default function Fleet() {
     }
   };
 
+  const fetchPendingApprovals = async () => {
+    if (isAdc) return;
+    try {
+      const res = await api.get('/r4/flotilla/solicitudes');
+      setPendingApprovals(res.data?.data || []);
+    } catch (error) {
+      console.error('Error fetching pending approvals:', error);
+    }
+  };
+
+  const fetchSites = async () => {
+    try {
+      const res = await api.get('/r4/clientes');
+      const clientes = res.data?.data || res.data || [];
+      const sites = clientes.flatMap((c: any) => c.sitios || []);
+      setAllSites(sites);
+    } catch (error) {
+      console.error('Error fetching sites:', error);
+    }
+  };
+
   useEffect(() => {
     fetchFlotilla();
+    fetchPendingApprovals();
+    fetchSites();
   }, []);
 
-  const [isNewAssetModalOpen, setIsNewAssetModalOpen] = useState(false);
-  const [newAssetTipo, setNewAssetTipo] = useState("Montacargas");
+  const handleApprove = async (id: string) => {
+    try {
+      await api.post(`/r4/flotilla/solicitudes/${id}/aprobar`);
+      toast.success('Cambio aprobado con éxito');
+      fetchPendingApprovals();
+      fetchFlotilla();
+    } catch (error) {
+      console.error('Error approving request:', error);
+      toast.error('Error al aprobar el cambio');
+    }
+  };
 
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
-  const [editingData, setEditingData] = useState<any>({});
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const handleReject = async (id: string) => {
+    try {
+      await api.post(`/r4/flotilla/solicitudes/${id}/rechazar`);
+      toast.success('Cambio rechazado');
+      fetchPendingApprovals();
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      toast.error('Error al rechazar el cambio');
+    }
+  };
 
   const startEditing = (e: React.MouseEvent, asset: any) => {
     e.stopPropagation();
     setEditingRowId(asset.serie);
-    setEditingData({ ...asset });
+    // Deep clone to avoid mutating the original
+    setEditingData(JSON.parse(JSON.stringify(asset)));
     setIsEditModalOpen(true);
   };
 
@@ -95,44 +159,167 @@ export default function Fleet() {
 
   const saveEditing = async () => {
     try {
-      // await api.put(`/r4/flotilla/${editingRowId}`, editingData); // Real API call
-      setFleetAssets(prev => prev.map(a => a.serie === editingRowId ? { ...a, ...editingData } : a));
-      toast.success("Activo actualizado correctamente");
+      // Compute only the fields that actually changed
+      const originalAsset = fleetAssets.find(a => a.serie === editingRowId) || {};
+      const changedFields: any = {};
+      Object.keys(editingData).forEach(key => {
+        if (editingData[key] !== originalAsset[key]) {
+          changedFields[key] = editingData[key];
+        }
+      });
+
+      if (Object.keys(changedFields).length === 0) {
+        toast.info('No se detectaron cambios');
+        cancelEditing();
+        return;
+      }
+
+      if (isAdc) {
+        // Requires approval
+        await api.post(`/r4/flotilla/${editingRowId}/solicitar-cambio`, changedFields);
+        toast.info('Solicitud de cambio enviada para aprobación de Coordinación.');
+      } else {
+        // Direct save
+        await api.put(`/r4/flotilla/${editingRowId}`, changedFields);
+        toast.success('Activo actualizado directamente');
+      }
+      fetchFlotilla();
       cancelEditing();
     } catch (error) {
       console.error(error);
-      toast.error("Error al actualizar el activo");
+      toast.error('Error al actualizar el activo');
     }
   };
 
-  // Transfer Modal State
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [selectedAssetForTransfer, setSelectedAssetForTransfer] = useState<any>(null);
-
-  const openTransferModal = (asset: any) => {
+  const openTransferModal = (e: React.MouseEvent, asset: any) => {
+    e.stopPropagation();
     setSelectedAssetForTransfer(asset);
+    setTransferDestinationSite('');
     setIsTransferModalOpen(true);
   };
 
-  // ADC Visual Visibility Logic
-  const baseAssets = role === "adc_user" 
-    ? fleetAssets.filter(a => a.adc?.toLowerCase() === adcAsignado?.toLowerCase())
+  const handleTransfer = async () => {
+    if (!transferDestinationSite) {
+      toast.error('Selecciona un sitio de destino.');
+      return;
+    }
+
+    const selectedSiteObj = allSites.find(s => s.id === transferDestinationSite);
+    if (!selectedSiteObj) return;
+
+    const destAdc = selectedSiteObj.adc || '';
+
+    // Check Cross-ADC Transfer Constraint
+    if (isAdc && destAdc.toLowerCase() !== loggedInAdcName.toLowerCase()) {
+      // Must set status to INACTIVO first and notify
+      toast.error(`Las transferencias entre diferentes ADCs deben ser autorizadas por Coordinación. Por favor cambie el estatus del equipo a "Inactivo" primero.`);
+      return;
+    }
+
+    try {
+      const payload = {
+        sitio_id: transferDestinationSite,
+        estatus_operativo: 'Activo'
+      };
+
+      if (isAdc) {
+        // Requires approval
+        await api.post(`/r4/flotilla/${selectedAssetForTransfer.serie}/solicitar-cambio`, payload);
+        toast.info('Solicitud de transferencia enviada a Coordinación para aprobación.');
+      } else {
+        // Direct transfer
+        await api.put(`/r4/flotilla/${selectedAssetForTransfer.serie}`, payload);
+        toast.success('Transferencia realizada con éxito.');
+      }
+
+      setIsTransferModalOpen(false);
+      fetchFlotilla();
+    } catch (error) {
+      console.error('Error in transfer:', error);
+      toast.error('Error al realizar la transferencia');
+    }
+  };
+
+  const handleCreateAsset = async () => {
+    if (!newAssetSerie || !newAssetModelo) {
+      toast.error('Faltan campos obligatorios.');
+      return;
+    }
+
+    // 1. DUPLICATE SERIAL CHECK
+    const duplicate = fleetAssets.find(
+      a => a.serie?.toLowerCase().trim() === newAssetSerie.toLowerCase().trim()
+    );
+    if (duplicate) {
+      toast.error(
+        `Alerta: El número de serie "${newAssetSerie}" ya existe registrado en la flotilla. Ubicación actual: ${duplicate.cliente} - ${duplicate.site} (${duplicate.estatus}).`,
+        { duration: 6000 }
+      );
+      return;
+    }
+
+    try {
+      const payload = {
+        serie: newAssetSerie,
+        clase: newAssetClase,
+        modelo: newAssetModelo,
+        oach: newAssetOach,
+        altura: newAssetAltura,
+        bc: newAssetBc,
+        estatus_operativo: newAssetEstatus,
+        cliente_id: newAssetCliente,
+        sitio_id: newAssetSitio,
+        adc: newAssetAdc || loggedInAdcName,
+        distribuidor: newAssetDistribuidor
+      };
+
+      // Direct creation (only allowed for admins/coordinators)
+      await api.post('/r4/activos', payload); // Or direct creation API
+      toast.success('Equipo registrado con éxito');
+      setIsNewAssetModalOpen(false);
+      fetchFlotilla();
+    } catch (error) {
+      console.error('Error creating asset:', error);
+      toast.error('Error al dar de alta el equipo');
+    }
+  };
+
+  // ADC Visual Filtering Logic
+  // Bypass filter for the generic "comercial.admin2" testing account
+  const isTestingAdmin = user?.email === 'comercial.admin2@run.com' || user?.username === 'Administrador';
+  
+  const baseAssets = (isAdc && !isTestingAdmin)
+    ? fleetAssets.filter(a => {
+        const adcLower = a.adc?.toLowerCase() || '';
+        const userLower = loggedInAdcName.toLowerCase();
+        const usernameLower = user?.username?.toLowerCase() || '';
+        const emailLower = user?.email?.toLowerCase() || '';
+        return adcLower === userLower || 
+               userLower.includes(adcLower) || 
+               (user?.firstName && adcLower.includes(user.firstName.toLowerCase())) ||
+               usernameLower.includes(adcLower) ||
+               emailLower.includes(adcLower);
+      })
     : fleetAssets;
-    
+
   const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
-  const uniqueADCs = Array.from(new Set(baseAssets.map(a => getValidString(a.adc)).filter(Boolean))).sort();
-  const uniqueClientes = Array.from(new Set(baseAssets.map(a => getValidString(a.cliente)).filter(Boolean))).sort();
-  const uniqueSites = Array.from(new Set(baseAssets.map(a => getValidString(a.site)).filter(Boolean))).sort();
-  const uniqueCuentas = Array.from(new Set(baseAssets.map(a => getValidString(a.cuenta)).filter(Boolean))).sort();
-  const uniqueDistribuidores = Array.from(new Set(baseAssets.map(a => getValidString(a.distribuidor)).filter(Boolean))).sort();
-  const uniqueEstatus = Array.from(new Set(baseAssets.map(a => getValidString(a.estatus)).filter(Boolean))).sort();
-  const uniqueTipos = Array.from(new Set(baseAssets.map(a => getValidString(a.tipo)).filter(Boolean))).sort();
+  const uniqueADCs = Array.from(new Set(baseAssets.map(a => getValidString(a.adc)).filter((v): v is string => !!v))).sort();
+  const uniqueClientes = Array.from(new Set(baseAssets.map(a => getValidString(a.cliente)).filter((v): v is string => !!v))).sort();
+  const uniqueSites = Array.from(new Set(baseAssets.map(a => getValidString(a.site)).filter((v): v is string => !!v))).sort();
+  const uniqueDistribuidores = Array.from(new Set(baseAssets.map(a => getValidString(a.distribuidor)).filter((v): v is string => !!v))).sort();
+  const uniqueEstatus = Array.from(new Set(baseAssets.map(a => getValidString(a.estatus)).filter((v): v is string => !!v))).sort();
+  const uniqueTipos = Array.from(new Set(baseAssets.map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort();
+  const uniqueModelos = Array.from(new Set(baseAssets.map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort();
+  const uniqueClases = Array.from(new Set(baseAssets.map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort();
 
   const filteredAssets = baseAssets.filter((asset: any) => {
-    if (selectedADC !== "Todos" && asset.adc !== selectedADC) return false;
-    if (selectedCliente !== "Todos" && asset.cliente !== selectedCliente) return false;
-    if (selectedEstatus !== "Todos" && asset.estatus !== selectedEstatus) return false;
-    if (selectedTipo !== "Todos" && asset.tipo !== selectedTipo) return false;
+    if (selectedADC !== 'Todos' && asset.adc !== selectedADC) return false;
+    if (selectedCliente !== 'Todos' && asset.cliente !== selectedCliente) return false;
+    if (selectedEstatus !== 'Todos' && asset.estatus !== selectedEstatus) return false;
+    if (selectedTipo !== 'Todos' && asset.tipo !== selectedTipo) return false;
+    if (selectedModelo !== 'Todos' && asset.modelo !== selectedModelo) return false;
+    if (selectedClase !== 'Todos' && asset.clase !== selectedClase) return false;
+    if (selectedDistribuidor !== 'Todos' && asset.distribuidor !== selectedDistribuidor) return false;
     
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
@@ -149,7 +336,6 @@ export default function Fleet() {
     currentPage * itemsPerPage
   );
 
-  // Stock Rules
   const getEstatusCount = (statusList: string[]) => 
     filteredAssets.filter(a => a && a.estatus && statusList.includes(a.estatus.toUpperCase())).length;
 
@@ -157,10 +343,7 @@ export default function Fleet() {
     totalActivos: filteredAssets.length,
     enRenta: getEstatusCount(['ACTIVO', 'EN RENTA']),
     disponibles: getEstatusCount(['DISPONIBLE', 'BACK UP']),
-    mantenimiento: getEstatusCount(['MANTENIMIENTO', 'EN TALLER', 'INACTIVO CON CLIENTE']),
-    inactivos: getEstatusCount(['INACTIVO']),
-    movimientos: 0, // Pendiente de conexión real
-    docsPendientes: 0 // Pendiente de conexión real
+    inactivos: getEstatusCount(['INACTIVO'])
   };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -203,7 +386,7 @@ export default function Fleet() {
           toast.success(res.data.message || 'Carga completada con éxito');
           setFile(null);
           setIsUploadModalOpen(false);
-          fetchFlotilla(); // Refresh the list
+          fetchFlotilla();
       } catch (err: any) {
           console.error('Upload Error:', err);
           toast.error(err.response?.data?.message || 'Error al subir el archivo');
@@ -223,6 +406,15 @@ export default function Fleet() {
           <p className="text-slate-500 font-medium mt-1">Gestión y control de inventario de equipos y accesorios</p>
         </div>
         <div className="flex items-center gap-3">
+          {!isAdc && pendingApprovals.length > 0 && (
+            <button
+              onClick={() => setShowApprovalsTab(!showApprovalsTab)}
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-sm border-2 ${showApprovalsTab ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-100 hover:bg-red-50'}`}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Aprobaciones ({pendingApprovals.length})
+            </button>
+          )}
           <button
             onClick={() => setIsUploadModalOpen(true)}
             className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest border-2 border-slate-100 transition-all shadow-sm"
@@ -234,7 +426,7 @@ export default function Fleet() {
             <Download className="w-4 h-4" />
             Exportar
           </button>
-          {role === 'admin' && (
+          {!isAdc && (
             <button onClick={() => setIsNewAssetModalOpen(true)} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-amber-100">
               <Plus className="w-4 h-4" />
               Alta de Equipo
@@ -243,9 +435,8 @@ export default function Fleet() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
-        
+      {/* Summary Cards (Mantenimiento, Movimientos and Docs removed) */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-amber-100 hover:shadow-md transition-all">
           <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
             <Truck className="w-24 h-24 text-amber-600" />
@@ -263,31 +454,64 @@ export default function Fleet() {
           <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Disponibles</p>
           <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.disponibles}</h3>
         </div>
-        
-        <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-amber-100 hover:shadow-md transition-all">
-          <p className="text-amber-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Mantenimiento</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.mantenimiento}</h3>
-        </div>
 
         <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-red-100 hover:shadow-md transition-all">
           <p className="text-red-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Inactivos</p>
           <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.inactivos}</h3>
         </div>
-
-        <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-slate-300 hover:shadow-md transition-all">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Movimientos</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.movimientos}</h3>
-        </div>
-
-        <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-slate-300 hover:shadow-md transition-all">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Docs Pend.</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.docsPendientes}</h3>
-        </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row gap-3 items-center">
-          <div className="relative group flex-1 w-full">
+      {/* Coordinator Approval Drawer */}
+      {showApprovalsTab && !isAdc && pendingApprovals.length > 0 && (
+        <div className="bg-red-50/50 p-6 border-2 border-red-100 rounded-[2rem] space-y-4 animate-in slide-in-from-top duration-300">
+          <h2 className="text-lg font-black text-red-800 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5" />
+            Solicitudes de Cambio Pendientes de Aprobación
+          </h2>
+          <div className="overflow-x-auto bg-white rounded-2xl border border-red-100">
+            <table className="w-full text-left text-xs whitespace-nowrap">
+              <thead className="bg-red-50 text-[9px] text-red-700 uppercase tracking-widest border-b border-red-100">
+                <tr>
+                  <th className="px-4 py-3 font-black">Equipo (Serie)</th>
+                  <th className="px-4 py-3 font-black">Sitio Propuesto</th>
+                  <th className="px-4 py-3 font-black">Detalles Propuestos</th>
+                  <th className="px-4 py-3 font-black">Fecha</th>
+                  <th className="px-4 py-3 font-black text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-red-50 text-slate-700 font-bold">
+                {pendingApprovals.map((sol: any) => (
+                  <tr key={sol.id}>
+                    <td className="px-4 py-3 text-slate-900 font-black">{sol.activoSerie} ({sol.activoModelo})</td>
+                    <td className="px-4 py-3">{allSites.find(s => s.id === sol.sitioNuevoId)?.nombre || sol.sitioNuevoId}</td>
+                    <td className="px-4 py-3">
+                      {sol.datosPropuestos?.tipo === 'EDICION' ? (
+                        <div className="space-y-0.5 text-[10px]">
+                          {Object.entries(sol.datosPropuestos.datos).map(([k, v]: any) => (
+                            <div key={k}><span className="text-slate-400">{k}:</span> {v}</div>
+                          ))}
+                        </div>
+                      ) : 'Transferencia directa'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">{new Date(sol.fecha).toLocaleDateString('es-MX')}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => handleApprove(sol.id)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider">Aprobar</button>
+                        <button onClick={() => handleReject(sol.id)} className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider">Rechazar</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Filters (Excel layout fields) */}
+      <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="relative group flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
             <input
               type="text"
@@ -295,152 +519,157 @@ export default function Fleet() {
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
-                setCurrentPage(1); // Reset page on search
+                setCurrentPage(1);
               }}
-              className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium focus:border-amber-500 focus:outline-none transition-all shadow-sm"
+              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:border-amber-500 focus:outline-none transition-all"
             />
           </div>
-          
-          <div className="relative group w-full sm:w-64">
-            <select
-              value={selectedADC}
-              onChange={(e) => {
-                setSelectedADC(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-4 pr-10 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-amber-500 focus:outline-none transition-all shadow-sm appearance-none cursor-pointer"
-            >
-              <option value="Todos">Todos los ADCs</option>
-              {(uniqueADCs as string[]).map(adc => (
-                <option key={adc} value={adc}>{adc}</option>
-              ))}
-            </select>
-            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          </div>
-          
-          <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
+
+          {!isAdc && (
+            <div className="relative group">
+              <select
+                value={selectedADC}
+                onChange={(e) => { setSelectedADC(e.target.value); setCurrentPage(1); }}
+                className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
+              >
+                <option value="Todos">Ejecutivo (ADC): Todos</option>
+                {uniqueADCs.map(adc => <option key={adc} value={adc}>{adc}</option>)}
+              </select>
+              <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            </div>
+          )}
+
+          <div className="relative group">
             <select
               value={selectedCliente}
-              onChange={(e) => {
-                setSelectedCliente(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0 cursor-pointer"
+              onChange={(e) => { setSelectedCliente(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
             >
-              <option value="Todos">Todos los clientes</option>
-              {(uniqueClientes as string[]).map(cliente => (
-                <option key={cliente} value={cliente}>{cliente}</option>
-              ))}
+              <option value="Todos">Cliente: Todos</option>
+              {uniqueClientes.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          <div className="relative group">
             <select
               value={selectedEstatus}
-              onChange={(e) => {
-                setSelectedEstatus(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0 cursor-pointer"
+              onChange={(e) => { setSelectedEstatus(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
             >
               <option value="Todos">Estatus: Todos</option>
-              {(uniqueEstatus as string[]).map(estatus => (
-                <option key={estatus} value={estatus}>{estatus}</option>
-              ))}
+              {uniqueEstatus.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
+            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          <div className="relative group">
             <select
-              value={selectedTipo}
-              onChange={(e) => {
-                setSelectedTipo(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-all shadow-sm shrink-0 cursor-pointer"
+              value={selectedModelo}
+              onChange={(e) => { setSelectedModelo(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
             >
-              <option value="Todos">Tipo: Todos</option>
-              {(uniqueTipos as string[]).map(tipo => (
-                <option key={tipo} value={tipo}>{tipo}</option>
-              ))}
+              <option value="Todos">Modelo: Todos</option>
+              {uniqueModelos.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
+            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          <div className="relative group">
+            <select
+              value={selectedClase}
+              onChange={(e) => { setSelectedClase(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
+            >
+              <option value="Todos">Clase: Todas</option>
+              {uniqueClases.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          <div className="relative group">
+            <select
+              value={selectedDistribuidor}
+              onChange={(e) => { setSelectedDistribuidor(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer"
+            >
+              <option value="Todos">Distribuidor: Todos</option>
+              {uniqueDistribuidores.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')} className="flex-1 p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 flex items-center justify-center transition-colors">
+              {viewMode === 'table' ? <Grid3x3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
+            </button>
           </div>
         </div>
       </div>
 
       {/* MAIN CONTENT AREA */}
-      {viewMode === "table" && (
+      {viewMode === 'table' && (
         <div className="bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm overflow-hidden animate-in fade-in duration-300">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+            <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-widest border-b-2 border-slate-100">
                 <tr>
-                  <th className="px-6 py-5 font-black">Equipo / Serie</th>
-                  <th className="px-6 py-5 font-black">Estatus</th>
-                  <th className="px-6 py-5 font-black">Cliente / Sitio</th>
-                  <th className="px-6 py-5 font-black">ADC</th>
-                  <th className="px-6 py-5 font-black">Fecha Entregado</th>
-                  <th className="px-6 py-5 font-black">Plazo de Renta (Meses)</th>
-                  <th className="px-6 py-5 font-black">Fecha Vencimiento</th>
-                  <th className="px-6 py-5 font-black text-right">Acciones</th>
+                  <th className="px-4 py-4 font-black">Cuenta</th>
+                  <th className="px-4 py-4 font-black">Site</th>
+                  <th className="px-4 py-4 font-black">Tipo</th>
+                  <th className="px-4 py-4 font-black">Clase</th>
+                  <th className="px-4 py-4 font-black">Modelo</th>
+                  <th className="px-4 py-4 font-black">Serie</th>
+                  <th className="px-4 py-4 font-black text-right">Precio Renta</th>
+                  <th className="px-4 py-4 font-black">Moneda</th>
+                  <th className="px-4 py-4 font-black">Tipo Póliza</th>
+                  <th className="px-4 py-4 font-black">Distribuidor</th>
+                  <th className="px-4 py-4 font-black text-right">Costo Póliza</th>
+                  <th className="px-4 py-4 font-black">Moneda Pago</th>
+                  <th className="px-4 py-4 font-black">Estatus</th>
+                  {!isAdc && <th className="px-4 py-4 font-black">ADC</th>}
+                  <th className="px-4 py-4 font-black text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando flotilla...</td></tr>
+                  <tr><td colSpan={15} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando flotilla...</td></tr>
                 ) : filteredAssets.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron activos.</td></tr>
+                  <tr><td colSpan={15} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron activos.</td></tr>
                 ) : paginatedAssets.map((asset) => (
                   <tr key={asset.serie} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={(e) => startEditing(e, asset)}>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
-                          {asset.tipo === 'Montacargas' ? <Truck className="w-5 h-5 text-slate-400" /> : <HardDrive className="w-5 h-5 text-slate-400" />}
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-900 group-hover:text-amber-600 transition-colors">{asset.serie}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-[10px] text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                              Clase {asset.clase}
-                            </span>
-                            <span className="text-[10px] text-slate-500">{asset.modelo}</span>
-                          </div>
-                        </div>
-                      </div>
+                    <td className="px-4 py-3.5 text-slate-800 font-bold">{asset.cuenta}</td>
+                    <td className="px-4 py-3.5">{asset.site}</td>
+                    <td className="px-4 py-3.5">{asset.tipo}</td>
+                    <td className="px-4 py-3.5 font-mono text-[11px]">{asset.clase}</td>
+                    <td className="px-4 py-3.5 font-bold text-slate-800">{asset.modelo}</td>
+                    <td className="px-4 py-3.5">
+                      <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-slate-900 hover:text-amber-600 hover:underline">
+                        {asset.serie}
+                      </Link>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3.5 text-right font-black text-slate-950">${Number(asset.renta_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3.5">{asset.renta_moneda}</td>
+                    <td className="px-4 py-3.5 font-bold">{asset.tipo_poliza}</td>
+                    <td className="px-4 py-3.5">{asset.distribuidor}</td>
+                    <td className="px-4 py-3.5 text-right font-black text-slate-900">${Number(asset.costo_poliza_distribuidor).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3.5">{asset.moneda_pago_distribuidor}</td>
+                    <td className="px-4 py-3.5">
                       <span className={`inline-flex items-center px-2 py-0.5 text-[9px] font-black uppercase rounded border tracking-wider ${statusColors[asset.estatus as keyof typeof statusColors] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                         {asset.estatus}
                       </span>
                     </td>
-                    
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-bold text-slate-800 text-sm">{asset.cliente}</span>
-                        <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-0.5">
-                          <MapPin className="w-3 h-3" />
-                          <span>{asset.site}</span>
-                        </div>
-                      </div>
-                    </td>
-                    
-                    <td className="px-6 py-4">
-                      <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                        {asset.adc}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-700">
-                      {asset.fechaIngreso}
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-700">
-                      {asset.plazo}
-                    </td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-700">
-                      {asset.fechaVencimiento}
-                    </td>
-
-                    <td className="px-6 py-4 text-right">
+                    {!isAdc && <td className="px-4 py-3.5 font-bold text-slate-500">{asset.adc}</td>}
+                    <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={(e) => startEditing(e, asset)}
-                          className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded transition-colors"
-                          title="Editar Activo"
-                        >
-                          <Edit className="w-4 h-4" />
+                        <Link href={`/r4/flotilla/${asset.serie}`} className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-lg transition-colors">
+                          <Eye className="w-3.5 h-3.5" />
+                        </Link>
+                        <button onClick={(e) => startEditing(e, asset)} className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-lg transition-colors">
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={(e) => openTransferModal(e, asset)} className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-lg transition-colors">
+                          <MapPin className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
@@ -453,21 +682,21 @@ export default function Fleet() {
           {/* Table Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t-2 border-slate-50 bg-slate-50/50">
-              <span className="text-sm font-bold text-slate-500">
+              <span className="text-xs font-bold text-slate-500 font-brand">
                 Página {currentPage} de {totalPages}
               </span>
               <div className="flex gap-2">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all"
+                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
                 >
                   Anterior
                 </button>
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all"
+                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
                 >
                   Siguiente
                 </button>
@@ -478,144 +707,85 @@ export default function Fleet() {
       )}
 
       {/* VISTA DE CARDS */}
-      {viewMode === "cards" && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-in fade-in duration-300">
-            {paginatedAssets.map((asset) => (
-            <div key={asset.serie} className="bg-card border border-border rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col h-full overflow-hidden">
-              
-              <div className="p-5 border-b border-border flex justify-between items-start bg-secondary/20">
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-in fade-in duration-300">
+          {paginatedAssets.map((asset) => (
+            <div key={asset.serie} className="bg-white border border-slate-200 rounded-3xl shadow-sm hover:shadow-md transition-all flex flex-col h-full overflow-hidden">
+              <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
                 <div>
-                  <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-xl text-primary hover:underline flex items-center gap-2 mb-1">
+                  <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-lg text-slate-900 hover:text-amber-600 hover:underline">
                     {asset.serie}
                   </Link>
-                  <div className="flex gap-2 items-center">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusColors[asset.estatus as keyof typeof statusColors]}`}>
+                  <div className="flex gap-2 items-center mt-1">
+                    <span className={`inline-flex px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusColors[asset.estatus as keyof typeof statusColors] || 'bg-slate-50 border-slate-200'}`}>
                       {asset.estatus}
                     </span>
-                    <span className="text-xs text-muted-foreground font-medium">{asset.tipo} • {asset.clase}</span>
+                    <span className="text-xs text-slate-400 font-bold">{asset.tipo} • Clase {asset.clase}</span>
                   </div>
                 </div>
-                <div className="p-2 bg-background border border-border rounded-lg shadow-sm">
-                  <ShieldCheck className="w-5 h-5 text-muted-foreground" />
+                <div className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-slate-500">
+                  <ShieldCheck className="w-5 h-5" />
                 </div>
               </div>
               
-              <div className="p-5 flex-1 space-y-3 text-sm">
+              <div className="p-5 flex-1 space-y-4 text-xs font-bold text-slate-600">
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mb-0.5">Ubicación</p>
-                  <p className="font-bold text-sm line-clamp-1">{asset.cliente}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3"/> {asset.site}</p>
+                  <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Ubicación</p>
+                  <p className="font-black text-sm text-slate-900">{asset.cliente}</p>
+                  <p className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400"/> {asset.site}</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">
+                <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-[11px]">
                   <div>
-                    <span className="text-xs text-muted-foreground">Cuenta:</span>
-                    <p className="font-medium text-xs truncate">{asset.cuenta}</p>
+                    <span className="text-[9px] text-slate-400 uppercase">Cuenta:</span>
+                    <p className="font-black text-slate-800">{asset.cuenta}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted-foreground">Distribuidor:</span>
-                    <p className="font-medium text-xs truncate">{asset.distribuidor}</p>
+                    <span className="text-[9px] text-slate-400 uppercase">Distribuidor:</span>
+                    <p className="font-black text-slate-800">{asset.distribuidor}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted-foreground">ADC:</span>
-                    <p className="font-medium text-xs truncate">{asset.adc}</p>
+                    <span className="text-[9px] text-slate-400 uppercase">Modelo:</span>
+                    <p className="font-black text-slate-800">{asset.modelo}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted-foreground">Modelo:</span>
-                    <p className="font-medium text-xs truncate">{asset.modelo}</p>
+                    <span className="text-[9px] text-slate-400 uppercase">Precio Renta:</span>
+                    <p className="font-black text-slate-950">${Number(asset.renta_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })} {asset.renta_moneda}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 border-t border-border pt-2 bg-secondary/10 p-2 rounded">
+                <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 bg-slate-50/50 p-3 rounded-2xl">
                   <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Entregado</span>
-                    <p className="font-medium text-[11px] truncate">{asset.fechaIngreso}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Plazo (Meses)</span>
-                    <p className="font-medium text-[11px] truncate">{asset.plazo}</p>
+                    <span className="text-[8px] text-slate-400 uppercase font-black block">Entregado</span>
+                    <p className="font-black text-[10.5px] text-slate-800">{asset.fechaIngreso}</p>
                   </div>
                   <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Vencimiento</span>
-                    <p className="font-medium text-[11px] truncate text-primary">{asset.fechaVencimiento}</p>
+                    <span className="text-[8px] text-slate-400 uppercase font-black block">Plazo (Meses)</span>
+                    <p className="font-black text-[10.5px] text-slate-800">{asset.plazo}</p>
                   </div>
-                </div>
-
-                {/* SECCIÓN SMP EN CARD */}
-                <div className={`mt-2 p-3 rounded-lg border ${asset.smp === 'Vencido' ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800' : asset.smp === 'Pendiente' ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' : asset.smp === 'Sin SMP' ? 'bg-secondary/30 border-border' : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'}`}>
-                  <div className="flex justify-between items-center mb-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 text-muted-foreground">
-                      <Wrench className="w-3 h-3" /> Estado SMP
-                    </p>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${(smpColors[asset.smp as keyof typeof smpColors] || '').split(' ')[0]}`}>
-                      {asset.smp}
-                    </span>
+                  <div>
+                    <span className="text-[8px] text-slate-400 uppercase font-black block">Vencimiento</span>
+                    <p className="font-black text-[10.5px] text-amber-600">{asset.fechaVencimiento}</p>
                   </div>
-                  {asset.smp !== 'Sin SMP' && (
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-xs text-muted-foreground">Próximo servicio:</span>
-                      <span className="text-xs font-bold text-foreground">{asset.proxSmp}</span>
-                    </div>
-                  )}
                 </div>
               </div>
               
-              <div className="p-3 border-t border-border bg-secondary/10 flex items-center justify-between">
+              <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <button className="p-2 hover:bg-secondary text-muted-foreground hover:text-foreground rounded transition-colors" title="Editar">
+                  <button onClick={(e) => startEditing(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-xl transition-all" title="Editar">
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button className="p-2 hover:bg-secondary text-muted-foreground hover:text-foreground rounded transition-colors" title="Documentos">
-                    <FileText className="w-4 h-4" />
-                  </button>
-                  <button className="p-2 hover:bg-secondary text-muted-foreground hover:text-foreground rounded transition-colors" title="Historial">
-                    <Clock className="w-4 h-4" />
-                  </button>
-                  <Link href={`/r4/flotilla/${asset.serie}`}>
-                    <button className="p-2 hover:bg-secondary text-muted-foreground hover:text-primary rounded transition-colors" title="Registrar SMP">
-                      <Wrench className="w-4 h-4" />
-                    </button>
-                  </Link>
-                  <button onClick={() => openTransferModal(asset)} className="p-2 hover:bg-secondary text-muted-foreground hover:text-primary rounded transition-colors" title="Transferir equipo">
+                  <button onClick={(e) => openTransferModal(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-xl transition-all" title="Transferir equipo">
                     <MapPin className="w-4 h-4" />
                   </button>
                 </div>
-                <Link href={`/r4/flotilla/${asset.serie}`}>
-                  <button className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm">
-                    <Eye className="w-4 h-4" /> Detalle
-                  </button>
+                <Link href={`/r4/flotilla/${asset.serie}`} className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm">
+                  <Eye className="w-3.5 h-3.5" /> Detalle
                 </Link>
               </div>
             </div>
           ))}
-          </div>
-          
-          {/* Cards Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 bg-white rounded-2xl border-2 border-slate-100 shadow-sm mt-4">
-              <span className="text-sm font-bold text-slate-500">
-                Página {currentPage} de {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-100 transition-all"
-                >
-                  Anterior
-                </button>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-100 transition-all"
-                >
-                  Siguiente
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       {/* Modal de Carga Masiva */}
@@ -627,94 +797,88 @@ export default function Fleet() {
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden"
             >
-              <div className="flex items-center justify-between p-5 border-b border-border bg-secondary/30">
-                <h3 className="text-lg font-bold flex items-center gap-2 text-foreground">
-                  <HardDrive className="w-5 h-5 text-primary" />
+              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                  <HardDrive className="w-5 h-5 text-amber-600" />
                   Carga Masiva de Flotilla
                 </h3>
-                <button onClick={() => setIsUploadModalOpen(false)} className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground transition-colors">
+                <button onClick={() => setIsUploadModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
               <div className="p-6 space-y-6">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Sube un archivo <span className="font-bold text-foreground">.xlsx</span> o <span className="font-bold text-foreground">.csv</span> para importar y actualizar múltiples equipos, incluyendo sus fechas de mantenimiento, de una sola vez.
+                <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                  Sube un archivo <span className="font-black text-slate-900">.xlsx</span> o <span className="font-black text-slate-900">.csv</span> para importar y actualizar múltiples equipos, incluyendo sus fechas de mantenimiento.
                 </p>
-              <div className="p-5">
-                {isUploading ? (
-                  <div className="flex flex-col items-center justify-center py-10 space-y-4">
-                    <div className="relative w-20 h-20">
-                      <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
-                      <div className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <FileSpreadsheet className="w-8 h-8 text-primary animate-pulse" />
-                      </div>
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">Procesando Archivo...</h3>
-                    <p className="text-sm text-muted-foreground text-center max-w-xs">
-                      Estamos validando y registrando los activos y sus rentas mensuales. 
-                      <br/><br/>
-                      <span className="font-semibold text-amber-600 dark:text-amber-400">Este proceso puede tomar entre 1 y 2 minutos. Por favor, no cierres esta ventana.</span>
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <label 
-                      className={`relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-300 ${file ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary hover:bg-secondary/50 group'}`}
-                      onDragOver={handleDragOver}
-                      onDrop={handleDrop}
-                    >
-                      <input id="file-upload" type="file" className="hidden" accept=".xlsx,.csv" onChange={handleFileChange} />
-                      <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-sm">
-                        <Upload className="w-6 h-6 text-primary" />
-                      </div>
-                      <p className="text-sm font-bold mb-1">
-                        {file ? file.name : "Arrastra tu archivo aquí o haz clic para subir"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Tamaño máximo: 10MB</p>
-                    </label>
-
-                    {file && (
-                      <div className="flex items-center justify-between bg-primary/5 border border-primary/10 p-4 rounded-xl mt-4">
-                        <div className="flex items-center gap-3">
-                          <FileSpreadsheet className="w-8 h-8 text-green-600 dark:text-green-400" />
-                          <div>
-                            <p className="text-sm font-bold">{file.name}</p>
-                            <p className="text-[10px] text-muted-foreground uppercase font-medium mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                          </div>
+                <div className="p-2">
+                  {isUploading ? (
+                    <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                      <div className="relative w-20 h-20">
+                        <div className="absolute inset-0 border-4 border-amber-100 rounded-full"></div>
+                        <div className="absolute inset-0 border-4 border-amber-600 rounded-full border-t-transparent animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <FileSpreadsheet className="w-8 h-8 text-amber-600 animate-pulse" />
                         </div>
-                        <button onClick={() => setFile(null)} className="p-2 bg-background hover:bg-secondary border border-border rounded-lg text-red-500 transition-all shadow-sm" title="Quitar archivo">
-                          <X className="w-4 h-4" />
-                        </button>
                       </div>
-                    )}
-                  </>
-                )}
+                      <h3 className="text-base font-black text-slate-900">Procesando Archivo...</h3>
+                      <p className="text-xs text-slate-400 text-center max-w-xs font-semibold">
+                        Registrando activos y rentas mensuales...
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <label 
+                        className={`relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-3xl cursor-pointer transition-all duration-300 ${file ? 'border-amber-500/50 bg-amber-50/5' : 'border-slate-200 hover:border-amber-500 hover:bg-slate-50/50 group'}`}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                      >
+                        <input id="file-upload" type="file" className="hidden" accept=".xlsx,.csv" onChange={handleFileChange} />
+                        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
+                          <Upload className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <p className="text-xs font-black mb-1">
+                          {file ? file.name : 'Arrastra tu archivo aquí o haz clic'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold">Tamaño máximo: 10MB</p>
+                      </label>
+
+                      {file && (
+                        <div className="flex items-center justify-between bg-amber-50/30 border border-amber-100 p-4 rounded-2xl mt-4">
+                          <div className="flex items-center gap-3">
+                            <FileSpreadsheet className="w-8 h-8 text-green-600" />
+                            <div>
+                              <p className="text-xs font-black">{file.name}</p>
+                              <p className="text-[9px] text-slate-400 uppercase font-medium mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                            </div>
+                          </div>
+                          <button onClick={() => setFile(null)} className="p-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-red-500 transition-all shadow-sm" title="Quitar archivo">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
-              </div>
-
-              <div className="flex items-center justify-end gap-3 p-5 border-t border-border bg-secondary/30">
-                <button onClick={() => { setIsUploadModalOpen(false); setFile(null); }} className="px-5 py-2.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors" disabled={isUploading}>
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button onClick={() => { setIsUploadModalOpen(false); setFile(null); }} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors" disabled={isUploading}>
                   Cancelar
                 </button>
-                <button onClick={handleUpload} disabled={isUploading || !file} className="px-6 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                  {isUploading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Procesando...
-                    </>
-                  ) : 'Importar Datos'}
+                <button onClick={handleUpload} disabled={isUploading || !file} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors disabled:opacity-50 flex items-center gap-2">
+                  Importar Datos
                 </button>
               </div>
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* --- MODAL NUEVA ENTRADA (ALTA DE EQUIPO) --- */}
+      {/* Modal Alta de Nuevo Activo */}
+      <AnimatePresence>
         {isNewAssetModalOpen && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -722,236 +886,96 @@ export default function Fleet() {
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]"
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden"
             >
-              <div className="flex items-center justify-between p-5 border-b border-border bg-secondary/30 shrink-0">
-                <h3 className="text-lg font-bold flex items-center gap-2 text-foreground">
-                  <Truck className="w-5 h-5 text-primary" />
+              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                  <Plus className="w-5 h-5 text-amber-600" />
                   Alta de Nuevo Activo
                 </h3>
-                <button onClick={() => setIsNewAssetModalOpen(false)} className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground transition-colors">
+                <button onClick={() => setIsNewAssetModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
-              <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-6">
-                
-                {/* Tipo de Equipo */}
-                <div className="space-y-4">
-                  <h4 className="font-bold text-sm text-primary border-b border-border pb-2">1. Clasificación del Activo</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Tipo de Equipo *</label>
-                      <select 
-                        value={newAssetTipo}
-                        onChange={(e) => setNewAssetTipo(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 font-medium"
-                      >
-                        <option>Montacargas</option>
-                        <option>Patín</option>
-                        <option>Batería</option>
-                        <option>Cargador</option>
-                        <option>Otro / Accesorio</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Clase</label>
-                      <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                        <option>Clase I</option>
-                        <option>Clase II</option>
-                        <option>Clase III</option>
-                        <option>Clase IV</option>
-                        <option>Clase V</option>
-                        <option>N/A</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Estatus Inicial *</label>
-                      <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                        <option>Activo</option>
-                        <option>Back Up</option>
-                        <option>Inactivo con cliente</option>
-                        <option>Inactivo</option>
-                      </select>
-                    </div>
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto font-bold text-xs text-slate-600">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Número de Serie *</label>
+                    <input type="text" value={newAssetSerie} onChange={(e) => setNewAssetSerie(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder="Ej: 12345" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Modelo *</label>
+                    <input type="text" value={newAssetModelo} onChange={(e) => setNewAssetModelo(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder="Ej: Raymond 7400" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Tipo de Activo *</label>
+                    <select value={newAssetTipo} onChange={(e) => setNewAssetTipo(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                      <option>Montacargas</option>
+                      <option>Patín</option>
+                      <option>Batería</option>
+                      <option>Cargador</option>
+                      <option>Otro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Clase *</label>
+                    <select value={newAssetClase} onChange={(e) => setNewAssetClase(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                      <option>Clase I</option>
+                      <option>Clase II</option>
+                      <option>Clase III</option>
+                      <option>Clase IV</option>
+                      <option>Clase V</option>
+                      <option>OTROS</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Estatus Inicial *</label>
+                    <select value={newAssetEstatus} onChange={(e) => setNewAssetEstatus(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                      <option value="Activo">Activo</option>
+                      <option value="Back Up">Back Up</option>
+                      <option value="Disponible">Disponible</option>
+                      <option value="Inactivo">Inactivo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Ejecutivo (ADC)</label>
+                    <input type="text" value={newAssetAdc} onChange={(e) => setNewAssetAdc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder={loggedInAdcName} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>
+                    <input type="text" value={newAssetDistribuidor} onChange={(e) => setNewAssetDistribuidor(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder="Distribuidor que atiende" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">OACH</label>
+                    <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Altura</label>
+                    <input type="text" value={newAssetAltura} onChange={(e) => setNewAssetAltura(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">BC</label>
+                    <input type="text" value={newAssetBc} onChange={(e) => setNewAssetBc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" />
                   </div>
                 </div>
-
-                {/* Especificaciones Técnicas */}
-                <div className="space-y-4">
-                  <h4 className="font-bold text-sm text-primary border-b border-border pb-2">2. Especificaciones Técnicas</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-1.5">Número de Serie *</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 font-bold" placeholder="Escribe la serie" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Modelo *</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe el modelo" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5 flex justify-between">OACH {newAssetTipo === "Montacargas" && <span className="text-red-500">*</span>}</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe el ancho" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5 flex justify-between">Altura {newAssetTipo === "Montacargas" && <span className="text-red-500">*</span>}</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe la altura" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5 flex justify-between">Compartimiento Batería (BC) {newAssetTipo === "Montacargas" && <span className="text-red-500">*</span>}</label>
-                      <input type="text" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Escribe el ancho" />
-                    </div>
-                  </div>
-                  {newAssetTipo !== "Montacargas" && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                      <Info className="w-4 h-4 shrink-0" />
-                      Al ser un producto alterno ({newAssetTipo}), los campos OACH, Altura y BC no son obligatorios.
-                    </div>
-                  )}
-                </div>
-
-                {/* Asignación y Control */}
-                <div className="space-y-4">
-                  <h4 className="font-bold text-sm text-primary border-b border-border pb-2">3. Asignación y Control Comercial</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Cliente</label>
-                      <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                        <option>Seleccionar...</option>
-                        {(uniqueClientes as string[]).map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Cuenta Relacionada</label>
-                      <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                        <option>Seleccionar...</option>
-                        {(uniqueCuentas as string[]).map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Site (Ubicación)</label>
-                      <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                        <option>Seleccionar...</option>
-                        {(uniqueSites as string[]).map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Administrador de Cuenta (ADC)</label>
-                      <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                        <option>Seleccionar...</option>
-                        {(uniqueADCs as string[]).map(adc => <option key={adc} value={adc}>{adc}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Distribuidor de Servicio</label>
-                      <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                        <option>Seleccionar...</option>
-                        {(uniqueDistribuidores as string[]).map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
               </div>
 
-              <div className="flex items-center justify-end gap-3 p-5 border-t border-border bg-secondary/30 shrink-0">
-                <button onClick={() => setIsNewAssetModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button onClick={() => setIsNewAssetModalOpen(false)} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
-                <button className="px-6 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-md">
-                  Registrar Activo
+                <button onClick={handleCreateAsset} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors">
+                  Guardar Equipo
                 </button>
               </div>
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* --- MODAL DE TRANSFERENCIA DE EQUIPO --- */}
-        {isTransferModalOpen && selectedAssetForTransfer && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              <div className="p-5 border-b border-border bg-secondary/30 flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">Transferir Equipo</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Registrar reubicación de este activo a otro sitio.</p>
-                </div>
-                <button onClick={() => setIsTransferModalOpen(false)} className="p-2 hover:bg-secondary rounded-lg transition-colors text-muted-foreground">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Equipo</label>
-                    <input type="text" readOnly value={selectedAssetForTransfer.serie} className="w-full px-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm font-medium text-foreground" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Site Actual</label>
-                    <input type="text" readOnly value={selectedAssetForTransfer.site} className="w-full px-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm font-medium text-foreground" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Nuevo Site *</label>
-                  <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                    <option value="">Seleccione el sitio destino...</option>
-                    <option value="SIT-002">Planta Sur</option>
-                    <option value="SIT-003">Obra Central</option>
-                    <option value="SIT-004">Proyecto Residencial</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Fecha de Transferencia *</label>
-                    <input type="date" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Responsable *</label>
-                    <input type="text" placeholder="Nombre de quien autoriza" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Motivo de Transferencia *</label>
-                  <select className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
-                    <option>Reasignación Operativa</option>
-                    <option>Cierre de Proyecto</option>
-                    <option>Mantenimiento Mayor</option>
-                    <option>Préstamo Temporal</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Comentarios</label>
-                  <textarea rows={2} placeholder="Detalles adicionales sobre la reubicación" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 resize-none"></textarea>
-                </div>
-                
-                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 flex gap-2">
-                  <Clock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground">Esta acción quedará registrada en el historial del activo y requerirá validación del nuevo responsable de sitio.</p>
-                </div>
-              </div>
-
-              <div className="p-5 border-t border-border bg-secondary/30 flex justify-end gap-3 shrink-0">
-                <button onClick={() => setIsTransferModalOpen(false)} className="px-4 py-2 text-sm font-medium text-foreground bg-background border border-border rounded-lg hover:bg-secondary transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={() => setIsTransferModalOpen(false)} className="px-5 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 transition-colors shadow-md flex items-center gap-2">
-                  <MapPin className="w-4 h-4" /> Transferir
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-        {/* --- MODAL EDICIÓN DE EQUIPO --- */}
+      {/* Modal Editar Equipo (Incluye campos adicionales de póliza) */}
+      <AnimatePresence>
         {isEditModalOpen && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -959,102 +983,164 @@ export default function Fleet() {
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden"
             >
-              <div className="flex items-center justify-between p-5 border-b border-border bg-secondary/30 shrink-0">
-                <h3 className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
                   <Edit className="w-5 h-5 text-amber-600" />
-                  Editar Activo: {editingData.serie}
+                  Editar Activo: {editingRowId}
                 </h3>
-                <button onClick={cancelEditing} className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground transition-colors">
+                <button onClick={cancelEditing} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
-              <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-6">
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto font-bold text-xs text-slate-600">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Modelo</label>
-                    <input 
-                      type="text" 
-                      value={editingData.modelo || ''} 
-                      onChange={(e) => setEditingData({...editingData, modelo: e.target.value})}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" 
-                    />
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Clase</label>
+                    <input type="text" value={editingData.clase || ''} onChange={(e) => setEditingData({...editingData, clase: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Estatus</label>
-                    <select 
-                      value={editingData.estatus || ''} 
-                      onChange={(e) => setEditingData({...editingData, estatus: e.target.value})}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
-                    >
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Modelo</label>
+                    <input type="text" value={editingData.modelo || ''} onChange={(e) => setEditingData({...editingData, modelo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Cuenta</label>
+                    <input type="text" value={editingData.cuenta || ''} onChange={(e) => setEditingData({...editingData, cuenta: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>
+                    <input type="text" value={editingData.distribuidor || ''} onChange={(e) => setEditingData({...editingData, distribuidor: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Estatus Operativo</label>
+                    <select value={editingData.estatus || ''} onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
                       <option value="Activo">Activo</option>
-                      <option value="En Renta">En Renta</option>
+                      <option value="Back Up">Back Up</option>
+                      <option value="Inactivo con Cliente">Inactivo con Cliente</option>
                       <option value="Inactivo">Inactivo</option>
                       <option value="Disponible">Disponible</option>
-                      <option value="Back Up">Back Up</option>
-                      <option value="Inactivo con cliente">Inactivo con cliente</option>
-                      <option value="En Taller">En Taller</option>
+                      <option value="En Renta">En Renta</option>
                       <option value="Mantenimiento">Mantenimiento</option>
+                      <option value="En Taller">En Taller</option>
+                    </select>
+                  </div>
+                  {!isAdc && (
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider mb-1">Administrador (ADC)</label>
+                      <input type="text" value={editingData.adc || ''} onChange={(e) => setEditingData({...editingData, adc: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                    </div>
+                  )}
+
+                  {/* Campos Financieros y Pólizas */}
+                  <div className="col-span-2 border-t border-slate-100 pt-4 mt-2">
+                    <h4 className="text-[10px] uppercase tracking-widest text-amber-600 mb-3">Condiciones de Renta y Póliza</h4>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Precio Renta Cliente</label>
+                    <input type="number" value={editingData.renta_precio || ''} onChange={(e) => setEditingData({...editingData, renta_precio: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Moneda Renta</label>
+                    <select value={editingData.renta_moneda || 'MXN'} onChange={(e) => setEditingData({...editingData, renta_moneda: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                      <option value="MXN">MXN</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Tipo de Póliza (SMP/CFPM)</label>
+                    <select value={editingData.tipo_poliza || 'SMP'} onChange={(e) => setEditingData({...editingData, tipo_poliza: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                      <option value="SMP">SMP</option>
+                      <option value="CFPM">CFPM</option>
+                      <option value="N/A">N/A</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Costo Póliza Distribuidor</label>
+                    <input type="number" value={editingData.costo_poliza_distribuidor || ''} onChange={(e) => setEditingData({...editingData, costo_poliza_distribuidor: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Moneda Pago Distribuidor</label>
+                    <select value={editingData.moneda_pago_distribuidor || 'MXN'} onChange={(e) => setEditingData({...editingData, moneda_pago_distribuidor: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                      <option value="MXN">MXN</option>
+                      <option value="USD">USD</option>
                     </select>
                   </div>
                 </div>
-
-                <div className="space-y-4 pt-4 border-t border-border">
-                  <h4 className="font-bold text-sm text-primary">Asignación Comercial</h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Cliente</label>
-                      <select 
-                        value={editingData.cliente || ''} 
-                        onChange={(e) => setEditingData({...editingData, cliente: e.target.value})}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {(uniqueClientes as string[]).map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Site (Ubicación)</label>
-                      <select 
-                        value={editingData.site || ''} 
-                        onChange={(e) => setEditingData({...editingData, site: e.target.value})}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {(uniqueSites as string[]).map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Administrador de Cuenta (ADC)</label>
-                      <select 
-                        value={editingData.adc || ''} 
-                        onChange={(e) => setEditingData({...editingData, adc: e.target.value})}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {(uniqueADCs as string[]).map(adc => <option key={adc} value={adc}>{adc}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
               </div>
 
-              <div className="flex items-center justify-end gap-3 p-5 border-t border-border bg-secondary/30 shrink-0">
-                <button onClick={cancelEditing} className="px-5 py-2.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button onClick={cancelEditing} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
-                <button onClick={saveEditing} className="px-6 py-2.5 bg-amber-600 text-white text-sm font-bold rounded-lg hover:bg-amber-700 transition-colors shadow-md">
-                  Guardar Cambios
+                <button onClick={saveEditing} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors">
+                  {isAdc ? 'Solicitar Cambio' : 'Guardar Directo'}
                 </button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal Transferir Equipo */}
+      <AnimatePresence>
+        {isTransferModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                  <MapPin className="w-5 h-5 text-amber-600" />
+                  Transferir Serie: {selectedAssetForTransfer?.serie}
+                </h3>
+                <button onClick={() => setIsTransferModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-4 font-bold text-xs text-slate-600">
+                <div>
+                  <p className="text-[9px] text-slate-400 uppercase mb-1">Ubicación Actual</p>
+                  <p className="text-slate-900 text-sm font-black">{selectedAssetForTransfer?.cliente} - {selectedAssetForTransfer?.site}</p>
+                  <p className="text-[10px] text-slate-500 font-bold mt-1">ADC Responsable: {selectedAssetForTransfer?.adc}</p>
+                </div>
+                
+                <div className="pt-2">
+                  <label className="block text-[10px] uppercase tracking-wider mb-2">Seleccionar Sitio de Destino *</label>
+                  <select
+                    value={transferDestinationSite}
+                    onChange={(e) => setTransferDestinationSite(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Elige un sitio destino --</option>
+                    {allSites.map(site => (
+                      <option key={site.id} value={site.id}>
+                        {site.cliente?.razon_social || 'Cliente'} - {site.nombre} (ADC: {site.adc || 'Sin asignación'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button onClick={() => setIsTransferModalOpen(false)} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={handleTransfer} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors">
+                  Ejecutar Transferencia
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

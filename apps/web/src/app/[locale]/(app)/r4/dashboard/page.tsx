@@ -4,11 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
-  BarChart, Bar
+  BarChart, Bar, AreaChart, Area
 } from 'recharts';
 import { 
   Calendar, CircleDollarSign,
-  TrendingUp, DollarSign, Truck, Receipt
+  TrendingUp, DollarSign, Truck, Receipt,
+  User, Briefcase, Percent, CheckCircle2, Clock, ShieldCheck, ArrowUpRight
 } from 'lucide-react';
 import api from '@/lib/api';
 
@@ -21,21 +22,12 @@ const donutChartData = [
 ];
 
 const barChartData = [
-  { month: 'Ene', facturado: 2.8, presupuesto: 2.5 },
-  { month: 'Feb', facturado: 3.1, presupuesto: 3.0 },
-  { month: 'Mar', facturado: 3.4, presupuesto: 3.4 },
-  { month: 'Abr', facturado: 3.7, presupuesto: 3.6 },
-  { month: 'May', facturado: 3.4, presupuesto: 3.6 },
-  { month: 'Jun', facturado: 4.0, presupuesto: 3.8 },
-];
-
-const lineChartData = [
-  { month: 'Ene', facturado: 2.8 },
-  { month: 'Feb', facturado: 3.1 },
-  { month: 'Mar', facturado: 3.4 },
-  { month: 'Abr', facturado: 3.7 },
-  { month: 'May', facturado: 3.4 },
-  { month: 'Jun', facturado: 4.0 },
+  { month: 'Ene', facturado: 28000, presupuesto: 25000 },
+  { month: 'Feb', facturado: 31000, presupuesto: 30000 },
+  { month: 'Mar', facturado: 34000, presupuesto: 34000 },
+  { month: 'Abr', facturado: 37000, presupuesto: 36000 },
+  { month: 'May', facturado: 34000, presupuesto: 36000 },
+  { month: 'Jun', facturado: 40000, presupuesto: 38000 },
 ];
 
 export default function R4DashboardPage() {
@@ -65,10 +57,10 @@ export default function R4DashboardPage() {
 
   // Derived values from metrics
   const totalActivos = Number(
-  metrics?.flotillaStatus
-    ? Object.values(metrics.flotillaStatus as Record<string, number>)
-        .reduce((a, b) => a + b, 0)
-    : 0
+    metrics?.flotillaStatus
+      ? Object.values(metrics.flotillaStatus as Record<string, number>)
+          .reduce((a, b) => a + b, 0)
+      : 0
   );
 
   const dynamicDonutData = [
@@ -80,7 +72,6 @@ export default function R4DashboardPage() {
 
   const displayDonutData = totalActivos > 0 ? dynamicDonutData : donutChartData;
   const barChartRealData = metrics?.historialFacturacion?.length > 0 ? metrics.historialFacturacion : barChartData;
-  const lineChartRealData = metrics?.historialFacturacion?.length > 0 ? metrics.historialFacturacion : lineChartData;
 
   if (loading) {
     return (
@@ -114,101 +105,52 @@ export default function R4DashboardPage() {
       <div className="px-8 max-w-[1600px] mx-auto mt-6 space-y-6">
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Card 1: Total activos */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+          <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-lg hover:-translate-y-1 transition-all">
             <div className="absolute top-0 right-0 p-6 opacity-10 text-slate-900 group-hover:scale-110 transition-transform">
-              <Truck className="w-20 h-20" />
+              <Truck className="w-20 h-20 text-slate-400" />
             </div>
-            <p className="text-sm font-bold text-[#64748B] relative z-10">Total de Activos</p>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:bg-slate-100 transition-colors">
+                <Truck className="w-6 h-6" />
+              </div>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total de Activos</p>
+            </div>
             <h3 className="text-4xl font-black text-slate-900 mt-2 relative z-10">{totalActivos || '--'}</h3>
+            <p className="text-[11px] text-slate-400 font-semibold mt-3">Equipos registrados en el módulo</p>
           </div>
 
-          {/* Card 2: Órdenes generadas */}
-          <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-amber-500/30 hover:shadow-lg hover:-translate-y-1 transition-all group relative overflow-hidden">
+          {/* Card 2: Pedidos Generados (Totvs) */}
+          <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-amber-500/30 hover:shadow-lg hover:-translate-y-1 transition-all group relative overflow-hidden flex flex-col justify-between">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all">
-              <CircleDollarSign className="w-24 h-24 text-amber-600" />
+              <Receipt className="w-24 h-24 text-amber-600" />
             </div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:bg-amber-100 group-hover:text-amber-700 transition-colors">
-                <Receipt className="w-6 h-6" />
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:bg-amber-100 group-hover:text-amber-700 transition-colors">
+                  <Receipt className="w-6 h-6" />
+                </div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pedidos Generados</p>
               </div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Órdenes Generadas</p>
+              <h3 className="text-3xl sm:text-4xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">
+                {metrics?.pedidosGenerados ?? '--'}
+              </h3>
             </div>
-            <h3 className="text-3xl sm:text-4xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">
-              {metrics?.ordenesGeneradas ?? '--'}
-            </h3>
-          </div>
-
-          {/* Card 3: Monto facturado */}
-          <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-blue-500/30 hover:shadow-lg hover:-translate-y-1 transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all">
-              <DollarSign className="w-24 h-24 text-blue-600" />
-            </div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
-                <TrendingUp className="w-6 h-6" />
+            <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-1 text-[11px] font-bold text-slate-500">
+              <div className="flex justify-between items-center">
+                <span>Total MXN:</span>
+                <span className="text-slate-900 font-black">${metrics?.importePedidosTotvs?.mxn ? metrics.importePedidosTotvs.mxn.toLocaleString('es-MX', { minimumFractionDigits: 2 }) : '0.00'}</span>
               </div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-tight">
-                Monto Facturado<br />
-                <span className="text-amber-500">{metrics?.periodoActual || 'Mes Actual'}</span>
-              </p>
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">
-              ${metrics?.montoMesActual
-                ? metrics.montoMesActual.toLocaleString('es-MX', { minimumFractionDigits: 2 })
-                : '0.00'}
-            </h3>
-          </div>
-
-          {/* Card 4: Órdenes del mes */}
-          <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-emerald-500/30 hover:shadow-lg hover:-translate-y-1 transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all">
-              <Calendar className="w-24 h-24 text-emerald-600" />
-            </div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors">
-                <Calendar className="w-6 h-6" />
+              <div className="flex justify-between items-center">
+                <span>Total USD:</span>
+                <span className="text-emerald-600 font-black">${metrics?.importePedidosTotvs?.usd ? metrics.importePedidosTotvs.usd.toLocaleString('es-MX', { minimumFractionDigits: 2 }) : '0.00'}</span>
               </div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-tight">
-                Órdenes del Mes<br />
-                <span className="text-amber-500">{metrics?.periodoActual || 'Mes Actual'}</span>
-              </p>
             </div>
-            <h3 className="text-3xl sm:text-4xl font-black text-slate-900 group-hover:text-emerald-600 transition-colors">
-              {metrics?.ordenesMesActual ?? '--'}
-            </h3>
           </div>
-        </div>
-
+          </div>
         {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Historial de Facturación */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm col-span-1 lg:col-span-2">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-black text-slate-900">Historial de Facturación por Periodo</h3>
-              <div className="flex items-center gap-4 text-sm font-bold">
-                <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-orange-600"></div> Facturado</div>
-                <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div> Presupuesto</div>
-              </div>
-            </div>
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barChartRealData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
-                  <RechartsTooltip
-                    cursor={{ fill: '#f8fafc' }}
-                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="facturado" name="Facturado" fill="#ea580c" radius={[6, 6, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="presupuesto" name="Presupuesto" fill="#cbd5e1" radius={[6, 6, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
           {/* Donut Chart */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
             <h3 className="text-lg font-black text-slate-900 mb-6">Distribución por estado de renta</h3>
@@ -255,45 +197,176 @@ export default function R4DashboardPage() {
         </div>
 
         {/* Charts Row 2 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
-          {/* Activos por ADC */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Resumen Órdenes */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-black text-slate-900">Activos por Ejecutivo de Cuenta (ADC)</h3>
+            <h3 className="text-lg font-black text-slate-900 mb-6">Resumen Órdenes</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
+              <div className="flex flex-col justify-between p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100/50 shadow-sm">
+                <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider">OCs Registradas</span>
+                <span className="text-3xl font-black text-amber-600 mt-2">{metrics?.resumenOrdenes?.totalOc ?? '--'}</span>
+                <p className="text-[10px] text-amber-600/70 font-semibold mt-2">Órdenes de Compra únicas en plataforma</p>
+              </div>
+              <div className="flex flex-col justify-between p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 shadow-sm">
+                <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Pedidos Totvs</span>
+                <span className="text-3xl font-black text-blue-600 mt-2">{metrics?.resumenOrdenes?.totalPedidosTotvs ?? '--'}</span>
+                <p className="text-[10px] text-blue-600/70 font-semibold mt-2">Registros de renta en Totvs consolidados</p>
+              </div>
             </div>
-            <div className="flex-1 min-h-[300px]">
+          </div>
+
+          {/* Presupuesto por ADC por Cliente */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm col-span-1 lg:col-span-2 flex flex-col justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Resumen de Presupuesto por ADC por Cliente</h3>
+              <p className="text-xs font-semibold text-slate-400 mt-0.5">Monto de renta correspondiente a equipos con estatus operativo "Activo"</p>
+            </div>
+            <div className="mt-4 overflow-x-auto overflow-y-auto max-h-[200px] border border-slate-100 rounded-2xl">
+              <table className="w-full text-left text-xs whitespace-nowrap">
+                <thead className="bg-slate-50 text-[9px] text-slate-500 uppercase tracking-widest border-b border-slate-100 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 font-black">ADC</th>
+                    <th className="px-4 py-3 font-black">Cliente</th>
+                    <th className="px-4 py-3 font-black text-center">Equipos</th>
+                    <th className="px-4 py-3 font-black text-right">Presupuesto MXN</th>
+                    <th className="px-4 py-3 font-black text-right">Presupuesto USD</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
+                  {metrics?.presupuestoAdcCliente?.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">No hay equipos activos registrados.</td>
+                    </tr>
+                  ) : (
+                    metrics?.presupuestoAdcCliente?.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-2.5">
+                          <span className="text-slate-900 font-black">{item.adc}</span>
+                        </td>
+                        <td className="px-4 py-2.5 max-w-[150px] truncate">{item.cliente}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md text-[10px]">
+                            {item.equiposCount}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-slate-900">
+                          ${item.mxn.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-emerald-600">
+                          ${item.usd.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Cumplimiento de Cobro de Rentas */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 flex flex-col justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Cumplimiento de Cobro de Rentas</h3>
+              <p className="text-xs font-semibold text-slate-400 mt-0.5">Monto de renta facturada/esperada vs. importe recuperado por periodo</p>
+            </div>
+            <div className="h-[250px] w-full mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barChartRealData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <BarChart data={metrics?.cumplimientoCobro} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
-                  <RechartsTooltip 
-                    cursor={{fill: '#f8fafc'}}
-                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="facturado" name="Facturado" fill="#ea580c" radius={[6, 6, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="presupuesto" name="Presupuesto" fill="#cbd5e1" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                  <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} tickFormatter={(val) => "$" + (val / 1000).toFixed(0) + "k"} />
+                  <RechartsTooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                  <Bar dataKey="esperadoMXN" name="Facturado MXN" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                  <Bar dataKey="recuperadoMXN" name="Cobrado MXN" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={30} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
+          <div className="flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-slate-100 lg:pl-6 pt-6 lg:pt-0">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Desglose de Cobros (MXN)</h4>
+            <div className="overflow-y-auto max-h-[250px] space-y-3 pr-2 scrollbar-thin flex-1">
+              {metrics?.cumplimientoCobro?.length === 0 ? (
+                <p className="text-xs font-bold text-slate-400 py-8 text-center">No hay registros de cobros.</p>
+              ) : (
+                metrics?.cumplimientoCobro?.map((item: any, idx: number) => (
+                  <div key={idx} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex flex-col gap-2 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-black text-slate-950">{item.mes} {item.periodo.split('-')[0]}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${item.porcentajeMXN >= 90 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                        {item.porcentajeMXN.toFixed(1)}% Cobrado
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[10.5px] font-bold text-slate-500">
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-slate-400">Esperado</p>
+                        <p className="text-slate-800">${item.esperadoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-slate-400">Cobrado</p>
+                        <p className="text-slate-800">${item.recuperadoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
 
-          {/* POs Activas */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
-            <h3 className="text-lg font-black text-slate-900 mb-6">Resumen Órdenes</h3>
-            <div className="space-y-4 mt-2">
-              <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                <span className="text-sm font-bold text-amber-700">POs Activas</span>
-                <span className="text-2xl font-black text-amber-600">{metrics?.poActivas ?? '--'}</span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                <span className="text-sm font-bold text-emerald-700">Órdenes Totales</span>
-                <span className="text-2xl font-black text-emerald-600">{metrics?.ordenesGeneradas ?? '--'}</span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                <span className="text-sm font-bold text-blue-700">Órdenes del Periodo</span>
-                <span className="text-2xl font-black text-blue-600">{metrics?.ordenesMesActual ?? '--'}</span>
-              </div>
+        {/* Recuperación de Rentas de Meses Anteriores */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm grid grid-cols-1 lg:grid-cols-3 gap-6 pb-6">
+          <div className="lg:col-span-2 flex flex-col justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Recuperación de Rentas de Meses Anteriores</h3>
+              <p className="text-xs font-semibold text-slate-400 mt-0.5">Recuperación e importe cobrado de rentas vencidas de periodos pasados</p>
+            </div>
+            <div className="h-[250px] w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={metrics?.recuperacionMesesAnteriores} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorRecup" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ea580c" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} tickFormatter={(val) => "$" + (val / 1000).toFixed(0) + "k"} />
+                  <RechartsTooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                  <Area type="monotone" dataKey="recuperadoMXN" name="Recuperado MXN" stroke="#ea580c" fillOpacity={1} fill="url(#colorRecup)" strokeWidth={3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-slate-100 lg:pl-6 pt-6 lg:pt-0">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Histórico de Recuperación (MXN)</h4>
+            <div className="overflow-y-auto max-h-[250px] space-y-3 pr-2 scrollbar-thin flex-1">
+              {metrics?.recuperacionMesesAnteriores?.length === 0 ? (
+                <p className="text-xs font-bold text-slate-400 py-8 text-center">No hay cartera vencida recuperada registrada.</p>
+              ) : (
+                metrics?.recuperacionMesesAnteriores?.map((item: any, idx: number) => (
+                  <div key={idx} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex flex-col gap-2 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-black text-slate-950">{item.mes} {item.periodo.split('-')[0]}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100`}>
+                        {item.porcentajeMXN.toFixed(1)}% Recup.
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[10.5px] font-bold text-slate-500">
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-slate-400">Total Facturado</p>
+                        <p className="text-slate-800">${item.esperadoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-slate-400">Total Recuperado</p>
+                        <p className="text-slate-800">${item.recuperadoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -302,3 +375,4 @@ export default function R4DashboardPage() {
     </div>
   );
 }
+

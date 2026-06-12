@@ -282,6 +282,9 @@ export class CargaMasivaService {
                                         moneda: getVal(row, 'MONEDA'),
                                         tipo: getVal(row, 'TIPO'),
                                         plazo_meses: getVal(row, 'PLAZO DE RENTA (MESES)'),
+                                        tipo_poliza: getVal(row, 'CFPM / SMP'),
+                                        costo_poliza_distribuidor: parseCurrency(getVal(row, 'PRECIO RENTA DEALER')),
+                                        moneda_pago_distribuidor: getVal(row, 'MONEDA2'),
                                     },
                                     fecha_inicio: getDateVal(row, ['FECHA ENTREGADO', 'FECHA INICIO', 'INICIO'], new Date()),
                                     fecha_fin: getDateVal(row, ['FECHA VENCIMIENTO', 'FECHA FIN', 'FIN VIGENCIA', 'VENCIMIENTO'], defaultFin),
@@ -299,6 +302,14 @@ export class CargaMasivaService {
                                 where: { id: renta.id },
                                 data: {
                                     ...rentaData,
+                                    condiciones: {
+                                        ...(typeof renta.condiciones === 'object' ? renta.condiciones : {}),
+                                        moneda: getVal(row, 'MONEDA') || (renta.condiciones as any)?.moneda,
+                                        tipo: getVal(row, 'TIPO') || (renta.condiciones as any)?.tipo,
+                                        tipo_poliza: getVal(row, 'CFPM / SMP') || (renta.condiciones as any)?.tipo_poliza,
+                                        costo_poliza_distribuidor: parseCurrency(getVal(row, 'PRECIO RENTA DEALER')) ?? (renta.condiciones as any)?.costo_poliza_distribuidor,
+                                        moneda_pago_distribuidor: getVal(row, 'MONEDA2') || (renta.condiciones as any)?.moneda_pago_distribuidor,
+                                    },
                                     detalles: {
                                         upsert: {
                                             create: {
