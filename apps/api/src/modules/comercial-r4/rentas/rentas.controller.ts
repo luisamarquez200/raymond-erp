@@ -16,7 +16,7 @@ export class RentasController {
     constructor(private readonly rentasService: RentasService) {}
 
     @Get()
-    @UseGuards(JwtAuthGuard)
+    // @UseGuards(JwtAuthGuard)
     async getRentas(@Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
