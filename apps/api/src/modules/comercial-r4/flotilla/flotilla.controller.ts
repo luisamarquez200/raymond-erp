@@ -41,11 +41,13 @@ export class FlotillaController {
     }
 
     @Put(':id')
-    async actualizarDirecto(@Param('id') id: string, @Body() dto: any) {
+    async actualizarDirecto(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
         const db = PrismaDynamicService.clients.r4;
         if (!db) throw new Error('Database client for R4 not initialized');
         const statusLimpio = dto.estatus_operativo ? this.flotillaService.unificarEstatus(dto.estatus_operativo) : undefined;
         
+        const activoAnterior = await db.activo.findUnique({ where: { id } });
+
         const updated = await db.activo.update({
             where: { id },
             data: {
@@ -93,6 +95,18 @@ export class FlotillaController {
                 }
             }
         }
+
+        const userId = req.user?.id || 'sistema';
+        await db.cambioSitioLog.create({
+            data: {
+                activo_id: id,
+                sitio_anterior_id: activoAnterior?.sitio_id || null,
+                sitio_nuevo_id: dto.sitio_id || activoAnterior?.sitio_id || 'sin_sitio',
+                motivo: dto.motivo || JSON.stringify({ tipo: 'EDICION', datos: dto }),
+                aprobado: true,
+                usuario_id: userId
+            }
+        });
 
         return {
             success: true,
