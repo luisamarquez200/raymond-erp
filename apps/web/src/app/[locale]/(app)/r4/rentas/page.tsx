@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from "motion/react";
 
 export default function R4RentasPage() {
   const { user } = useAuthStore();
-  const isAdc = user?.role?.toLowerCase() !== 'administrador';
+  const isAdc = user?.role?.toLowerCase() !== 'administrador' && user?.role?.toLowerCase() !== 'gerente' && !user?.role?.toLowerCase().includes('coordinaci');
   const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
 
   const [rentas, setRentas] = useState<any[]>([]);

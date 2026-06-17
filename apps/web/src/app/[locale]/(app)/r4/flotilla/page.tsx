@@ -85,7 +85,7 @@ export default function Fleet() {
 
   // User Profile Identification
   const userRole = user?.role?.toLowerCase() || 'administrador';
-  const isAdc = userRole === 'administrador';
+  const isAdc = userRole !== 'administrador' && userRole !== 'gerente' && !userRole.includes('coordinaci');
   const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
 
   const fetchFlotilla = async () => {
@@ -116,7 +116,13 @@ export default function Fleet() {
     try {
       const res = await api.get('/r4/clientes');
       const clientes = res.data?.data || res.data || [];
-      const sites = clientes.flatMap((c: any) => c.sitios || []);
+      const sites = clientes.flatMap((c: any) => 
+        (c.sitios || []).map((s: any) => ({
+          ...s,
+          cliente: { razon_social: c.razonSocial || c.razon_social },
+          adc: c.adc && c.adc !== '-' ? c.adc : ''
+        }))
+      );
       setAllSites(sites);
     } catch (error) {
       console.error('Error fetching sites:', error);
@@ -220,9 +226,11 @@ export default function Fleet() {
 
     // Check Cross-ADC Transfer Constraint
     if (isAdc && destAdc.toLowerCase() !== loggedInAdcName.toLowerCase()) {
-      // Must set status to INACTIVO first and notify
-      toast.error(`Las transferencias entre diferentes ADCs deben ser autorizadas por Coordinación. Por favor cambie el estatus del equipo a "Inactivo" primero.`);
-      return;
+      if (selectedAssetForTransfer?.estatus?.toUpperCase() !== 'INACTIVO') {
+        // Must set status to INACTIVO first and notify
+        toast.error(`Las transferencias entre diferentes ADCs deben ser autorizadas por Coordinación. Por favor cambie el estatus del equipo a "Inactivo" primero.`);
+        return;
+      }
     }
 
     try {
@@ -1130,18 +1138,21 @@ export default function Fleet() {
                 
                 <div className="pt-2">
                   <label className="block text-[10px] uppercase tracking-wider mb-2">Seleccionar Sitio de Destino *</label>
-                  <select
+                  <Select
                     value={transferDestinationSite}
-                    onChange={(e) => setTransferDestinationSite(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer"
+                    onValueChange={(val) => setTransferDestinationSite(val)}
                   >
-                    <option value="">-- Elige un sitio destino --</option>
-                    {allSites.map(site => (
-                      <option key={site.id} value={site.id}>
-                        {site.cliente?.razon_social || 'Cliente'} - {site.nombre} (ADC: {site.adc || 'Sin asignación'})
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                      <SelectValue placeholder="-- Elige un sitio destino --" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
+                      {allSites.map(site => (
+                        <SelectItem key={site.id} value={site.id} className="text-xs">
+                          {site.cliente?.razon_social || 'Cliente'} - {site.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

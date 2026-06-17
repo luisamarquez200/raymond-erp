@@ -30,6 +30,13 @@ export default function ClientesSitios() {
   });
   const [isSubmittingClient, setIsSubmittingClient] = useState(false);
 
+  // Modal Edit Client
+  const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
+  const [editClientFormData, setEditClientFormData] = useState({
+    razon_social: '', rfc: '', adc: '', moneda: 'MXN', calle: '', numero: '', cp: '', ciudad: '', estado: ''
+  });
+  const [isSubmittingEditClient, setIsSubmittingEditClient] = useState(false);
+
   // Modal Sitio
   const [isNewSitioModalOpen, setIsNewSitioModalOpen] = useState(false);
   const [newSitioFormData, setNewSitioFormData] = useState({
@@ -45,6 +52,10 @@ export default function ClientesSitios() {
   // Pagination for Directory
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Pagination for Directorio Tab
+  const [currentPageDirectorio, setCurrentPageDirectorio] = useState(1);
+  const itemsPerPageDirectorio = 10;
 
   const fetchClientes = async () => {
     try {
@@ -110,6 +121,61 @@ export default function ClientesSitios() {
       toast.error(error.response?.data?.message || 'Error al crear cliente');
     } finally {
       setIsSubmittingClient(false);
+    }
+  };
+
+  const openEditClientModal = (cliente: any) => {
+    setEditClientFormData({
+      razon_social: cliente.razonSocial || '',
+      rfc: cliente.rfc === '-' ? '' : (cliente.rfc || ''),
+      adc: cliente.adc === '-' ? '' : (cliente.adc || ''),
+      moneda: cliente.moneda || 'MXN',
+      calle: cliente.datos_fiscales?.calle || '',
+      numero: cliente.datos_fiscales?.numero || '',
+      cp: cliente.datos_fiscales?.cp || '',
+      ciudad: cliente.ciudad === '-' ? '' : (cliente.ciudad || ''),
+      estado: cliente.estado_fiscal === '-' ? '' : (cliente.estado_fiscal || '')
+    });
+    setIsEditClientModalOpen(true);
+  };
+
+  const handleEditClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isReadOnly) {
+      toast.error('No tienes permisos para editar clientes.');
+      return;
+    }
+    if (!selectedClienteId) return;
+    if (!editClientFormData.razon_social || !editClientFormData.rfc) {
+      toast.error('Razón Social y RFC son obligatorios');
+      return;
+    }
+    
+    try {
+      setIsSubmittingEditClient(true);
+      const payload: any = {
+        razon_social: editClientFormData.razon_social,
+        rfc: editClientFormData.rfc,
+        adc: editClientFormData.adc,
+        moneda: editClientFormData.moneda,
+        datos_fiscales: {
+          calle: editClientFormData.calle,
+          numero: editClientFormData.numero,
+          cp: editClientFormData.cp,
+          ciudad: editClientFormData.ciudad,
+          estado: editClientFormData.estado,
+        }
+      };
+      
+      await api.put(`/r4/clientes/${selectedClienteId}`, payload);
+      toast.success('Cliente actualizado correctamente');
+      setIsEditClientModalOpen(false);
+      fetchClientes();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.response?.data?.message || 'Error al actualizar cliente');
+    } finally {
+      setIsSubmittingEditClient(false);
     }
   };
 
@@ -234,10 +300,15 @@ export default function ClientesSitios() {
   );
 
   // Calculate unique distributors dynamically from the database, starting with a base list
-  const loadedDistribuidores = allSites.map((site: any) => site.distribuidor).filter(Boolean);
+  const loadedDistribuidores = allSites
+    .map((site: any) => site.distribuidor)
+    .filter((d: any) => Boolean(d) && String(d) !== '[object Object]' && String(d) !== '-');
   const baseDistribuidores = ['Raymond GDL', 'Raymond Monterrey', 'Raymond Centro', 'Raymond Bajío', 'Raymond Norte', 'Raymond Occidente'];
   
   const uniqueDistribuidores = Array.from(new Set([...baseDistribuidores, ...loadedDistribuidores])).sort();
+
+  const totalPagesDirectorio = Math.ceil(allSites.length / itemsPerPageDirectorio);
+  const paginatedAllSites = allSites.slice((currentPageDirectorio - 1) * itemsPerPageDirectorio, currentPageDirectorio * itemsPerPageDirectorio);
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
@@ -471,7 +542,10 @@ export default function ClientesSitios() {
                           <Trash className="w-3.5 h-3.5" />
                           Eliminar
                         </button>
-                        <button className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-sm">
+                        <button 
+                          onClick={() => openEditClientModal(selectedCliente)}
+                          className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-sm"
+                        >
                           <Settings className="w-3.5 h-3.5" />
                           Editar Info
                         </button>
@@ -549,7 +623,7 @@ export default function ClientesSitios() {
                           <div className="bg-slate-50/80 border border-slate-100 p-3.5 rounded-xl space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Distribuidor</span>
-                              <span className="text-xs font-bold text-[#E5222D] flex items-center gap-1"><Truck className="w-3.5 h-3.5"/> {sitio.distribuidor || 'No asignado'}</span>
+                              <span className="text-xs font-bold text-[#E5222D] flex items-center gap-1"><Truck className="w-3.5 h-3.5"/> {sitio.distribuidor && String(sitio.distribuidor) !== '[object Object]' && String(sitio.distribuidor) !== '-' ? sitio.distribuidor : 'No asignado'}</span>
                             </div>
                             {sitio.distribuidor_contacto_nombre && sitio.distribuidor_contacto_nombre !== '-' && (
                               <div className="pt-2 border-t border-slate-200/50 space-y-1.5">
@@ -614,13 +688,13 @@ export default function ClientesSitios() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
-                {allSites.length === 0 ? (
+                {paginatedAllSites.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-12 text-center text-slate-400">
                       No se encontraron sitios o distribuidores registrados.
                     </td>
                   </tr>
-                ) : allSites.map((site: any) => (
+                ) : paginatedAllSites.map((site: any) => (
                   <tr key={site.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4">
                       <div className="flex flex-col">
@@ -643,7 +717,7 @@ export default function ClientesSitios() {
                     <td className="p-4">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-bold">
                         <Truck className="w-3.5 h-3.5"/>
-                        {site.distribuidor || 'No asignado'}
+                        {site.distribuidor && String(site.distribuidor) !== '[object Object]' && String(site.distribuidor) !== '-' ? site.distribuidor : 'No asignado'}
                       </span>
                     </td>
                     <td className="p-4">
@@ -669,6 +743,25 @@ export default function ClientesSitios() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls for Directorio */}
+          {totalPagesDirectorio > 1 && (
+            <div className="flex justify-center items-center py-4 gap-4">
+               <button 
+                onClick={() => setCurrentPageDirectorio(p => Math.max(p - 1, 1))}
+                disabled={currentPageDirectorio === 1}
+                className="px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 disabled:opacity-30 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
+               >Anterior</button>
+               <span className="text-sm font-bold text-slate-600 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                 Página {currentPageDirectorio} de {totalPagesDirectorio}
+               </span>
+               <button 
+                onClick={() => setCurrentPageDirectorio(p => Math.min(p + 1, totalPagesDirectorio))}
+                disabled={currentPageDirectorio === totalPagesDirectorio}
+                className="px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 disabled:opacity-30 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
+               >Siguiente</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -780,6 +873,104 @@ export default function ClientesSitios() {
                 className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
               >
                 <Building2 className="w-4 h-4"/> {isSubmittingClient ? 'Guardando...' : 'Guardar Cliente'}
+              </button>
+            </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR CLIENTE */}
+      {isEditClientModalOpen && selectedCliente && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col relative border border-slate-100">
+            <form onSubmit={handleEditClient} className="flex flex-col h-full overflow-hidden">
+            <button 
+              type="button"
+              onClick={() => setIsEditClientModalOpen(false)}
+              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="p-8 border-b border-slate-100 shrink-0">
+              <h2 className="text-2xl font-black text-slate-900">Editar Cliente</h2>
+              <p className="text-slate-500 font-medium mt-1">Modifica la información corporativa y fiscal de {selectedCliente.razonSocial}.</p>
+            </div>
+
+            <div className="p-8 overflow-y-auto flex-1 custom-scrollbar space-y-8">
+              <section className="space-y-4">
+                <h3 className="text-sm font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-4">
+                  <Building2 className="w-4 h-4" /> Información Fiscal y Comercial
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">Nombre o Razón Social *</label>
+                    <input type="text" value={editClientFormData.razon_social} onChange={e => setEditClientFormData({...editClientFormData, razon_social: e.target.value})} placeholder="Escribe el nombre o razón social" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">RFC *</label>
+                    <input type="text" value={editClientFormData.rfc} onChange={e => setEditClientFormData({...editClientFormData, rfc: e.target.value})} placeholder="Escribe el RFC" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all uppercase placeholder:normal-case" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">Clave ADC</label>
+                    <input type="text" value={editClientFormData.adc} onChange={e => setEditClientFormData({...editClientFormData, adc: e.target.value})} placeholder="Escribe la clave ADC" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">Moneda Preferida</label>
+                    <select value={editClientFormData.moneda} onChange={e => setEditClientFormData({...editClientFormData, moneda: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-red-500 focus:bg-white focus:outline-none transition-all appearance-none">
+                      <option value="MXN">MXN - Peso Mexicano</option>
+                      <option value="USD">USD - Dólar Estadounidense</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              <hr className="border-slate-100" />
+
+              <section className="space-y-4">
+                <h3 className="text-sm font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-4">
+                  <MapPin className="w-4 h-4" /> Dirección del Cliente (Fiscal)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-black text-slate-700">Calle</label>
+                    <input type="text" value={editClientFormData.calle} onChange={e => setEditClientFormData({...editClientFormData, calle: e.target.value})} placeholder="Escribe la calle" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">Número</label>
+                    <input type="text" value={editClientFormData.numero} onChange={e => setEditClientFormData({...editClientFormData, numero: e.target.value})} placeholder="Escribe el número" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">Código Postal</label>
+                    <input type="text" value={editClientFormData.cp} onChange={e => setEditClientFormData({...editClientFormData, cp: e.target.value})} placeholder="Escribe el código postal" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">Ciudad / Municipio</label>
+                    <input type="text" value={editClientFormData.ciudad} onChange={e => setEditClientFormData({...editClientFormData, ciudad: e.target.value})} placeholder="Escribe la ciudad o municipio" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">Estado</label>
+                    <input type="text" value={editClientFormData.estado} onChange={e => setEditClientFormData({...editClientFormData, estado: e.target.value})} placeholder="Escribe el estado" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end gap-3 rounded-b-[2rem]">
+              <button 
+                type="button"
+                onClick={() => setIsEditClientModalOpen(false)}
+                className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit"
+                disabled={isSubmittingEditClient}
+                className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4"/> {isSubmittingEditClient ? 'Guardando...' : 'Guardar Cambios'}
               </button>
             </div>
             </form>
