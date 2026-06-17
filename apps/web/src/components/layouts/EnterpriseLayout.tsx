@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth.store'
 import { useOrganizationStore } from '@/store/organization.store'
 import OrganizationProvider from '@/providers/organization-provider'
 import Loader from '../ui/loader'
+import Image from 'next/image'
 
 const queryClient = new QueryClient()
 
@@ -115,7 +116,7 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
 
                         {/* Page Content */}
                         <main className={cn(
-                            "overflow-x-hidden w-full",
+                            "overflow-x-hidden w-full pb-10",
                             !isIsolated ? "p-3 sm:p-4 md:p-6" : "p-0"
                         )}>
                             <div className="max-w-full">
@@ -123,6 +124,27 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
                             </div>
                         </main>
                     </div>
+
+                    {/* Footer Banner */}
+                    <div className={cn(
+                        "fixed bottom-0 right-0 bg-red-500 text-white text-[10px] sm:text-xs font-black uppercase tracking-widest text-center py-1.5 px-4 shadow-md z-40 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 h-auto min-h-[40px] transition-all duration-300",
+                        !isIsolated && (sidebarCollapsed ? "lg:left-16 left-0" : "lg:left-64 left-0"),
+                        isIsolated && "left-0"
+                    )}>
+                        <a href="https://www.runsolutions-services.com" target="_blank" rel="noreferrer" className="hover:underline hover:text-red-100 transition-colors">
+                            www.runsolutions-Services.com
+                        </a>
+                        <span className="hidden sm:inline opacity-50">•</span>
+                        <span>Software v1.0 pruebas</span>
+                        <span className="hidden sm:inline opacity-50">•</span>
+                        <div className="flex items-center gap-2">
+                            <span className="opacity-80">Desarrollado por</span>
+                            <div className="bg-white px-2 py-0.5 rounded flex items-center justify-center">
+                                <Image src="/logos/run-solutions.png" alt="RUN SOLUTIONS" width={100} height={24} className="h-4 w-auto object-contain" />
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </OrganizationProvider>
         </QueryClientProvider>

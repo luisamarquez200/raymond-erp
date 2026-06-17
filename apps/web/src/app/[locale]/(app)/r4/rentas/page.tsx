@@ -14,7 +14,12 @@ import { motion, AnimatePresence } from "motion/react";
 
 export default function R4RentasPage() {
   const { user } = useAuthStore();
-  const isAdc = user?.role?.toLowerCase() !== 'administrador' && user?.role?.toLowerCase() !== 'gerente' && !user?.role?.toLowerCase().includes('coordinaci');
+  let rawRole: any = user?.role;
+  if (Array.isArray(rawRole)) rawRole = rawRole[0]?.name || rawRole[0]?.rol || rawRole[0];
+  if (typeof rawRole === 'object' && rawRole !== null) rawRole = rawRole?.name || rawRole?.rol;
+  const userRole = String(rawRole || 'administrador').toLowerCase();
+  
+  const isAdc = userRole !== 'administrador' && !userRole.includes('geren') && !userRole.includes('coordinaci');
   const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
 
   const [rentas, setRentas] = useState<any[]>([]);
@@ -367,7 +372,7 @@ export default function R4RentasPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col -gap-1">
-          <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
+          <span className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestión de Rentas</h1>
           <p className="text-slate-500 font-medium mt-1">Administración de contratos de renta, vigencias y asignación de activos</p>
         </div>
@@ -391,12 +396,12 @@ export default function R4RentasPage() {
 
       {/* Summary Cards */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-amber-100 hover:shadow-md transition-all">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-red-100 hover:shadow-md transition-all">
           <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Receipt className="w-24 h-24 text-amber-600" />
+            <Receipt className="w-24 h-24 text-red-600" />
           </div>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total de Rentas {isAdc && '(Mi ADC)'}</p>
-          <h3 className="text-3xl font-black text-amber-600">{totalRentas}</h3>
+          <h3 className="text-3xl font-black text-red-600">{totalRentas}</h3>
         </div>
 
         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-emerald-100 hover:shadow-md transition-all">
@@ -404,8 +409,8 @@ export default function R4RentasPage() {
           <h3 className="text-3xl font-black text-slate-900">{activas}</h3>
         </div>
 
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-amber-100 hover:shadow-md transition-all">
-          <p className="text-amber-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Próximas a Vencer</p>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-red-100 hover:shadow-md transition-all">
+          <p className="text-red-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Próximas a Vencer</p>
           <h3 className="text-3xl font-black text-slate-900">{porVencer}</h3>
         </div>
       </div>
@@ -1184,7 +1189,7 @@ export default function R4RentasPage() {
               <form onSubmit={handleEditRentaSubmit} className="flex flex-col h-full overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                    <div className="p-2 bg-red-100 text-red-600 rounded-xl">
                       <Pencil className="w-5 h-5" />
                     </div>
                     <div>
@@ -1203,7 +1208,7 @@ export default function R4RentasPage() {
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white">
                   <div className="space-y-4">
                     <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[10px] text-amber-600">1</span>
+                      <span className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-[10px] text-red-600">1</span>
                       Información General
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
@@ -1218,7 +1223,7 @@ export default function R4RentasPage() {
                         <select
                           value={editRentaConfig.formData.estado}
                           onChange={e => setEditRentaConfig({ ...editRentaConfig, formData: { ...editRentaConfig.formData, estado: e.target.value } })}
-                          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" required
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors" required
                         >
                           <option value="VIGENTE">VIGENTE</option>
                           <option value="IMPORTADA">IMPORTADA</option>
@@ -1231,7 +1236,7 @@ export default function R4RentasPage() {
 
                   <div className="space-y-4">
                     <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[10px] text-amber-600">2</span>
+                      <span className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-[10px] text-red-600">2</span>
                       Tarifas y Monedas
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
@@ -1241,7 +1246,7 @@ export default function R4RentasPage() {
                           type="number"
                           value={editRentaConfig.formData.renta_base}
                           onChange={e => setEditRentaConfig({ ...editRentaConfig, formData: { ...editRentaConfig.formData, renta_base: e.target.value } })}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1249,7 +1254,7 @@ export default function R4RentasPage() {
                         <select
                           value={editRentaConfig.formData.moneda}
                           onChange={e => setEditRentaConfig({ ...editRentaConfig, formData: { ...editRentaConfig.formData, moneda: e.target.value } })}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
                         >
                           <option value="MXN">MXN</option>
                           <option value="USD">USD</option>
@@ -1270,7 +1275,7 @@ export default function R4RentasPage() {
                   <button
                     type="submit"
                     disabled={isSubmittingRenta}
-                    className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all"
+                    className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all"
                   >
                     Guardar Cambios
                   </button>

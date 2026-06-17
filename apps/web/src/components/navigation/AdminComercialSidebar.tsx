@@ -76,7 +76,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
             <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
                 {!isCollapsed && (
                     <div className="flex flex-col -gap-1">
-                        <span className="text-2xl font-black text-amber-600 font-brand tracking-tighter leading-none">RAYMOND</span>
+                        <span className="text-2xl font-black text-red-600 font-brand tracking-tighter leading-none">RAYMOND</span>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">
                             Admin Comercial
                         </span>
@@ -86,7 +86,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                     {!isCollapsed && (
                         <Link
                             href="/es/site-selection"
-                            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-amber-600"
+                            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-red-600"
                             title="Volver a selección"
                         >
                             <LayoutDashboard className="w-4 h-4" />
@@ -119,13 +119,13 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                                     className={cn(
                                         'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
                                         isActive
-                                            ? 'bg-amber-50 text-amber-600 font-semibold'
+                                            ? 'bg-red-50 text-red-600 font-semibold'
                                             : 'text-gray-700 hover:bg-gray-100',
                                         isCollapsed && 'justify-center'
                                     )}
                                     title={isCollapsed ? item.label : undefined}
                                 >
-                                    <Icon className={cn('w-5 h-5 flex-shrink-0', isActive && 'text-amber-600')} />
+                                    <Icon className={cn('w-5 h-5 flex-shrink-0', isActive && 'text-red-600')} />
                                     {!isCollapsed && <span>{item.label}</span>}
                                 </Link>
                             </li>
@@ -141,17 +141,17 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                     title="Cerrar sesión"
                     className={cn(
                         "w-full flex items-center gap-3 p-2 rounded-xl transition-all h-12 text-left",
-                        !isCollapsed ? "hover:bg-amber-50 group" : "justify-center hover:bg-amber-50"
+                        !isCollapsed ? "hover:bg-red-50 group" : "justify-center hover:bg-red-50"
                     )}>
-                    <div className="w-10 h-10 rounded-full bg-amber-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg border-2 border-white group-hover:bg-amber-700 transition-colors">
+                    <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg border-2 border-white group-hover:bg-red-700 transition-colors">
                         {isCollapsed ? <LogOut className="w-5 h-5" /> : (user ? getInitials(user.firstName || user.email, user.lastName || '', user.email) : 'AC')}
                     </div>
                     {!isCollapsed && (
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-black text-gray-900 truncate leading-none group-hover:text-amber-700 transition-colors">
+                            <p className="text-sm font-black text-gray-900 truncate leading-none group-hover:text-red-700 transition-colors">
                                 {user ? `${user.firstName || user.email.split('@')[0]} ${user.lastName || ''}`.trim() : 'Admin'}
                             </p>
-                            <div className="flex items-center gap-1 mt-1 text-amber-600">
+                            <div className="flex items-center gap-1 mt-1 text-red-600">
                                 <p className="text-[10px] font-black uppercase tracking-widest flex-1 truncate">
                                     {user?.role || 'Admin'}
                                 </p>
@@ -165,7 +165,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
             <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
                 <DialogContent className="max-w-md p-0 overflow-hidden bg-white border-none shadow-2xl rounded-[2rem]">
                     <div className="p-8 space-y-6">
-                        <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mx-auto">
+                        <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mx-auto">
                             <AlertCircle className="w-8 h-8" />
                         </div>
                         <div className="text-center space-y-2">
@@ -183,7 +183,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                             </button>
                             <button
                                 onClick={handleConfirmLogout}
-                                className="flex-1 py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-200 transition-all"
+                                className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-200 transition-all"
                             >
                                 Confirmar
                             </button>

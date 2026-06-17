@@ -230,12 +230,19 @@ export class FlotillaService {
 
     async solicitarCambio(id: string, dto: any, usuarioId: string) {
         const db = this.getDb();
-        const activo = await db.activo.findUnique({ where: { id } });
-        if (!activo) throw new NotFoundException(`Equipo con serie ${id} no encontrado`);
+        const activo = await db.activo.findFirst({
+            where: {
+                OR: [
+                    { id: id },
+                    { serie: id }
+                ]
+            }
+        });
+        if (!activo) throw new NotFoundException(`Equipo con serie o ID ${id} no encontrado`);
 
         const log = await db.cambioSitioLog.create({
             data: {
-                activo_id: id,
+                activo_id: activo.id,
                 sitio_anterior_id: activo.sitio_id,
                 sitio_nuevo_id: dto.sitio_id || activo.sitio_id || 'sin_sitio',
                 motivo: JSON.stringify({

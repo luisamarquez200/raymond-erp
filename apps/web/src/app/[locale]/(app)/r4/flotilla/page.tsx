@@ -19,9 +19,9 @@ const statusColors = {
   'Inactivo': 'bg-gray-50 text-gray-600 border-gray-200',
   'Disponible': 'bg-blue-50 text-blue-700 border-blue-100',
   'Back Up': 'bg-blue-50 text-blue-700 border-blue-100',
-  'Inactivo con Cliente': 'bg-amber-50 text-amber-700 border-amber-100',
-  'En Taller': 'bg-amber-50 text-amber-700 border-amber-100',
-  'Mantenimiento': 'bg-amber-50 text-amber-700 border-amber-100',
+  'Inactivo con Cliente': 'bg-red-50 text-red-700 border-red-100',
+  'En Taller': 'bg-red-50 text-red-700 border-red-100',
+  'Mantenimiento': 'bg-red-50 text-red-700 border-red-100',
 };
 
 const formatFilterText = (str: string) => {
@@ -84,8 +84,12 @@ export default function Fleet() {
   const [allSites, setAllSites] = useState<any[]>([]);
 
   // User Profile Identification
-  const userRole = user?.role?.toLowerCase() || 'administrador';
-  const isAdc = userRole !== 'administrador' && userRole !== 'gerente' && !userRole.includes('coordinaci');
+  let rawRole: any = user?.role;
+  if (Array.isArray(rawRole)) rawRole = rawRole[0]?.name || rawRole[0]?.rol || rawRole[0];
+  if (typeof rawRole === 'object' && rawRole !== null) rawRole = rawRole?.name || rawRole?.rol;
+  const userRole = String(rawRole || 'administrador').toLowerCase();
+  
+  const isAdc = userRole !== 'administrador' && !userRole.includes('geren') && !userRole.includes('coordinaci');
   const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
 
   const fetchFlotilla = async () => {
@@ -426,7 +430,7 @@ export default function Fleet() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col -gap-1">
-          <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
+          <span className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Flotilla y Activos</h1>
           <p className="text-slate-500 font-medium mt-1">Gestión y control de inventario de equipos y accesorios</p>
         </div>
@@ -452,7 +456,7 @@ export default function Fleet() {
             Exportar
           </button>
           {!isAdc && (
-            <button onClick={() => setIsNewAssetModalOpen(true)} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-amber-100">
+            <button onClick={() => setIsNewAssetModalOpen(true)} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-100">
               <Plus className="w-4 h-4" />
               Alta de Equipo
             </button>
@@ -462,12 +466,12 @@ export default function Fleet() {
 
       {/* Summary Cards (Mantenimiento, Movimientos and Docs removed) */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-amber-100 hover:shadow-md transition-all">
+        <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-red-100 hover:shadow-md transition-all">
           <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Truck className="w-24 h-24 text-amber-600" />
+            <Truck className="w-24 h-24 text-red-600" />
           </div>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total Activos</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-amber-600">{statusCounts.totalActivos}</h3>
+          <h3 className="text-2xl sm:text-3xl font-black text-red-600">{statusCounts.totalActivos}</h3>
         </div>
         
         <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-emerald-100 hover:shadow-md transition-all">
@@ -537,7 +541,7 @@ export default function Fleet() {
       <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="relative group flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
             <input
               type="text"
               placeholder="Buscar por Serie, Cliente o Modelo"
@@ -546,14 +550,14 @@ export default function Fleet() {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:border-amber-500 focus:outline-none transition-all"
+              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:border-red-500 focus:outline-none transition-all"
             />
           </div>
 
           {!isAdc && (
             <div className="relative group flex-1 min-w-[160px]">
               <Select value={selectedADC} onValueChange={(val) => { setSelectedADC(val); setCurrentPage(1); }}>
-                <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                   <SelectValue placeholder="Ejecutivo (ADC): Todos" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
@@ -566,7 +570,7 @@ export default function Fleet() {
 
           <div className="relative group flex-1 min-w-[160px]">
             <Select value={selectedCliente} onValueChange={(val) => { setSelectedCliente(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                 <SelectValue placeholder="Cliente: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
@@ -578,7 +582,7 @@ export default function Fleet() {
 
           <div className="relative group flex-1 min-w-[160px]">
             <Select value={selectedEstatus} onValueChange={(val) => { setSelectedEstatus(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                 <SelectValue placeholder="Estatus: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
@@ -590,7 +594,7 @@ export default function Fleet() {
 
           <div className="relative group flex-1 min-w-[160px]">
             <Select value={selectedModelo} onValueChange={(val) => { setSelectedModelo(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                 <SelectValue placeholder="Modelo: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
@@ -602,7 +606,7 @@ export default function Fleet() {
 
           <div className="relative group flex-1 min-w-[160px]">
             <Select value={selectedClase} onValueChange={(val) => { setSelectedClase(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                 <SelectValue placeholder="Clase: Todas" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
@@ -614,7 +618,7 @@ export default function Fleet() {
 
           <div className="relative group flex-1 min-w-[160px]">
             <Select value={selectedDistribuidor} onValueChange={(val) => { setSelectedDistribuidor(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                 <SelectValue placeholder="Distribuidor: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
@@ -669,7 +673,7 @@ export default function Fleet() {
                     <td className="px-4 py-3.5 font-mono text-[11px]">{asset.clase}</td>
                     <td className="px-4 py-3.5 font-bold text-slate-800">{asset.modelo}</td>
                     <td className="px-4 py-3.5">
-                      <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-slate-900 hover:text-amber-600 hover:underline">
+                      <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-slate-900 hover:text-red-600 hover:underline">
                         {asset.serie}
                       </Link>
                     </td>
@@ -687,13 +691,13 @@ export default function Fleet() {
                     {!isAdc && <td className="px-4 py-3.5 font-bold text-slate-500">{asset.adc}</td>}
                     <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
-                        <Link href={`/r4/flotilla/${asset.serie}`} className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-lg transition-colors">
+                        <Link href={`/r4/flotilla/${asset.serie}`} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors">
                           <Eye className="w-3.5 h-3.5" />
                         </Link>
-                        <button onClick={(e) => startEditing(e, asset)} className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-lg transition-colors">
+                        <button onClick={(e) => startEditing(e, asset)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors">
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={(e) => openTransferModal(e, asset)} className="p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-lg transition-colors">
+                        <button onClick={(e) => openTransferModal(e, asset)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors">
                           <MapPin className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -738,7 +742,7 @@ export default function Fleet() {
             <div key={asset.serie} className="bg-white border border-slate-200 rounded-3xl shadow-sm hover:shadow-md transition-all flex flex-col h-full overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
                 <div>
-                  <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-lg text-slate-900 hover:text-amber-600 hover:underline">
+                  <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-lg text-slate-900 hover:text-red-600 hover:underline">
                     {asset.serie}
                   </Link>
                   <div className="flex gap-2 items-center mt-1">
@@ -790,17 +794,17 @@ export default function Fleet() {
                   </div>
                   <div>
                     <span className="text-[8px] text-slate-400 uppercase font-black block">Vencimiento</span>
-                    <p className="font-black text-[10.5px] text-amber-600">{asset.fechaVencimiento}</p>
+                    <p className="font-black text-[10.5px] text-red-600">{asset.fechaVencimiento}</p>
                   </div>
                 </div>
               </div>
               
               <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <button onClick={(e) => startEditing(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-xl transition-all" title="Editar">
+                  <button onClick={(e) => startEditing(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded-xl transition-all" title="Editar">
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button onClick={(e) => openTransferModal(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-xl transition-all" title="Transferir equipo">
+                  <button onClick={(e) => openTransferModal(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded-xl transition-all" title="Transferir equipo">
                     <MapPin className="w-4 h-4" />
                   </button>
                 </div>
@@ -826,7 +830,7 @@ export default function Fleet() {
             >
               <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
-                  <HardDrive className="w-5 h-5 text-amber-600" />
+                  <HardDrive className="w-5 h-5 text-red-600" />
                   Carga Masiva de Flotilla
                 </h3>
                 <button onClick={() => setIsUploadModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
@@ -842,10 +846,10 @@ export default function Fleet() {
                   {isUploading ? (
                     <div className="flex flex-col items-center justify-center py-10 space-y-4">
                       <div className="relative w-20 h-20">
-                        <div className="absolute inset-0 border-4 border-amber-100 rounded-full"></div>
-                        <div className="absolute inset-0 border-4 border-amber-600 rounded-full border-t-transparent animate-spin"></div>
+                        <div className="absolute inset-0 border-4 border-red-100 rounded-full"></div>
+                        <div className="absolute inset-0 border-4 border-red-600 rounded-full border-t-transparent animate-spin"></div>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <FileSpreadsheet className="w-8 h-8 text-amber-600 animate-pulse" />
+                          <FileSpreadsheet className="w-8 h-8 text-red-600 animate-pulse" />
                         </div>
                       </div>
                       <h3 className="text-base font-black text-slate-900">Procesando Archivo...</h3>
@@ -856,13 +860,13 @@ export default function Fleet() {
                   ) : (
                     <>
                       <label 
-                        className={`relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-3xl cursor-pointer transition-all duration-300 ${file ? 'border-amber-500/50 bg-amber-50/5' : 'border-slate-200 hover:border-amber-500 hover:bg-slate-50/50 group'}`}
+                        className={`relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-3xl cursor-pointer transition-all duration-300 ${file ? 'border-red-500/50 bg-red-50/5' : 'border-slate-200 hover:border-red-500 hover:bg-slate-50/50 group'}`}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
                       >
                         <input id="file-upload" type="file" className="hidden" accept=".xlsx,.csv" onChange={handleFileChange} />
                         <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
-                          <Upload className="w-5 h-5 text-amber-600" />
+                          <Upload className="w-5 h-5 text-red-600" />
                         </div>
                         <p className="text-xs font-black mb-1">
                           {file ? file.name : 'Arrastra tu archivo aquí o haz clic'}
@@ -871,7 +875,7 @@ export default function Fleet() {
                       </label>
 
                       {file && (
-                        <div className="flex items-center justify-between bg-amber-50/30 border border-amber-100 p-4 rounded-2xl mt-4">
+                        <div className="flex items-center justify-between bg-red-50/30 border border-red-100 p-4 rounded-2xl mt-4">
                           <div className="flex items-center gap-3">
                             <FileSpreadsheet className="w-8 h-8 text-green-600" />
                             <div>
@@ -893,7 +897,7 @@ export default function Fleet() {
                 <button onClick={() => { setIsUploadModalOpen(false); setFile(null); }} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors" disabled={isUploading}>
                   Cancelar
                 </button>
-                <button onClick={handleUpload} disabled={isUploading || !file} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors disabled:opacity-50 flex items-center gap-2">
+                <button onClick={handleUpload} disabled={isUploading || !file} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors disabled:opacity-50 flex items-center gap-2">
                   Importar Datos
                 </button>
               </div>
@@ -915,7 +919,7 @@ export default function Fleet() {
             >
               <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
-                  <Plus className="w-5 h-5 text-amber-600" />
+                  <Plus className="w-5 h-5 text-red-600" />
                   Alta de Nuevo Activo
                 </h3>
                 <button onClick={() => setIsNewAssetModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
@@ -927,11 +931,11 @@ export default function Fleet() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Número de Serie *</label>
-                    <input type="text" value={newAssetSerie} onChange={(e) => setNewAssetSerie(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder="Ej: 12345" />
+                    <input type="text" value={newAssetSerie} onChange={(e) => setNewAssetSerie(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 12345" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Modelo *</label>
-                    <input type="text" value={newAssetModelo} onChange={(e) => setNewAssetModelo(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder="Ej: Raymond 7400" />
+                    <input type="text" value={newAssetModelo} onChange={(e) => setNewAssetModelo(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: Raymond 7400" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Tipo de Activo *</label>
@@ -965,23 +969,23 @@ export default function Fleet() {
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Ejecutivo (ADC)</label>
-                    <input type="text" value={newAssetAdc} onChange={(e) => setNewAssetAdc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder={loggedInAdcName} />
+                    <input type="text" value={newAssetAdc} onChange={(e) => setNewAssetAdc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder={loggedInAdcName} />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>
-                    <input type="text" value={newAssetDistribuidor} onChange={(e) => setNewAssetDistribuidor(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" placeholder="Distribuidor que atiende" />
+                    <input type="text" value={newAssetDistribuidor} onChange={(e) => setNewAssetDistribuidor(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Distribuidor que atiende" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">OACH</label>
-                    <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" />
+                    <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Altura</label>
-                    <input type="text" value={newAssetAltura} onChange={(e) => setNewAssetAltura(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" />
+                    <input type="text" value={newAssetAltura} onChange={(e) => setNewAssetAltura(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">BC</label>
-                    <input type="text" value={newAssetBc} onChange={(e) => setNewAssetBc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500" />
+                    <input type="text" value={newAssetBc} onChange={(e) => setNewAssetBc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
                   </div>
                 </div>
               </div>
@@ -990,7 +994,7 @@ export default function Fleet() {
                 <button onClick={() => setIsNewAssetModalOpen(false)} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
-                <button onClick={handleCreateAsset} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors">
+                <button onClick={handleCreateAsset} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
                   Guardar Equipo
                 </button>
               </div>
@@ -1012,7 +1016,7 @@ export default function Fleet() {
             >
               <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
-                  <Edit className="w-5 h-5 text-amber-600" />
+                  <Edit className="w-5 h-5 text-red-600" />
                   Editar Activo: {editingRowId}
                 </h3>
                 <button onClick={cancelEditing} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
@@ -1060,7 +1064,7 @@ export default function Fleet() {
 
                   {/* Campos Financieros y Pólizas */}
                   <div className="col-span-2 border-t border-slate-100 pt-4 mt-2">
-                    <h4 className="text-[10px] uppercase tracking-widest text-amber-600 mb-3">Condiciones de Renta y Póliza</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest text-red-600 mb-3">Condiciones de Renta y Póliza</h4>
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Precio Renta Cliente</label>
@@ -1099,7 +1103,7 @@ export default function Fleet() {
                 <button onClick={cancelEditing} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
-                <button onClick={saveEditing} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors">
+                <button onClick={saveEditing} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
                   {isAdc ? 'Solicitar Cambio' : 'Guardar Directo'}
                 </button>
               </div>
@@ -1121,7 +1125,7 @@ export default function Fleet() {
             >
               <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
-                  <MapPin className="w-5 h-5 text-amber-600" />
+                  <MapPin className="w-5 h-5 text-red-600" />
                   Transferir Serie: {selectedAssetForTransfer?.serie}
                 </h3>
                 <button onClick={() => setIsTransferModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
@@ -1142,7 +1146,7 @@ export default function Fleet() {
                     value={transferDestinationSite}
                     onValueChange={(val) => setTransferDestinationSite(val)}
                   >
-                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-sm hover:border-slate-300">
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                       <SelectValue placeholder="-- Elige un sitio destino --" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
@@ -1160,7 +1164,7 @@ export default function Fleet() {
                 <button onClick={() => setIsTransferModalOpen(false)} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
-                <button onClick={handleTransfer} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-100 transition-colors">
+                <button onClick={handleTransfer} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
                   Ejecutar Transferencia
                 </button>
               </div>
