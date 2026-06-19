@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param } from '@nestjs/common';
 import { EquipoUbicacionService, CreateEquipoUbicacionDto, MoverEquipoDto } from './equipo-ubicacion.service';
 import { Public } from '../../common/decorators/public.decorator';
 
@@ -73,5 +73,10 @@ export class EquipoUbicacionController {
     @Delete('costos-refacciones/:costoId')
     async deleteCostoRefaccion(@Param('costoId') costoId: string) {
         return this.service.deleteCostoRefaccion(Number(costoId));
+    }
+
+    @Patch(':serial/update-estado')
+    async updateEntradaDetalleEstado(@Param('serial') serial: string, @Body() data: { estado: string }) {
+        return this.service.updateEntradaDetalleEstado(serial, data.estado);
     }
 }

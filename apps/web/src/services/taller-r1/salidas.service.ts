@@ -162,7 +162,7 @@ export const salidasApi = {
     // Obtener siguiente folio
     getNextFolio: async () => {
         const response = await tallerApi.get<any>(`${API_URL}/next-folio/generate`);
-        return response.data?.data || response.data;
+        return response.data?.data?.folio || response.data?.folio;
     },
 
     // Crear una nueva salida

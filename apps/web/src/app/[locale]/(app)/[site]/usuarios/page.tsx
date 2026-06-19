@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Edit, Shield, X, AlertCircle, Plus, Search, UserCheck, ShieldCheck, Mail, Lock, Unlock, CheckCircle2, User, ChevronRight, Save } from 'lucide-react'
+import { Edit, Shield, X, AlertCircle, Plus, Search, UserCheck, ShieldCheck, Mail, Lock, Unlock, CheckCircle2, User, ChevronRight, Save, Eye, EyeOff } from 'lucide-react'
 import { QrScannerButton } from '@/components/ui/qr-scanner-button'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,7 @@ export default function TallerR1UsuariosPage() {
     const [showConfirmCancel, setShowConfirmCancel] = useState(false)
     const [passwordError, setPasswordError] = useState('')
     const [passwordInput, setPasswordInput] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
     const [showDetailModal, setShowDetailModal] = useState(false)
     const [isEditingUsuario, setIsEditingUsuario] = useState(false)
     const [selectedTalleres, setSelectedTalleres] = useState<string[]>([])
@@ -482,14 +483,23 @@ export default function TallerR1UsuariosPage() {
                                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-4">
                                                 {isCreateMode ? 'Contraseña *' : 'Nueva Contraseña (Opcional)'}
                                             </label>
-                                            <input
-                                                type="password"
-                                                placeholder={isCreateMode ? "Ingresa una contraseña" : "Dejar en blanco para no cambiar"}
-                                                name="password"
-                                                value={passwordInput}
-                                                onChange={handlePasswordChange}
-                                                className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-red-50 focus:border-[#D8262F] outline-none transition-all"
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    placeholder={isCreateMode ? "Ingresa una contraseña" : "Dejar en blanco para no cambiar"}
+                                                    name="password"
+                                                    value={passwordInput}
+                                                    onChange={handlePasswordChange}
+                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-red-50 focus:border-[#D8262F] outline-none transition-all pr-12"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                                >
+                                                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                                </button>
+                                            </div>
                                             {passwordInput && (
                                                 <div className="mt-3 ml-4 space-y-1">
                                                     <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-tighter ${passwordInput.length >= 8 ? 'text-green-500' : 'text-gray-400'}`}>

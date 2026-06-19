@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { entradasApi } from '@/services/taller-r1/entradas.service';
 import { ubicacionesApi, Ubicacion } from '@/services/taller-r1/ubicaciones.service';
 import { clientesApi, Cliente } from '@/services/taller-r1/clientes.service';
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthTallerStore } from '@/store/auth-taller.store';
 
 type TipoElemento = 'equipo' | 'accesorio';
 
@@ -45,10 +46,30 @@ function normalizeDate(raw: string): string {
     return new Date().toISOString().split('T')[0];
 }
 
-function newRow(): EntradaRapidaRow {
-    return {
+export default function EntradasRapidasPage() {
+    const tallerUser = useAuthTallerStore(s => s.user);
+    const isAdmin = tallerUser?.role && ['Superadmin', 'Admin', 'Administrador'].includes(tallerUser.role);
+
+    if (!isAdmin) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <p className="text-red-500 font-bold text-lg">Acceso denegado. Solo administradores.</p>
+            </div>
+        );
+    }
+
+    const [rows, setRows] = useState<EntradaRapidaRow[]>([]);
+    const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
+    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [loadingUbic, setLoadingUbic] = useState(true);
+    const [loadingClientes, setLoadingClientes] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [folioReady, setFolioReady] = useState(false);
+    const folioRef = useRef(0);
+
+    const createRow = (): EntradaRapidaRow => ({
         id: crypto.randomUUID(),
-        folio: '',
+        folio: folioReady ? `E-${folioRef.current++}` : '',
         fecha: new Date().toISOString().split('T')[0],
         cliente: '',
         marca: '',
@@ -58,16 +79,7 @@ function newRow(): EntradaRapidaRow {
         ubicacion: '',
         tipo: 'equipo',
         status: 'pending',
-    };
-}
-
-export default function EntradasRapidasPage() {
-    const [rows, setRows] = useState<EntradaRapidaRow[]>([newRow()]);
-    const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
-    const [clientes, setClientes] = useState<Cliente[]>([]);
-    const [loadingUbic, setLoadingUbic] = useState(true);
-    const [loadingClientes, setLoadingClientes] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
+    });
 
     useEffect(() => {
         ubicacionesApi.getAll()
@@ -77,7 +89,19 @@ export default function EntradasRapidasPage() {
         clientesApi.getAll()
             .then(d => setClientes(Array.isArray(d) ? d : []))
             .finally(() => setLoadingClientes(false));
+
+        entradasApi.getNextFolio().then(folio => {
+            const num = parseInt(folio.replace('E-', ''), 10);
+            folioRef.current = isNaN(num) ? 1 : num;
+            setFolioReady(true);
+        });
     }, []);
+
+    useEffect(() => {
+        if (folioReady && rows.length === 0) {
+            setRows([createRow()]);
+        }
+    }, [folioReady]);
 
     const updateRow = useCallback((id: string, field: keyof EntradaRapidaRow, value: string) => {
         setRows(prev => prev.map(r => {
@@ -88,7 +112,7 @@ export default function EntradasRapidasPage() {
         }));
     }, []);
 
-    const addRow = () => setRows(prev => [...prev, newRow()]);
+    const addRow = () => setRows(prev => [...prev, createRow()]);
     const removeRow = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
 
     const resolveClienteId = (rawNombre: string): string => {
@@ -119,9 +143,11 @@ export default function EntradasRapidasPage() {
                 const clase = cols[6]?.trim() || '';
                 const clienteNombre = cols[2]?.trim() || '';
                 const clienteResolved = resolveClienteId(clienteNombre) || clienteNombre;
+                let folio = cols[0]?.trim() || '';
+                if (!folio && folioReady) folio = `E-${folioRef.current++}`;
                 return {
                     id: crypto.randomUUID(),
-                    folio: cols[0]?.trim() || '',
+                    folio,
                     fecha: normalizeDate(cols[1]?.trim() || ''),
                     cliente: clienteResolved,
                     marca: cols[3]?.trim() || '',
@@ -153,8 +179,13 @@ export default function EntradasRapidasPage() {
         for (const row of rows) {
             if (row.status === 'success') continue;
 
-            if (!row.folio || !row.numero_serie || !row.ubicacion) {
-                const missing = [!row.folio && 'Folio', !row.numero_serie && 'No. Serie', !row.ubicacion && 'Ubicación'].filter(Boolean).join(', ');
+            let folio = row.folio;
+            if (!folio && folioReady) {
+                folio = `E-${folioRef.current++}`;
+            }
+
+            if (!folio || !row.numero_serie || !row.ubicacion) {
+                const missing = [!folio && 'Folio', !row.numero_serie && 'No. Serie', !row.ubicacion && 'Ubicación'].filter(Boolean).join(', ');
                 setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: 'error', errorMsg: `Falta: ${missing}` } : r));
                 fail++;
                 continue;
@@ -166,7 +197,7 @@ export default function EntradasRapidasPage() {
 
             try {
                 await entradasApi.createRapida({
-                    folio: row.folio,
+                    folio,
                     fecha: row.fecha,
                     cliente: clienteParaBackend || undefined,
                     marca: row.marca || undefined,

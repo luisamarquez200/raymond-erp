@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { salidasApi } from '@/services/taller-r1/salidas.service';
 import { clientesApi, Cliente } from '@/services/taller-r1/clientes.service';
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2, Upload, CheckCircle2, AlertCircle, ArrowUpFromLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthTallerStore } from '@/store/auth-taller.store';
 
 interface SalidaRapidaRow {
     id: string;
@@ -32,30 +33,53 @@ function normalizeDate(raw: string): string {
     return new Date().toISOString().split('T')[0];
 }
 
-function newRow(): SalidaRapidaRow {
-    return {
+export default function SalidasRapidasPage() {
+    const tallerUser = useAuthTallerStore(s => s.user);
+    const isAdmin = tallerUser?.role && ['Superadmin', 'Admin', 'Administrador'].includes(tallerUser.role);
+
+    if (!isAdmin) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <p className="text-red-500 font-bold text-lg">Acceso denegado. Solo administradores.</p>
+            </div>
+        );
+    }
+
+    const [rows, setRows] = useState<SalidaRapidaRow[]>([]);
+    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [loadingClientes, setLoadingClientes] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [folioReady, setFolioReady] = useState(false);
+    const folioRef = useRef(0);
+
+    const createRow = (): SalidaRapidaRow => ({
         id: crypto.randomUUID(),
-        folio: '',
+        folio: folioReady ? `S-${String(folioRef.current++).padStart(3, '0')}` : '',
         fecha: new Date().toISOString().split('T')[0],
         cliente: '',
         destino: '',
         remision: '',
         numero_serie: '',
         status: 'pending',
-    };
-}
-
-export default function SalidasRapidasPage() {
-    const [rows, setRows] = useState<SalidaRapidaRow[]>([newRow()]);
-    const [clientes, setClientes] = useState<Cliente[]>([]);
-    const [loadingClientes, setLoadingClientes] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
+    });
 
     useEffect(() => {
         clientesApi.getAll()
             .then(d => setClientes(Array.isArray(d) ? d : []))
             .finally(() => setLoadingClientes(false));
+
+        salidasApi.getNextFolio().then(folio => {
+            const num = parseInt(folio.replace('S-', ''), 10);
+            folioRef.current = isNaN(num) ? 1 : num;
+            setFolioReady(true);
+        });
     }, []);
+
+    useEffect(() => {
+        if (folioReady && rows.length === 0) {
+            setRows([createRow()]);
+        }
+    }, [folioReady]);
 
     const updateRow = useCallback((id: string, field: keyof SalidaRapidaRow, value: string) => {
         setRows(prev => prev.map(r =>
@@ -63,7 +87,7 @@ export default function SalidasRapidasPage() {
         ));
     }, []);
 
-    const addRow = () => setRows(prev => [...prev, newRow()]);
+    const addRow = () => setRows(prev => [...prev, createRow()]);
     const removeRow = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
 
     const resolveClienteNombre = (raw: string): string => {
@@ -82,9 +106,11 @@ export default function SalidasRapidasPage() {
             const lines = text.trim().split('\n').filter(Boolean);
             const parsed: SalidaRapidaRow[] = lines.map(line => {
                 const cols = line.split('\t');
+                let folio = cols[0]?.trim() || '';
+                if (!folio && folioReady) folio = `S-${String(folioRef.current++).padStart(3, '0')}`;
                 return {
                     id: crypto.randomUUID(),
-                    folio: cols[0]?.trim() || '',
+                    folio,
                     fecha: normalizeDate(cols[1]?.trim() || ''),
                     cliente: resolveClienteNombre(cols[2]?.trim() || ''),
                     destino: cols[3]?.trim() || '',

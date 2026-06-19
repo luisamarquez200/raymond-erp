@@ -8,6 +8,7 @@ export interface EquipoUbicacion {
     id_equipo?: string;
     id_ubicacion?: string;
     id_sub_ubicacion?: string;
+    id_detalle?: string;
     estado: string;
 
     // Datos enriquecidos (Master View)
@@ -104,6 +105,10 @@ export const equipoUbicacionApi = {
     },
     deleteCostoRefaccion: async (id: number) => {
         const response = await tallerApi.delete<any>(`${API_URL}/costos-refacciones/${id}`);
+        return response.data?.data || response.data;
+    },
+    updateEntradaDetalleEstado: async (serial: string, estado: string) => {
+        const response = await tallerApi.patch<any>(`${API_URL}/${encodeURIComponent(serial)}/update-estado`, { estado });
         return response.data?.data || response.data;
     }
 };

@@ -69,6 +69,7 @@ export class EquipoUbicacionService {
         const ubicacionesMap = new Map(ubicaciones.map(e => [e.id_ubicacion, e.nombre_ubicacion]));
         const subUbicacionesMap = new Map(subUbicaciones.map(e => [e.id_sub_ubicacion, { nombre: e.nombre, ocupada: e.ubicacion_ocupada }]));
         const cargueMap = new Map(cargueMasivo.map(e => [e.SERIE, e]));
+        const entradaDetalleMap = new Map(entradasDetalle.map(e => [e.serial_equipo, e]));
 
         // Group folios by serial for quick latest-folio retrieval
         const foliosEntradaMap = new Map<string, { folio: string, date: Date }>();
@@ -102,6 +103,7 @@ export class EquipoUbicacionService {
             const eq = eu.id_equipos ? equiposMap.get(eu.id_equipos) : null;
             const subUbi = eu.id_sub_ubicacion ? subUbicacionesMap.get(eu.id_sub_ubicacion) : null;
             const masivo = eu.serial_equipo ? cargueMap.get(eu.serial_equipo) : null;
+            const detalle = eu.serial_equipo ? entradaDetalleMap.get(eu.serial_equipo) : null;
 
             let folio = 'N/D';
             if (eu.serial_equipo) {
@@ -117,6 +119,7 @@ export class EquipoUbicacionService {
                 id_equipo: eu.id_equipos,
                 id_ubicacion: eu.id_ubicacion,
                 id_sub_ubicacion: eu.id_sub_ubicacion,
+                id_detalle: detalle?.id_detalles || null,
                 serial_equipo: eu.serial_equipo || 'S/N',
                 marca: eq?.marca || 'N/D',
                 modelo: eq?.modelo || 'N/D',
@@ -194,6 +197,20 @@ export class EquipoUbicacionService {
     async remove(id: string) {
         return this.db.equipo_ubicacion.delete({
             where: { id_equipo_ubicacion: id },
+        });
+    }
+
+    async updateEntradaDetalleEstado(serial: string, estado: string) {
+        const ubicacion = await this.db.equipo_ubicacion.findFirst({
+            where: { serial_equipo: serial },
+            orderBy: { fecha_entrada: 'desc' },
+        });
+        if (!ubicacion) {
+            throw new Error(`No se encontró equipo_ubicacion con serial "${serial}"`);
+        }
+        return this.db.equipo_ubicacion.update({
+            where: { id_equipo_ubicacion: ubicacion.id_equipo_ubicacion },
+            data: { estado },
         });
     }
 

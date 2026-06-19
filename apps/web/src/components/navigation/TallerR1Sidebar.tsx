@@ -242,7 +242,7 @@ export default function TallerR1Sidebar({ isCollapsed: externalIsCollapsed, onTo
                 return roleName && ['Superadmin', 'Admin', 'Administrador'].includes(roleName);
               })();
 
-            if (['usuarios', 'solicitudes', 'tecnicos'].includes(item.path) && !isAdmin) {
+            if (['usuarios', 'solicitudes', 'tecnicos', 'entradas/rapida', 'salidas/rapida'].includes(item.path) && !isAdmin) {
               return null;
             }
 

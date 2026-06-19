@@ -894,7 +894,7 @@ export function EntradaDetailsModal({ entradaId, open, onClose, onEdit, onDelete
                                         </button>
                                     </div>
                                 )}
-                                {entrada?.estado !== 'Cerrado' && (entrada?.estado === 'Por Ubicar' || (selectedSite === 'r1' && entrada?.estado === 'Recibido – En espera evaluación' )) && (detalles.length > 0 || accesorios.length > 0) && detalles.every(d => d.id_sub_ubicacion) && accesorios.every(a => a.sub_ubicacion) && (
+                                {entrada?.estado !== 'Cerrado' && entrada?.estado === 'Por Ubicar' && (detalles.length > 0 || accesorios.length > 0) && detalles.every(d => d.id_sub_ubicacion) && accesorios.every(a => a.sub_ubicacion) && (
                                     <button
                                         onClick={handleUbicarEquipos}
                                         disabled={isUbiking}
@@ -1118,7 +1118,7 @@ export function EntradaDetailsModal({ entradaId, open, onClose, onEdit, onDelete
                                                                             <Star className="w-3.5 h-3.5" /> Calificar
                                                                         </button>
                                                                     )}
-                                                                    {entrada?.estado !== 'Cerrado' && (entrada?.estado === 'Por Ubicar' || !!detalle.calificacion || (selectedSite === 'r1' && entrada?.estado === 'Recibido – En espera evaluación')) && (
+                                                                     {entrada?.estado !== 'Cerrado' && (entrada?.estado === 'Por Ubicar' || !!detalle.calificacion) && (
                                                                         <button
                                                                             onClick={() => {
                                                                                 setSelectedItem({ id: detalle.id_detalles, tipo: 'equipo' });
@@ -1274,7 +1274,7 @@ export function EntradaDetailsModal({ entradaId, open, onClose, onEdit, onDelete
                                                                                 <Star className="w-3 h-3" /> Calificar
                                                                             </button>
                                                                         )}
-                                                                        {entrada?.estado !== 'Cerrado' && (entrada?.estado === 'Por Ubicar' || (acc.evaluaciones && acc.evaluaciones.length > 0) || (selectedSite === 'r1' && entrada?.estado === 'Recibido – En espera evaluación')) && (
+                                                                         {entrada?.estado !== 'Cerrado' && (entrada?.estado === 'Por Ubicar' || (acc.evaluaciones && acc.evaluaciones.length > 0)) && (
                                                                             <button
                                                                                 onClick={() => {
                                                                                     setSelectedItem({ id: acc.id_accesorio, tipo: 'accesorio' });

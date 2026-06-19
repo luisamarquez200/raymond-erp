@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { User, Lock, Bell, Upload, X, Mail, Shield } from 'lucide-react'
+import { User, Lock, Bell, Upload, X, Mail, Shield, Eye, EyeOff } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,6 +50,9 @@ export default function SettingsPage() {
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
     const [showCropper, setShowCropper] = useState(false)
     const [imageToCrop, setImageToCrop] = useState<string | null>(null)
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+    const [showNewPassword, setShowNewPassword] = useState(false)
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -385,31 +388,49 @@ export default function SettingsPage() {
                                 <Label htmlFor="currentPassword" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Contraseña Actual
                                 </Label>
-                                <Input
-                                    id="currentPassword"
-                                    type="password"
-                                    value={passwordData.currentPassword}
-                                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                                    required
-                                    placeholder="Ingresa tu contraseña actual"
-                                    className="mt-1.5"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="currentPassword"
+                                        type={showCurrentPassword ? 'text' : 'password'}
+                                        value={passwordData.currentPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                                        required
+                                        placeholder="Ingresa tu contraseña actual"
+                                        className="mt-1.5 pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                    >
+                                        {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="space-y-2">
                                 <Label htmlFor="newPassword" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Nueva Contraseña
                                 </Label>
-                                <Input
-                                    id="newPassword"
-                                    type="password"
-                                    value={passwordData.newPassword}
-                                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                                    required
-                                    minLength={8}
-                                    placeholder="Mínimo 8 caracteres"
-                                    className="mt-1.5"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="newPassword"
+                                        type={showNewPassword ? 'text' : 'password'}
+                                        value={passwordData.newPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                        required
+                                        minLength={8}
+                                        placeholder="Mínimo 8 caracteres"
+                                        className="mt-1.5 pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                    >
+                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">
                                     Debe tener al menos 8 caracteres
                                 </p>
@@ -419,16 +440,25 @@ export default function SettingsPage() {
                                 <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Confirmar Nueva Contraseña
                                 </Label>
-                                <Input
-                                    id="confirmPassword"
-                                    type="password"
-                                    value={passwordData.confirmPassword}
-                                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                                    required
-                                    minLength={8}
-                                    placeholder="Confirma tu nueva contraseña"
-                                    className="mt-1.5"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="confirmPassword"
+                                        type={showConfirmPassword ? 'text' : 'password'}
+                                        value={passwordData.confirmPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                        required
+                                        minLength={8}
+                                        placeholder="Confirma tu nueva contraseña"
+                                        className="mt-1.5 pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                    >
+                                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">

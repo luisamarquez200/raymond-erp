@@ -1,11 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Building2, ArrowLeft } from 'lucide-react'
+import { Building2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { SuperadminService } from '@/services/superadmin.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +32,7 @@ const createOrganizationSchema = z.object({
 type CreateOrganizationFormData = z.infer<typeof createOrganizationSchema>
 
 export default function CreateOrganizationPage() {
+    const [showPassword, setShowPassword] = useState(false)
     const router = useRouter()
     const queryClient = useQueryClient()
 
@@ -201,12 +203,22 @@ export default function CreateOrganizationPage() {
 
                             <div className="space-y-2">
                                 <Label htmlFor="adminPassword">Contraseña *</Label>
-                                <Input
-                                    id="adminPassword"
-                                    {...register('adminPassword')}
-                                    type="password"
-                                    placeholder="Mínimo 8 caracteres"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="adminPassword"
+                                        {...register('adminPassword')}
+                                        type={showPassword ? 'text' : 'password'}
+                                        placeholder="Mínimo 8 caracteres"
+                                        className="pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                    >
+                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
                                 {errors.adminPassword && (
                                     <p className="text-red-500 text-xs mt-1">{errors.adminPassword.message}</p>
                                 )}

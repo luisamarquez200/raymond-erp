@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const MAIN_TABS = ['Equipos', 'Accesorios'];
+const EQUIP_TABS = ['Pendientes de evaluación', 'Evaluados'];
 const ACC_TABS = ['Pendientes de evaluación', 'Evaluados'];
 
 const getCalificacionColor = (calificacion: string) => {
@@ -57,6 +58,7 @@ export default function EvaluacionesPage() {
   const params = useParams();
   const currentSite = (params?.site as string) || 'r1';
   const [activeMainTab, setActiveMainTab] = useState('Equipos');
+  const [activeEquipTab, setActiveEquipTab] = useState('Pendientes de evaluación');
   const [activeAccTab, setActiveAccTab] = useState('Pendientes de evaluación');
   const [filterEstado, setFilterEstado] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -64,6 +66,7 @@ export default function EvaluacionesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [equiposData, setEquiposData] = useState<any[]>([]);
+  const [pendingEquipos, setPendingEquipos] = useState<any[]>([]);
   const [accesoriosData, setAccesoriosData] = useState<Accesorio[]>([]);
 
   // Modal State
@@ -95,11 +98,13 @@ export default function EvaluacionesPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [equiposRes, accesoriosRes] = await Promise.all([
+      const [equiposRes, accesoriosRes, pendingRes] = await Promise.all([
         evaluacionesApi.getAllEquiposEvaluations(),
-        accesoriosApi.getAll()
+        accesoriosApi.getAll(),
+        evaluacionesApi.getPendingEquipos(),
       ]);
       setEquiposData(equiposRes || []);
+      setPendingEquipos(pendingRes || []);
       setAccesoriosData(accesoriosRes || []);
     } catch (error) {
       console.error('Error cargando datos de evaluaciones:', error);
@@ -111,9 +116,9 @@ export default function EvaluacionesPage() {
 
   const handleOpenEvaluation = (item: any, type: 'equipo' | 'accesorio') => {
     if (type === 'equipo') {
-        const detail = item.entrada_detalle;
+        const detail = item.entrada_detalle || item;
         setSelectedItem({
-            id: detail?.id_detalles || item.id_detalle,
+            id: detail?.id_detalles || item.id_detalles,
             serial: detail?.serial_equipo || 'N/A',
             modelo: detail?.modelo || 'Desconocido',
             tipo: 'equipo',
@@ -147,6 +152,15 @@ export default function EvaluacionesPage() {
     const matchesEstado = filterEstado === 'Todos' || estadoReal === filterEstado;
 
     return matchesSearch && matchesEstado;
+  });
+
+  const filteredPendingEquipos = pendingEquipos.filter(item => {
+    const searchLow = searchTerm.toLowerCase();
+    return (
+        item.serial_equipo?.toLowerCase().includes(searchLow) ||
+        item.modelo?.toLowerCase().includes(searchLow) ||
+        item.entradas?.folio?.toLowerCase().includes(searchLow)
+    );
   });
 
   // ----- Filtrado de Accesorios -----
@@ -196,9 +210,11 @@ export default function EvaluacionesPage() {
               )}
               */}
               <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2">
-                  <p className="text-red-800 font-bold text-sm">
-                      {activeMainTab === 'Equipos' ? filteredEquipos.length : filteredAccesorios.length} Registros
-                  </p>
+                    <p className="text-red-800 font-bold text-sm">
+                        {activeMainTab === 'Equipos'
+                            ? (activeEquipTab === 'Pendientes de evaluación' ? filteredPendingEquipos.length : filteredEquipos.length)
+                            : filteredAccesorios.length} Registros
+                    </p>
               </div>
             </div>
           </div>
@@ -240,20 +256,20 @@ export default function EvaluacionesPage() {
 
         {/* Sub-pestañas para Equipos */}
         {activeMainTab === 'Equipos' && (
-            <div className="flex gap-2 overflow-x-auto pb-2">
-                {['Todos', 'Ingresado', 'En mantenimiento', 'Retirado'].map(estado => (
+            <div className="flex gap-2">
+                {EQUIP_TABS.map(tab => (
                     <button
-                        key={estado}
-                        onClick={() => setFilterEstado(estado)}
+                        key={tab}
+                        onClick={() => setActiveEquipTab(tab)}
                         className={cn(
-                            'flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border whitespace-nowrap',
-                            filterEstado === estado
+                            'flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border',
+                            activeEquipTab === tab
                                 ? 'bg-red-50 border-red-200 text-red-700'
                                 : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
                         )}
                     >
-                        {estado === 'Todos' ? <LayoutGrid className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                        {estado}
+                        {tab === 'Evaluados' ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                        {tab}
                     </button>
                 ))}
             </div>
@@ -288,6 +304,51 @@ export default function EvaluacionesPage() {
         ) : (
             <div className="mt-6">
                 {activeMainTab === 'Equipos' ? (
+                    activeEquipTab === 'Pendientes de evaluación' ? (
+                        filteredPendingEquipos.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filteredPendingEquipos.map((item) => (
+                                    <div
+                                        key={item.id_detalles}
+                                        onClick={() => handleOpenEvaluation(item, 'equipo')}
+                                        className="bg-white rounded-2xl border border-amber-200 p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
+                                    >
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                                                    {item.entradas?.folio || 'Sin Folio'}
+                                                </p>
+                                                <h3 className="text-lg font-black text-slate-900 leading-tight">
+                                                    {item.serial_equipo || 'S/N'}
+                                                </h3>
+                                            </div>
+                                            <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200 group-hover:bg-amber-500 group-hover:border-amber-500 transition-colors">
+                                                <Clock className="w-5 h-5 text-amber-600 group-hover:text-white transition-colors" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+                                                <Forklift className="w-4 h-4 text-slate-400" />
+                                                {item.modelo || 'Modelo Desconocido'}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+                                                <MapPin className="w-4 h-4 text-slate-400" />
+                                                {item.entradas?.rel_cliente?.nombre_cliente || item.entradas?.cliente_origen || 'Sin Cliente'}
+                                            </div>
+                                            <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
+                                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
+                                                <span className="px-3 py-1 rounded-lg text-xs font-black bg-amber-50 text-amber-700">
+                                                    Pendiente
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <EmptyState message="No hay equipos pendientes de evaluación." />
+                        )
+                    ) : (
                     filteredEquipos.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredEquipos.map((evaluacion) => {
@@ -385,6 +446,7 @@ export default function EvaluacionesPage() {
                         </div>
                     ) : (
                         <EmptyState message="No se encontraron evaluaciones de equipos." />
+                    )
                     )
                 ) : (
                     filteredAccesorios.length > 0 ? (

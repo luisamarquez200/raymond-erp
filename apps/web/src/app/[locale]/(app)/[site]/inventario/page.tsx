@@ -2,11 +2,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Search, LayoutGrid, FileText, MapPin, Download, Clock, Calendar, Globe } from 'lucide-react';
+import { Search, LayoutGrid, FileText, MapPin, Download, Clock, Calendar, Globe, Wrench } from 'lucide-react';
 import { QrScannerButton } from '@/components/ui/qr-scanner-button';
 import { inventarioApi, InventarioItem } from '@/services/taller-r1/inventario.service';
 import { evaluacionesApi } from '@/services/taller-r1/evaluaciones.service';
+import { equipoUbicacionApi } from '@/services/taller-r1/equipo-ubicacion.service';
+import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { useParams } from 'next/navigation';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { TableList } from '@/components/shared/TableList';
 import { DataTableColumnHeader } from '@/components/ui/data-table/data-table-column-header';
 import { DataTableViewOptions } from '@/components/ui/data-table/data-table-view-options';
@@ -38,6 +46,22 @@ export default function InventarioPage() {
             toast.error('Error al cargar el inventario');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const tallerUser = useAuthTallerStore(s => s.user);
+    const isAdmin = tallerUser?.email === 'j.molina@runsolutions-services.com' ||
+        (tallerUser?.role && ['Superadmin', 'Admin', 'Administrador'].includes(tallerUser.role));
+
+    const ESTADOS_EQUIPO = ['Renovado', 'Renovar', 'Venta AS IS', 'Chatarra', 'Scrap'];
+
+    const handleChangeEstado = async (item: InventarioItem, nuevoEstado: string) => {
+        try {
+            await equipoUbicacionApi.updateEntradaDetalleEstado(item.serial_equipo || '', nuevoEstado);
+            toast.success(`Estado cambiado a "${nuevoEstado}"`);
+            await loadData();
+        } catch {
+            toast.error('Error al cambiar el estado');
         }
     };
 
@@ -213,6 +237,35 @@ export default function InventarioPage() {
                     )}
                 </div>
             )
+        },
+        {
+            id: 'acciones',
+            header: 'Acciones',
+            size: 60,
+            cell: ({ row }) => (
+                <div className="flex items-center gap-1">
+                    {isAdmin && isR1 && ['Clase I', 'Clase II', 'Clase III', 'Otros'].includes(row.original.clase) && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-2 text-gray-400 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-200"
+                                    title="Cambiar estado entrada_detalle"
+                                >
+                                    <Wrench className="w-5 h-5" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                {ESTADOS_EQUIPO.map(estado => (
+                                    <DropdownMenuItem key={estado} onClick={() => handleChangeEstado(row.original, estado)}>
+                                        {estado}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
+                </div>
+            )
         }
     ];
 
@@ -282,7 +335,29 @@ export default function InventarioPage() {
                                         <span className="font-black text-slate-800 text-lg tracking-tight">{row.serial_equipo}</span>
                                         <span className="text-[10px] font-mono font-bold text-slate-400">{row.modelo} ({row.sitio})</span>
                                     </div>
-                                    <span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded border border-slate-200">#{row.folio}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded border border-slate-200">#{row.folio}</span>
+                                        {isAdmin && isR1 && ['Clase I', 'Clase II', 'Clase III', 'Otros'].includes(row.clase) && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="p-1.5 text-gray-400 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-200"
+                                                        title="Cambiar estado entrada_detalle"
+                                                    >
+                                                        <Wrench className="w-5 h-5" />
+                                                    </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                                    {ESTADOS_EQUIPO.map(estado => (
+                                                        <DropdownMenuItem key={estado} onClick={() => handleChangeEstado(row, estado)}>
+                                                            {estado}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex justify-between items-center text-xs">
                                     <div className="flex items-center gap-1.5 text-red-700 font-bold">

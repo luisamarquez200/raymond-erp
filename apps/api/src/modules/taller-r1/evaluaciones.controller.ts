@@ -65,6 +65,11 @@ export class EvaluacionesController {
         return this.evaluacionesService.getAllEquiposEvaluations();
     }
 
+    @Get('equipos-pendientes')
+    async getPendingEquipos() {
+        return this.evaluacionesService.getPendingEquipos();
+    }
+
     @Post('bulk-generic-r1')
     async bulkGenericEvaluationR1() {
         return this.evaluacionesService.bulkGenericEvaluationR1();

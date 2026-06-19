@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { QrCode, Search, LayoutGrid, FileText, CheckCircle2, XCircle, MapPin, Tag, Download, Truck, Wrench } from 'lucide-react';
+import { QrCode, Search, LayoutGrid, FileText, CheckCircle2, XCircle, MapPin, Tag, Download, Truck, Wrench, ClipboardCheck } from 'lucide-react';
 import { QrScannerButton } from '@/components/ui/qr-scanner-button';
 import { equipoUbicacionApi, EquipoUbicacion, MovilizacionHistory } from '@/services/taller-r1/equipo-ubicacion.service';
 import { generateQRLabel } from '@/lib/generateQRLabel';
@@ -23,6 +23,7 @@ import {
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { MovilizacionModal } from './MovilizacionModal';
 import { EquipoUbicacionDetailsModal } from '@/components/taller-r1/equipo-ubicacion/EquipoUbicacionDetailsModal';
+import { EvaluacionModal } from '@/components/taller-r1/evaluaciones/EvaluacionModal';
 
 export default function EquipoUbicacionPage() {
   const params = useParams();
@@ -40,6 +41,10 @@ export default function EquipoUbicacionPage() {
   const [itemToMovilizar, setItemToMovilizar] = useState<EquipoUbicacion | null>(null);
   const [historialMovilizaciones, setHistorialMovilizaciones] = useState<MovilizacionHistory[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
+
+  // Evaluación State
+  const [evalModalOpen, setEvalModalOpen] = useState(false);
+  const [evalItem, setEvalItem] = useState<any>(null);
 
   const TABS = ["Todo", "Retirado", "Ingresado", "Reservado"];
 
@@ -81,7 +86,7 @@ export default function EquipoUbicacionPage() {
     }
   };
 
-  const handleGenerateQR = async (item: EquipoUbicacion) => {
+    const handleGenerateQR = async (item: EquipoUbicacion) => {
     try {
       await generateQRLabel({
         serial: item.serial_equipo || 'SN-UNKNOWN',
@@ -92,6 +97,16 @@ export default function EquipoUbicacionPage() {
       console.error('Error generating QR:', error);
       toast.error('Error al generar la etiqueta');
     }
+  };
+
+  const handleOpenEvaluation = (item: EquipoUbicacion) => {
+    setEvalItem({
+      id: item.id_detalle || '',
+      serial: item.serial_equipo || 'N/A',
+      modelo: item.modelo || 'Desconocido',
+      tipo: 'equipo',
+    });
+    setEvalModalOpen(true);
   };
 
   const filteredData = data.filter(item => {
@@ -235,6 +250,18 @@ export default function EquipoUbicacionPage() {
               <Truck className="w-5 h-5" />
             </button>
           )}
+          {row.original.id_detalle && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenEvaluation(row.original);
+              }}
+              className="p-2 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200"
+              title="Evaluar equipo"
+            >
+              <ClipboardCheck className="w-5 h-5" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -363,6 +390,18 @@ export default function EquipoUbicacionPage() {
                       </button>
                     </>
                   )}
+                  {row.id_detalle && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEvaluation(row);
+                      }}
+                      className="p-2 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200"
+                      title="Evaluar equipo"
+                    >
+                      <ClipboardCheck className="w-6 h-6" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -403,6 +442,13 @@ export default function EquipoUbicacionPage() {
         open={movilizarModalOpen}
         onOpenChange={setMovilizarModalOpen}
         equipo={itemToMovilizar}
+        onSuccess={loadData}
+      />
+
+      <EvaluacionModal
+        open={evalModalOpen}
+        onClose={() => setEvalModalOpen(false)}
+        item={evalItem}
         onSuccess={loadData}
       />
     </div>

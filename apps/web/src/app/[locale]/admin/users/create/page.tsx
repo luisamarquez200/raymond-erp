@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { useAuthStore } from '@/store/auth.store';
+import { Eye, EyeOff } from 'lucide-react';
 
 const createUserSchema = z.object({
     firstName: z.string().min(2, 'El nombre es requerido'),
@@ -31,6 +33,7 @@ const createUserSchema = z.object({
 type CreateUserFormData = z.infer<typeof createUserSchema>;
 
 export default function CreateUserPage() {
+    const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
     const createUser = useCreateUser();
     const { user } = useAuthStore();
@@ -149,12 +152,22 @@ export default function CreateUserPage() {
 
                     <div className="space-y-2">
                         <Label htmlFor="password">Contraseña *</Label>
-                        <Input
-                            id="password"
-                            {...register('password')}
-                            type="password"
-                            placeholder="Mínimo 8 caracteres"
-                        />
+                        <div className="relative">
+                            <Input
+                                id="password"
+                                {...register('password')}
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Mínimo 8 caracteres"
+                                className="pr-10"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
                         {errors.password && (
                             <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>
                         )}

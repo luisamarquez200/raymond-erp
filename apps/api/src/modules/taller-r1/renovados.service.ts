@@ -725,6 +725,15 @@ export class RenovadosService implements OnModuleInit {
                 });
             }
 
+            // Si el detalle estaba en estado "Renovar", pasa automáticamente a "Renovado"
+            await tx.entrada_detalle.updateMany({
+                where: {
+                    serial_equipo: solicitud.serial_equipo,
+                    estado: 'Renovar',
+                },
+                data: { estado: 'Renovado' }
+            });
+
             if (solicitud.id_estacion) {
                 await tx.taller_estacion.update({
                     where: { id_estacion: solicitud.id_estacion },

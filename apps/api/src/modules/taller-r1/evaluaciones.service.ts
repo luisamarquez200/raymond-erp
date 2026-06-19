@@ -122,11 +122,27 @@ export class EvaluacionesService {
                 calificacionText = `${data.porcentaje_total}%`;
             }
 
+            // Determine estado based on evaluation percentage
+            let estadoEvaluacion: string | undefined;
+            const pct = data.porcentaje_total;
+            if (pct !== undefined) {
+                if (pct >= 86) {
+                    estadoEvaluacion = 'Renovado';
+                } else if (pct >= 51) {
+                    estadoEvaluacion = 'Renovar';
+                } else if (pct >= 30) {
+                    estadoEvaluacion = 'Venta AS IS';
+                } else {
+                    estadoEvaluacion = 'Chatarra';
+                }
+            }
+
             await this.db.entrada_detalle.update({
                 where: { id_detalles: data.id_detalle },
                 data: {
                     calificacion: calificacionText.trim(),
                     semanas_renovacion: data.semanas_renovacion !== undefined ? String(data.semanas_renovacion) : null,
+                    ...(estadoEvaluacion && { estado: estadoEvaluacion }),
                 }
             });
 
@@ -388,6 +404,50 @@ export class EvaluacionesService {
         } catch (error: any) {
              this.logger.error(`Error getting all equipment evaluations: ${error.message}`, error.stack);
              throw error;
+        }
+    }
+
+    async getPendingEquipos() {
+        try {
+            const records = await this.db.entrada_detalle.findMany({
+                where: {
+                    calificacion: null,
+                    entradas: {
+                        estado: { not: 'Cerrado' },
+                    },
+                },
+                include: {
+                    entradas: {
+                        include: {
+                            rel_cliente: {
+                                select: { nombre_cliente: true },
+                            },
+                        },
+                    },
+                },
+                orderBy: { fecha: 'desc' },
+                take: 100,
+            });
+
+            const serials = records.map(r => r.serial_equipo).filter(Boolean) as string[];
+            const eqUbis = serials.length > 0
+                ? await this.db.equipo_ubicacion.findMany({
+                      where: { serial_equipo: { in: serials } },
+                      orderBy: { fecha_entrada: 'desc' },
+                  })
+                : [];
+
+            return records.map(record => {
+                const eqUbi = eqUbis.find(e => e.serial_equipo === record.serial_equipo);
+                return {
+                    ...record,
+                    estado_real: eqUbi?.estado || record.estado || 'Sin ubicar',
+                    equipo_ubicacion: eqUbi || null,
+                };
+            });
+        } catch (error: any) {
+            this.logger.error(`Error getting pending equipos: ${error.message}`, error.stack);
+            throw error;
         }
     }
 
