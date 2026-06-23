@@ -969,11 +969,17 @@ export default function Fleet() {
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Ejecutivo (ADC)</label>
-                    <input type="text" value={newAssetAdc} onChange={(e) => setNewAssetAdc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder={loggedInAdcName} />
+                    <select value={newAssetAdc} onChange={(e) => setNewAssetAdc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                      <option value="">Seleccionar ADC</option>
+                      {uniqueADCs.map(adc => <option key={adc} value={adc}>{adc}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>
-                    <input type="text" value={newAssetDistribuidor} onChange={(e) => setNewAssetDistribuidor(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Distribuidor que atiende" />
+                    <select value={newAssetDistribuidor} onChange={(e) => setNewAssetDistribuidor(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                      <option value="">Seleccionar Distribuidor</option>
+                      {uniqueDistribuidores.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">OACH</label>
@@ -1040,7 +1046,10 @@ export default function Fleet() {
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>
-                    <input type="text" value={editingData.distribuidor || ''} onChange={(e) => setEditingData({...editingData, distribuidor: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                    <select value={editingData.distribuidor || ''} onChange={(e) => setEditingData({...editingData, distribuidor: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                      <option value="">Seleccionar Distribuidor</option>
+                      {uniqueDistribuidores.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Estatus Operativo</label>
@@ -1058,7 +1067,10 @@ export default function Fleet() {
                   {!isAdc && (
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider mb-1">Administrador (ADC)</label>
-                      <input type="text" value={editingData.adc || ''} onChange={(e) => setEditingData({...editingData, adc: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                      <select value={editingData.adc || ''} onChange={(e) => setEditingData({...editingData, adc: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                        <option value="">Seleccionar ADC</option>
+                        {uniqueADCs.map(adc => <option key={adc} value={adc}>{adc}</option>)}
+                      </select>
                     </div>
                   )}
 

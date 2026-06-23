@@ -13,7 +13,7 @@ import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 
 @Controller('r4/rentas')
 export class RentasController {
-    constructor(private readonly rentasService: RentasService) {}
+    constructor(private readonly rentasService: RentasService) { }
 
     @Get()
     // @UseGuards(JwtAuthGuard)
@@ -71,9 +71,7 @@ export class RentasController {
     async crearRenta(@Body() body: CreateRentaDto, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
+
             const data = await this.rentasService.crearRenta(body);
             return res.status(HttpStatus.CREATED).json({ success: true, data });
         } catch (error: any) {
@@ -87,9 +85,9 @@ export class RentasController {
     async actualizarRenta(@Param('id') id: string, @Body() body: UpdateRentaDto, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
+            // if (role?.toUpperCase() === 'ADMINISTRADOR') {
+            //     throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
+            // }
             const data = await this.rentasService.actualizarRenta(id, body);
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
@@ -103,9 +101,9 @@ export class RentasController {
     async actualizarDetalles(@Param('id') id: string, @Body() body: UpdateDetallesRentaDto, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
+            // if (role?.toUpperCase() === 'ADMINISTRADOR') {
+            //     throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
+            // }
             const data = await this.rentasService.actualizarDetalles(id, body);
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
@@ -119,9 +117,9 @@ export class RentasController {
     async cancelarRenta(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
+            // if (role?.toUpperCase() === 'ADMINISTRADOR') {
+            //     throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
+            // }
             const data = await this.rentasService.cancelarRenta(id);
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
