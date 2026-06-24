@@ -82,6 +82,7 @@ export default function Fleet() {
   const [selectedAssetForTransfer, setSelectedAssetForTransfer] = useState<any>(null);
   const [transferDestinationSite, setTransferDestinationSite] = useState('');
   const [allSites, setAllSites] = useState<any[]>([]);
+  const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
 
   // User Profile Identification
   let rawRole: any = user?.role;
@@ -120,6 +121,7 @@ export default function Fleet() {
     try {
       const res = await api.get('/r4/clientes');
       const clientes = res.data?.data || res.data || [];
+      setClientesDisponibles(clientes);
       const sites = clientes.flatMap((c: any) => 
         (c.sitios || []).map((s: any) => ({
           ...s,
@@ -138,6 +140,18 @@ export default function Fleet() {
     fetchPendingApprovals();
     fetchSites();
   }, []);
+
+  // Auto-assign Clase based on Modelo if known
+  useEffect(() => {
+    const term = newAssetModelo.toLowerCase();
+    if (term.includes('7400') || term.includes('4250') || term.includes('4750')) {
+      setNewAssetClase('Clase I');
+    } else if (term.includes('order picker') || term.includes('5000')) {
+      setNewAssetClase('Clase II');
+    } else if (term.includes('patin') || term.includes('8000') || term.includes('8210')) {
+      setNewAssetClase('Clase III');
+    }
+  }, [newAssetModelo]);
 
   const handleApprove = async (id: string) => {
     try {
@@ -262,8 +276,8 @@ export default function Fleet() {
   };
 
   const handleCreateAsset = async () => {
-    if (!newAssetSerie || !newAssetModelo) {
-      toast.error('Faltan campos obligatorios.');
+    if (!newAssetSerie || !newAssetModelo || !newAssetCliente || !newAssetSitio) {
+      toast.error('Faltan campos obligatorios (Serie, Modelo, Cliente, Sitio).');
       return;
     }
 
@@ -956,6 +970,20 @@ export default function Fleet() {
                       <option>Clase IV</option>
                       <option>Clase V</option>
                       <option>OTROS</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Cliente *</label>
+                    <select value={newAssetCliente} onChange={(e) => { setNewAssetCliente(e.target.value); setNewAssetSitio(''); }} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                      <option value="">Seleccionar Cliente</option>
+                      {clientesDisponibles.map((c: any) => <option key={c.id} value={c.id}>{c.razonSocial || c.razon_social}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Sitio *</label>
+                    <select value={newAssetSitio} onChange={(e) => setNewAssetSitio(e.target.value)} disabled={!newAssetCliente} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50">
+                      <option value="">Seleccionar Sitio</option>
+                      {clientesDisponibles.find((c: any) => c.id === newAssetCliente)?.sitios?.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                     </select>
                   </div>
                   <div>

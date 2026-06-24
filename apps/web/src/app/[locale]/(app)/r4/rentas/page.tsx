@@ -46,7 +46,7 @@ export default function R4RentasPage() {
   const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
   const [equiposDisponibles, setEquiposDisponibles] = useState<any[]>([]);
   const [newRentaFormData, setNewRentaFormData] = useState({
-    cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: ''
+    cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: '', mes_cobertura: ''
   });
   const [editRentaConfig, setEditRentaConfig] = useState<{ isOpen: boolean; id: string; formData: any }>({
     isOpen: false,
@@ -176,6 +176,7 @@ export default function R4RentasPage() {
         fecha_inicio: newRentaFormData.fecha_inicio,
         fecha_fin: newRentaFormData.fecha_fin,
         plazo_meses: newRentaFormData.plazo_meses ? Number(newRentaFormData.plazo_meses) : null,
+        mes_cobertura: newRentaFormData.mes_cobertura || null,
         detalles: {
           tipo_renta: newRentaFormData.tipo_renta,
           moneda: newRentaFormData.moneda,
@@ -189,7 +190,7 @@ export default function R4RentasPage() {
       toast.success('Renta creada correctamente');
       setIsNewRentaModalOpen(false);
       setNewRentaFormData({
-        cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: ''
+        cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: '', mes_cobertura: ''
       });
       fetchRentasYClientes();
     } catch (error: any) {
@@ -604,6 +605,7 @@ export default function R4RentasPage() {
                               <CommandGroup className="p-1.5">
                                 {clientesDisponibles.map((c) => (
                                   <CommandItem
+                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                     key={c.id}
                                     value={c.razonSocial}
                                     onSelect={() => {
@@ -650,6 +652,7 @@ export default function R4RentasPage() {
                               <CommandGroup className="p-1.5">
                                 {clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.map((s: any) => (
                                   <CommandItem
+                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                     key={s.id}
                                     value={s.nombre}
                                     onSelect={() => {
@@ -792,9 +795,8 @@ export default function R4RentasPage() {
                                   <input
                                     type="number"
                                     value={item.renta_base || ""}
-                                    onChange={e => handleGridFieldChange(index, 'renta_base', e.target.value)}
-                                    placeholder="0"
-                                    className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold"
+                                    readOnly
+                                    className="w-24 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 focus:outline-none text-xs font-bold cursor-not-allowed"
                                   />
                                 </td>
                                 <td className="p-3">
@@ -916,6 +918,7 @@ export default function R4RentasPage() {
                                   <CommandGroup className="p-1.5">
                                     {clientesDisponibles.map((c) => (
                                       <CommandItem
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                         key={c.id}
                                         value={c.razonSocial}
                                         onSelect={() => {
@@ -960,6 +963,7 @@ export default function R4RentasPage() {
                                   <CommandGroup className="p-1.5">
                                     {selectedClienteObj?.sitios?.map((s: any) => (
                                       <CommandItem
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                         key={s.id}
                                         value={s.nombre}
                                         onSelect={() => {
@@ -1064,6 +1068,16 @@ export default function R4RentasPage() {
                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors" required
                           />
                         </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes de Cobertura</label>
+                          <input
+                            type="month"
+                            value={newRentaFormData.mes_cobertura}
+                            onChange={e => setNewRentaFormData({ ...newRentaFormData, mes_cobertura: e.target.value })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-2 mb-4">
@@ -1089,13 +1103,15 @@ export default function R4RentasPage() {
                                 <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún equipo.</CommandEmpty>
                                 <CommandGroup className="p-1.5">
                                   {equiposDisponibles.map((e) => (
-                                    <CommandItem
-                                      key={e.id}
-                                      value={`${e.serie} ${e.modelo || ''}`}
-                                      onSelect={() => {
-                                        setNewRentaFormData({ ...newRentaFormData, activo_id: e.id });
-                                        setOpenEquipo(false);
-                                      }}
+                                      <CommandItem
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        key={e.id}
+                                        value={`${e.serie} ${e.modelo || ''}`}
+                                        onSelect={() => {
+                                          const assetPrice = equiposDisponibles.find(eq => eq.id === e.id)?.renta_precio || 0;
+                                          setNewRentaFormData({ ...newRentaFormData, activo_id: e.id, renta_base: assetPrice.toString() });
+                                          setOpenEquipo(false);
+                                        }}
                                       className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-red-700"
                                     >
                                       <Check className={cn("mr-2 h-4 w-4 shrink-0 text-red-600", newRentaFormData.activo_id === e.id ? "opacity-100" : "opacity-0")} />
@@ -1114,9 +1130,9 @@ export default function R4RentasPage() {
                         <input
                           type="number"
                           value={newRentaFormData.renta_base}
-                          onChange={e => setNewRentaFormData({ ...newRentaFormData, renta_base: e.target.value })}
+                          readOnly
                           placeholder="0.00"
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                          className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 focus:outline-none cursor-not-allowed opacity-80"
                         />
                       </div>
                     </div>
