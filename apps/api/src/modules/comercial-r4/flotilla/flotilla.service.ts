@@ -228,6 +228,40 @@ export class FlotillaService {
         return updated;
     }
 
+    async crearActivo(dto: any, usuarioId: string) {
+        const db = this.getDb();
+        const estatusLimpio = this.unificarEstatus(dto.estatus_operativo);
+
+        const nuevoActivo = await db.activo.create({
+            data: {
+                serie: dto.serie,
+                clase: dto.clase,
+                modelo: dto.modelo,
+                oach: dto.oach,
+                altura: dto.altura,
+                bc: dto.bc,
+                estatus_operativo: estatusLimpio,
+                cliente_id: dto.cliente_id,
+                sitio_id: dto.sitio_id,
+                adc: dto.adc,
+                distribuidor: dto.distribuidor
+            }
+        });
+
+        await db.cambioSitioLog.create({
+            data: {
+                activo_id: nuevoActivo.id,
+                sitio_anterior_id: null,
+                sitio_nuevo_id: dto.sitio_id || 'sin_sitio',
+                motivo: 'Alta de equipo',
+                aprobado: true,
+                usuario_id: usuarioId
+            }
+        });
+
+        return nuevoActivo;
+    }
+
     async solicitarCambio(id: string, dto: any, usuarioId: string) {
         const db = this.getDb();
         const activo = await db.activo.findFirst({

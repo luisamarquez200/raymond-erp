@@ -67,7 +67,7 @@ export class RentasController {
     }
 
     @Post()
-    @UseGuards(JwtAuthGuard)
+    // @UseGuards(JwtAuthGuard)
     async crearRenta(@Body() body: CreateRentaDto, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
@@ -81,7 +81,7 @@ export class RentasController {
     }
 
     @Patch(':id')
-    @UseGuards(JwtAuthGuard)
+    // @UseGuards(JwtAuthGuard)
     async actualizarRenta(@Param('id') id: string, @Body() body: UpdateRentaDto, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
@@ -97,7 +97,7 @@ export class RentasController {
     }
 
     @Patch(':id/detalles')
-    @UseGuards(JwtAuthGuard)
+    // @UseGuards(JwtAuthGuard)
     async actualizarDetalles(@Param('id') id: string, @Body() body: UpdateDetallesRentaDto, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
@@ -113,7 +113,7 @@ export class RentasController {
     }
 
     @Delete(':id')
-    @UseGuards(JwtAuthGuard)
+    // @UseGuards(JwtAuthGuard)
     async cancelarRenta(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;

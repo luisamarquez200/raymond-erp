@@ -153,6 +153,23 @@ export default function Fleet() {
     }
   }, [newAssetModelo]);
 
+  useEffect(() => {
+    if (editingData.modelo) {
+      const term = editingData.modelo.toLowerCase();
+      let newClase = editingData.clase;
+      if (term.includes('7400') || term.includes('4250') || term.includes('4750')) {
+        newClase = 'Clase I';
+      } else if (term.includes('order picker') || term.includes('5000')) {
+        newClase = 'Clase II';
+      } else if (term.includes('patin') || term.includes('8000') || term.includes('8210')) {
+        newClase = 'Clase III';
+      }
+      if (newClase !== editingData.clase) {
+        setEditingData((prev: any) => ({ ...prev, clase: newClase }));
+      }
+    }
+  }, [editingData.modelo]);
+
   const handleApprove = async (id: string) => {
     try {
       await api.post(`/r4/flotilla/solicitudes/${id}/aprobar`);
@@ -309,7 +326,7 @@ export default function Fleet() {
       };
 
       // Direct creation (only allowed for admins/coordinators)
-      await api.post('/r4/activos', payload); // Or direct creation API
+      await api.post('/r4/flotilla', payload); // Or direct creation API
       toast.success('Equipo registrado con éxito');
       setIsNewAssetModalOpen(false);
       fetchFlotilla();
@@ -963,7 +980,7 @@ export default function Fleet() {
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Clase *</label>
-                    <select value={newAssetClase} onChange={(e) => setNewAssetClase(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                    <select value={newAssetClase} onChange={(e) => setNewAssetClase(e.target.value)} disabled className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 focus:outline-none cursor-not-allowed disabled:opacity-70">
                       <option>Clase I</option>
                       <option>Clase II</option>
                       <option>Clase III</option>
@@ -1062,7 +1079,7 @@ export default function Fleet() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Clase</label>
-                    <input type="text" value={editingData.clase || ''} onChange={(e) => setEditingData({...editingData, clase: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                    <input type="text" value={editingData.clase || ''} readOnly className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 focus:outline-none cursor-not-allowed" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Modelo</label>

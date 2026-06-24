@@ -14,6 +14,15 @@ export class FlotillaController {
         };
     }
 
+    @Post()
+    async crearActivo(@Body() dto: any, @Request() req: any) {
+        const userId = req.user?.id || 'sistema';
+        return {
+            success: true,
+            data: await this.flotillaService.crearActivo(dto, userId)
+        };
+    }
+
     @Get('solicitudes')
     async getSolicitudes() {
         return {

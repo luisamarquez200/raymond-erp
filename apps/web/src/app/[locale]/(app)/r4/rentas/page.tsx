@@ -176,10 +176,10 @@ export default function R4RentasPage() {
         fecha_inicio: newRentaFormData.fecha_inicio,
         fecha_fin: newRentaFormData.fecha_fin,
         plazo_meses: newRentaFormData.plazo_meses ? Number(newRentaFormData.plazo_meses) : null,
-        mes_cobertura: newRentaFormData.mes_cobertura || null,
         detalles: {
           tipo_renta: newRentaFormData.tipo_renta,
           moneda: newRentaFormData.moneda,
+          mes_cobro: newRentaFormData.mes_cobertura || null,
           renta_base: Number(newRentaFormData.renta_base) || 0,
           mantenimiento: newRentaFormData.mantenimiento,
           comentarios: newRentaFormData.comentarios
@@ -583,93 +583,35 @@ export default function R4RentasPage() {
                     {/* Cliente select */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente *</label>
-                      <Popover open={openFichaCliente} onOpenChange={setOpenFichaCliente}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-all"
-                          >
-                            <span className="truncate">
-                              {selectedFichaClienteId
-                                ? clientesDisponibles.find((c) => c.id === selectedFichaClienteId)?.razonSocial
-                                : "Seleccionar Cliente..."}
-                            </span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
-                          <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
-                            <CommandInput placeholder="Buscar cliente" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
-                            <CommandList>
-                              <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún cliente.</CommandEmpty>
-                              <CommandGroup className="p-1.5">
-                                {clientesDisponibles.map((c) => (
-                                  <CommandItem
-                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                    key={c.id}
-                                    value={c.razonSocial}
-                                    onSelect={() => {
-                                      setSelectedFichaClienteId(c.id);
-                                      setSelectedFichaSitioId('');
-                                      setOpenFichaCliente(false);
-                                    }}
-                                    className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-[#E5222D]"
-                                  >
-                                    <Check className={cn("mr-2 h-4 w-4 shrink-0 text-[#E5222D]", selectedFichaClienteId === c.id ? "opacity-100" : "opacity-0")} />
-                                    {c.razonSocial}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                      <select
+                        value={selectedFichaClienteId}
+                        onChange={e => {
+                          setSelectedFichaClienteId(e.target.value);
+                          setSelectedFichaSitioId('');
+                        }}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
+                      >
+                        <option value="">Seleccionar Cliente...</option>
+                        {clientesDisponibles.map((c) => (
+                          <option key={c.id} value={c.id}>{c.razonSocial}</option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Sitio select */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio *</label>
-                      <Popover open={openFichaSitio} onOpenChange={setOpenFichaSitio}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!selectedFichaClienteId}
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-all disabled:opacity-50"
-                          >
-                            <span className="truncate">
-                              {selectedFichaSitioId
-                                ? clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
-                                : "Seleccionar Sitio..."}
-                            </span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
-                          <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
-                            <CommandInput placeholder="Buscar sitio" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
-                            <CommandList>
-                              <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún sitio.</CommandEmpty>
-                              <CommandGroup className="p-1.5">
-                                {clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.map((s: any) => (
-                                  <CommandItem
-                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                    key={s.id}
-                                    value={s.nombre}
-                                    onSelect={() => {
-                                      setSelectedFichaSitioId(s.id);
-                                      setOpenFichaSitio(false);
-                                    }}
-                                    className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-[#E5222D]"
-                                  >
-                                    <Check className={cn("mr-2 h-4 w-4 shrink-0 text-[#E5222D]", selectedFichaSitioId === s.id ? "opacity-100" : "opacity-0")} />
-                                    {s.nombre}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                      <select
+                        value={selectedFichaSitioId}
+                        onChange={e => setSelectedFichaSitioId(e.target.value)}
+                        disabled={!selectedFichaClienteId}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all disabled:opacity-50"
+                      >
+                        <option value="">Seleccionar Sitio...</option>
+                        {clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.nombre}</option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Folio OC */}
@@ -896,91 +838,31 @@ export default function R4RentasPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente</label>
-                          <Popover open={openCliente} onOpenChange={setOpenCliente}>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-colors"
-                              >
-                                <span className="truncate">
-                                  {newRentaFormData.cliente_id
-                                    ? clientesDisponibles.find((c) => c.id === newRentaFormData.cliente_id)?.razonSocial
-                                    : "Seleccionar Cliente..."}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
-                              <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
-                                <CommandInput placeholder="Buscar cliente" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
-                                <CommandList>
-                                  <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún cliente.</CommandEmpty>
-                                  <CommandGroup className="p-1.5">
-                                    {clientesDisponibles.map((c) => (
-                                      <CommandItem
-                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                        key={c.id}
-                                        value={c.razonSocial}
-                                        onSelect={() => {
-                                          setNewRentaFormData({ ...newRentaFormData, cliente_id: c.id, sitio_id: '' });
-                                          setOpenCliente(false);
-                                        }}
-                                        className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-red-700"
-                                      >
-                                        <Check className={cn("mr-2 h-4 w-4 shrink-0 text-red-600", newRentaFormData.cliente_id === c.id ? "opacity-100" : "opacity-0")} />
-                                        {c.razonSocial}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
+                          <select
+                            value={newRentaFormData.cliente_id}
+                            onChange={e => setNewRentaFormData(prev => ({ ...prev, cliente_id: e.target.value, sitio_id: '' }))}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                          >
+                            <option value="">Seleccionar Cliente...</option>
+                            {clientesDisponibles.map((c) => (
+                              <option key={c.id} value={c.id}>{c.razonSocial}</option>
+                            ))}
+                          </select>
                         </div>
 
                         <div className="space-y-2">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio</label>
-                          <Popover open={openSitio} onOpenChange={setOpenSitio}>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                disabled={!newRentaFormData.cliente_id}
-                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
-                              >
-                                <span className="truncate">
-                                  {newRentaFormData.sitio_id
-                                    ? selectedClienteObj?.sitios?.find((s: any) => s.id === newRentaFormData.sitio_id)?.nombre
-                                    : "Seleccionar Sitio..."}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
-                              <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
-                                <CommandInput placeholder="Buscar sitio" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
-                                <CommandList>
-                                  <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún sitio.</CommandEmpty>
-                                  <CommandGroup className="p-1.5">
-                                    {selectedClienteObj?.sitios?.map((s: any) => (
-                                      <CommandItem
-                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                        key={s.id}
-                                        value={s.nombre}
-                                        onSelect={() => {
-                                          setNewRentaFormData({ ...newRentaFormData, sitio_id: s.id });
-                                          setOpenSitio(false);
-                                        }}
-                                        className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-red-700"
-                                      >
-                                        <Check className={cn("mr-2 h-4 w-4 shrink-0 text-red-600", newRentaFormData.sitio_id === s.id ? "opacity-100" : "opacity-0")} />
-                                        {s.nombre}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
+                          <select
+                            value={newRentaFormData.sitio_id}
+                            onChange={e => setNewRentaFormData(prev => ({ ...prev, sitio_id: e.target.value }))}
+                            disabled={!newRentaFormData.cliente_id}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
+                          >
+                            <option value="">Seleccionar Sitio...</option>
+                            {selectedClienteObj?.sitios?.map((s: any) => (
+                              <option key={s.id} value={s.id}>{s.nombre}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
@@ -1082,47 +964,20 @@ export default function R4RentasPage() {
 
                       <div className="space-y-2 mb-4">
                         <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Asignar Equipo (Serie)</label>
-                        <Popover open={openEquipo} onOpenChange={setOpenEquipo}>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:border-red-500 transition-colors"
-                            >
-                              <span className="truncate">
-                                {newRentaFormData.activo_id
-                                  ? (equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.serie + (equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.modelo ? ` - ${equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.modelo}` : ''))
-                                  : "Seleccionar Equipo..."}
-                              </span>
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-2 border-slate-100 shadow-xl bg-white overflow-hidden" align="start">
-                            <Command className="bg-transparent [&_[cmdk-input-wrapper]]:border-b-2 [&_[cmdk-input-wrapper]]:border-slate-100 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:font-bold [&_[cmdk-input]]:text-slate-700">
-                              <CommandInput placeholder="Buscar equipo" className="border-none focus:ring-0 outline-none shadow-none bg-transparent" />
-                              <CommandList>
-                                <CommandEmpty className="py-6 text-center text-sm font-bold text-slate-500">No se encontró ningún equipo.</CommandEmpty>
-                                <CommandGroup className="p-1.5">
-                                  {equiposDisponibles.map((e) => (
-                                      <CommandItem
-                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                        key={e.id}
-                                        value={`${e.serie} ${e.modelo || ''}`}
-                                        onSelect={() => {
-                                          const assetPrice = equiposDisponibles.find(eq => eq.id === e.id)?.renta_precio || 0;
-                                          setNewRentaFormData({ ...newRentaFormData, activo_id: e.id, renta_base: assetPrice.toString() });
-                                          setOpenEquipo(false);
-                                        }}
-                                      className="rounded-xl mb-1 last:mb-0 cursor-pointer font-bold text-slate-600 aria-selected:bg-red-50 aria-selected:text-red-700"
-                                    >
-                                      <Check className={cn("mr-2 h-4 w-4 shrink-0 text-red-600", newRentaFormData.activo_id === e.id ? "opacity-100" : "opacity-0")} />
-                                      {e.serie} {e.modelo ? `- ${e.modelo}` : ''}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                        <select
+                          value={newRentaFormData.activo_id}
+                          onChange={e => {
+                            const val = e.target.value;
+                            const assetPrice = equiposDisponibles.find(eq => eq.id === val)?.renta_precio || 0;
+                            setNewRentaFormData(prev => ({ ...prev, activo_id: val, renta_base: assetPrice.toString() }));
+                          }}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                        >
+                          <option value="">Seleccionar Equipo...</option>
+                          {equiposDisponibles.map((e) => (
+                            <option key={e.id} value={e.id}>{e.serie} {e.modelo ? `- ${e.modelo}` : ''}</option>
+                          ))}
+                        </select>
                       </div>
 
                       <div className="space-y-2">
