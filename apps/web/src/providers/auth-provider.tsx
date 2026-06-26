@@ -11,17 +11,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         // Restore session on mount
         restoreSession();
 
-        // Check if this is a page reload
-        const isReload = window.performance
-            .getEntriesByType('navigation')
-            .map((nav) => (nav as PerformanceNavigationTiming).type)
-            .includes('reload');
-
-        if (isReload) {
-            console.log('[AuthProvider] Reload detected, forcing logout...');
-            signOut();
-        }
-
         // Add confirmation dialog before reload/close
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             // Standard confirmation message
@@ -35,7 +24,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
-    }, [restoreSession, signOut]);
+    }, [restoreSession]);
 
     return <>{children}</>;
 }
