@@ -24,7 +24,7 @@ api.interceptors.request.use(
                     const orgStore = require('@/store/organization.store').useOrganizationStore.getState();
                     orgId = orgStore.currentOrganization?.id;
 
-                    // FALLBACK: If store doesn't have orgId yet, try to get it from JWT token
+                    // FALLBACK 1: If store doesn't have orgId yet, try to get it from JWT token
                     // This only happens during initial page load, before organization is loaded into store
                     if (!orgId && token) {
                         try {
@@ -40,6 +40,23 @@ api.interceptors.request.use(
                             // Ignore JWT parsing errors
                         }
                     }
+
+                    // FALLBACK 2: If still no orgId, try user object in localStorage
+                    if (!orgId) {
+                        try {
+                            const userStr = localStorage.getItem('user');
+                            if (userStr && userStr !== 'null' && userStr !== 'undefined') {
+                                const userObj = JSON.parse(userStr);
+                                const userOrgId = userObj.organizationId || userObj.organization_id;
+                                if (userOrgId && userOrgId !== 'null' && userOrgId !== 'undefined') {
+                                    orgId = userOrgId;
+                                    console.log('[API] Using orgId from user localStorage (ultimate fallback)');
+                                }
+                            }
+                        } catch (e) {
+                            // Ignore
+                        }
+                    }
                 } catch (e) {
                     // If store not available, try JWT fallback
                     console.warn('[API] Could not access organization store, trying JWT fallback:', e);
@@ -53,6 +70,21 @@ api.interceptors.request.use(
                         }
                     } catch (parseError) {
                         // Ignore
+                    }
+                    // FALLBACK 2 (store exception): user localStorage
+                    if (!orgId) {
+                        try {
+                            const userStr = localStorage.getItem('user');
+                            if (userStr && userStr !== 'null' && userStr !== 'undefined') {
+                                const userObj = JSON.parse(userStr);
+                                const userOrgId = userObj.organizationId || userObj.organization_id;
+                                if (userOrgId && userOrgId !== 'null' && userOrgId !== 'undefined') {
+                                    orgId = userOrgId;
+                                }
+                            }
+                        } catch (parseError) {
+                            // Ignore
+                        }
                     }
                 }
 
