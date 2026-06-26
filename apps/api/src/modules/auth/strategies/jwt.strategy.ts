@@ -63,11 +63,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             }
             throw new UnauthorizedException('User has no organization assigned');
         } else if (!isSuperadmin && user.organization_id !== payload.orgId) {
-            // Regular user org must match token org
-            if (process.env.NODE_ENV === 'development') {
-                console.log(`[JwtStrategy] Org mismatch. User: ${user.organization_id}, Token: ${payload.orgId}`);
+            // Special case: isTaller tokens don't carry orgId in the payload.
+            // If orgId is missing from the token but the user has an assigned organization
+            // in the database, trust the DB value and allow the request.
+            if (!payload.orgId && user.organization_id) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[JwtStrategy] Token has no orgId (isTaller token). Trusting user org from DB: ${user.organization_id}`);
+                }
+                // Allow through - organization_id will be taken from user record below
+            } else {
+                // Regular user org must match token org
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[JwtStrategy] Org mismatch. User: ${user.organization_id}, Token: ${payload.orgId}`);
+                }
+                throw new UnauthorizedException('Organization context mismatch');
             }
-            throw new UnauthorizedException('Organization context mismatch');
         }
 
         // 4. Return full context for Request
