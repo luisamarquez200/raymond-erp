@@ -143,7 +143,7 @@ model audit_logs {
   details    Json?
   status     String   @default("SUCCESS")
   created_at DateTime @default(now())
-  user       users?   @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  user       users?   @relation(fields: [user_id], references: [id])
 
   @@index([action])
   @@index([created_at])
@@ -170,28 +170,28 @@ model categories {
 }
 
 model clients {
-  id                  String                @id
-  run_cliente         String?
-  nombre              String
-  rfc                 String?
-  direccion           String?
-  telefono            String?
-  country_code        String?               @default("52")
-  email               String?
-  contacto            String?
-  is_active           Boolean               @default(true)
-  legacy_client_id    Int?                  @unique
-  organization_id     String
-  created_at          DateTime              @default(now())
-  updated_at          DateTime
-  accounts_receivable accounts_receivable[]
-  organizations       organizations         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  flow_recoveries     flow_recoveries[]
-  invoices            invoices[]
-  projects            projects[]
-  quotes              quotes[]
-  recoveries          recoveries[]
-  converted_from_prospect prospects?        @relation("ProspectToClient")
+  id                      String                @id
+  run_cliente             String?
+  nombre                  String
+  rfc                     String?
+  direccion               String?
+  telefono                String?
+  country_code            String?               @default("52")
+  email                   String?
+  contacto                String?
+  is_active               Boolean               @default(true)
+  legacy_client_id        Int?                  @unique
+  organization_id         String
+  created_at              DateTime              @default(now())
+  updated_at              DateTime
+  accounts_receivable     accounts_receivable[]
+  organizations           organizations         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  flow_recoveries         flow_recoveries[]
+  invoices                invoices[]
+  projects                projects[]
+  converted_from_prospect prospects?            @relation("ProspectToClient")
+  quotes                  quotes[]
+  recoveries              recoveries[]
 
   @@index([is_active])
   @@index([legacy_client_id])
@@ -200,29 +200,29 @@ model clients {
 }
 
 model prospects {
-  id                    String          @id @default(uuid())
-  nombre                String
-  rfc                   String?
-  direccion             String?
-  telefono              String?
-  country_code          String?         @default("52")
-  email                 String?
-  contacto              String?
-  status                ProspectStatus  @default(NEW)
-  source                String?
-  estimated_value       Decimal?
-  probability           Int?
-  expected_close_date   DateTime?
-  notes                 String?
-  assigned_to_id        String?
-  converted_to_client_id String?       @unique
-  converted_at          DateTime?
-  organization_id       String
-  created_at            DateTime        @default(now())
-  updated_at            DateTime        @default(now())
-  organizations         organizations   @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  assigned_to           users?          @relation("ProspectAssignedTo", fields: [assigned_to_id], references: [id])
-  converted_to_client   clients?        @relation("ProspectToClient", fields: [converted_to_client_id], references: [id])
+  id                     String         @id @default(uuid())
+  nombre                 String
+  rfc                    String?
+  direccion              String?
+  telefono               String?
+  country_code           String?        @default("52")
+  email                  String?
+  contacto               String?
+  status                 ProspectStatus @default(NEW)
+  source                 String?
+  estimated_value        Decimal?
+  probability            Int?
+  expected_close_date    DateTime?
+  notes                  String?
+  assigned_to_id         String?
+  converted_to_client_id String?        @unique
+  converted_at           DateTime?
+  organization_id        String
+  created_at             DateTime       @default(now())
+  updated_at             DateTime       @default(now())
+  assigned_to            users?         @relation("ProspectAssignedTo", fields: [assigned_to_id], references: [id])
+  converted_to_client    clients?       @relation("ProspectToClient", fields: [converted_to_client_id], references: [id])
+  organizations          organizations  @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@index([organization_id])
   @@index([status])
@@ -278,9 +278,9 @@ model dispatches {
   updated_at           DateTime
   dispatch_attachments dispatch_attachments[]
   organizations        organizations          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  tasks                tasks?                 @relation(fields: [task_id], references: [id])
-  sender               users                  @relation("DispatchSender", fields: [sender_id], references: [id], onDelete: Cascade)
   recipient            users                  @relation("DispatchRecipient", fields: [recipient_id], references: [id], onDelete: Cascade)
+  sender               users                  @relation("DispatchSender", fields: [sender_id], references: [id], onDelete: Cascade)
+  tasks                tasks?                 @relation(fields: [task_id], references: [id])
 
   @@index([created_at])
   @@index([organization_id])
@@ -446,11 +446,11 @@ model organizations {
   is_active            Boolean                @default(true)
   created_at           DateTime               @default(now())
   updated_at           DateTime
-  logo_url             String?                // Organization logo (base64 or URL)
-  logo_zoom            Float?                 @default(1.0) // Logo zoom/scale (0.5 - 2.0)
-  primary_color        String?                // Primary brand color (hex)
-  secondary_color      String?                // Secondary brand color (hex)
-  accent_color         String?                // Accent brand color (hex)
+  logo_url             String?
+  logo_zoom            Float?                 @default(1.0)
+  primary_color        String?
+  secondary_color      String?
+  accent_color         String?
   accounts             accounts[]
   accounts_payable     accounts_payable[]
   accounts_receivable  accounts_receivable[]
@@ -462,10 +462,12 @@ model organizations {
   flow_recoveries      flow_recoveries[]
   invoices             invoices[]
   journal_entries      journal_entries[]
+  notifications        notifications[]
   organization_modules organization_modules[]
   payment_complements  payment_complements[]
   phases               phases[]
   projects             projects[]
+  prospects            prospects[]
   purchase_orders      purchase_orders[]
   quotes               quotes[]
   recoveries           recoveries[]
@@ -474,8 +476,6 @@ model organizations {
   suppliers            suppliers[]
   users                users[]
   webhooks             webhooks[]
-  notifications        notifications[]
-  prospects            prospects[]
 }
 
 model password_reset_tokens {
@@ -516,14 +516,14 @@ model payment_complements {
 }
 
 model permissions {
-  id                  String             @id
-  resource            String
-  action              String
-  description         String?
-  is_superadmin_only  Boolean            @default(false)
-  created_at          DateTime           @default(now())
-  updated_at          DateTime
-  role_permissions    role_permissions[]
+  id                 String             @id
+  resource           String
+  action             String
+  description        String?
+  is_superadmin_only Boolean            @default(false)
+  created_at         DateTime           @default(now())
+  updated_at         DateTime
+  role_permissions   role_permissions[]
 
   @@unique([resource, action])
   @@index([is_superadmin_only])
@@ -814,11 +814,11 @@ model tasks {
   attachments        attachments[]
   comments           comments[]
   dispatches         dispatches?
+  assignee           users?         @relation("TaskAssignee", fields: [assignee_id], references: [id])
   projects           projects       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  reporter           users          @relation("TaskReporter", fields: [reporter_id], references: [id])
   sprints            sprints?       @relation(fields: [sprint_id], references: [id])
   time_entries       time_entries[]
-  assignee           users?         @relation("TaskAssignee", fields: [assignee_id], references: [id])
-  reporter           users          @relation("TaskReporter", fields: [reporter_id], references: [id])
 
   @@index([assignee_id])
   @@index([organization_id])
@@ -862,31 +862,31 @@ model users {
   is_active             Boolean                 @default(true)
   avatar_url            String?
   last_login_at         DateTime?
-  organization_id       String?                 // CRITICAL: Nullable for SuperAdmin global
+  organization_id       String?
   role_id               String
-  ubicacion             String?                 // E.g., R1, R2, R3, Taller
   created_at            DateTime                @default(now())
   updated_at            DateTime
   deleted_at            DateTime?
   firebase_uid          String?                 @unique
   legacy_user_id        Int?                    @unique
+  ubicacion             String?
   api_keys              api_keys[]
+  audit_logs            audit_logs[]
   comments              comments[]
-  expenses              expenses[]
-  password_reset_tokens password_reset_tokens[]
-  purchase_orders       purchase_orders[]
-  time_entries          time_entries[]
-  sent_dispatches       dispatches[]            @relation("DispatchSender")
   received_dispatches   dispatches[]            @relation("DispatchRecipient")
+  sent_dispatches       dispatches[]            @relation("DispatchSender")
+  expenses              expenses[]
+  notifications         notifications[]
+  password_reset_tokens password_reset_tokens[]
+  assigned_prospects    prospects[]             @relation("ProspectAssignedTo")
+  purchase_orders       purchase_orders[]
+  assignedTasks         tasks[]                 @relation("TaskAssignee")
+  reportedTasks         tasks[]                 @relation("TaskReporter")
+  time_entries          time_entries[]
   organizations         organizations?          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   roles                 roles                   @relation(fields: [role_id], references: [id])
   projects              projects[]              @relation("ProjectMembers")
   sprints               sprints[]               @relation("SprintMembers")
-  assignedTasks         tasks[]                 @relation("TaskAssignee")
-  reportedTasks         tasks[]                 @relation("TaskReporter")
-  notifications         notifications[]
-  assigned_prospects    prospects[]             @relation("ProspectAssignedTo")
-  audit_logs            audit_logs[]
 
   @@unique([email, organization_id])
   @@index([email])
@@ -910,6 +910,29 @@ model webhooks {
   @@index([event])
   @@index([is_active])
   @@index([organization_id])
+}
+
+model notifications {
+  id              String           @id @default(uuid())
+  user_id         String
+  title           String
+  message         String
+  type            NotificationType @default(INFO)
+  read            Boolean          @default(false)
+  read_at         DateTime?
+  link            String?
+  metadata        Json?
+  organization_id String?
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @default(now())
+  organizations   organizations?   @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  users           users            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([read])
+  @@index([created_at])
+  @@index([organization_id])
+  @@index([type])
 }
 
 enum AccountType {
@@ -1020,29 +1043,6 @@ enum UrgencyLevel {
   CRITICAL
 }
 
-model notifications {
-  id              String             @id @default(uuid())
-  user_id         String
-  title           String
-  message         String
-  type            NotificationType   @default(INFO)
-  read            Boolean            @default(false)
-  read_at         DateTime?
-  link            String?
-  metadata        Json?
-  organization_id String?
-  created_at      DateTime           @default(now())
-  updated_at      DateTime           @default(now())
-  users           users              @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  organizations   organizations?     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id])
-  @@index([read])
-  @@index([created_at])
-  @@index([organization_id])
-  @@index([type])
-}
-
 enum NotificationType {
   INFO
   SUCCESS
@@ -1102,5 +1102,3 @@ enum ProspectStatus {
   WON
   LOST
 }
-
-

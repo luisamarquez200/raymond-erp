@@ -12,7 +12,8 @@ import {
     AlertCircle,
     Truck,
     Receipt,
-    CircleDollarSign
+    CircleDollarSign,
+    Users
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
@@ -49,6 +50,11 @@ const menuItems = [
         label: 'Rentas',
         icon: Receipt,
         href: '/es/r4/rentas',
+    },
+    {
+        label: 'Gestión ADCs',
+        icon: Users,
+        href: '/es/r4/adcs',
     }
 ];
 
@@ -108,7 +114,12 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
             {/* Navigation */}
             <nav className="flex-1 overflow-y-auto py-4">
                 <ul className="space-y-1 px-2">
-                    {menuItems.map((item) => {
+                    {menuItems.filter(item => {
+                        if (item.label === 'Gestión ADCs') {
+                            return user?.role?.toLowerCase() === 'administrador' || user?.isSuperadmin;
+                        }
+                        return true;
+                    }).map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
 

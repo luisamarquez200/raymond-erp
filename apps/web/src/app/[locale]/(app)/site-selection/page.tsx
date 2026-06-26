@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuthTallerStore } from '@/store/auth-taller.store';
+import { useAuthStore } from '@/store/auth.store';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
@@ -8,44 +9,14 @@ import { Building2, Factory, Warehouse, ChevronRight, FileSpreadsheet, LayoutDas
 import { toast } from 'sonner';
 
 export default function SiteSelectionPage() {
-    const { user, setSelectedSite } = useAuthTallerStore();
+    const { user: tallerUser, setSelectedSite } = useAuthTallerStore();
+    const { user: mainUser } = useAuthStore();
+    const user = tallerUser || mainUser;
+
     const router = useRouter();
 
     // Mapping code to display names and descriptions
     const siteOptions = [
-        {
-            id: 'r1',
-            code: 'R1',
-            name: 'R1 - Taller',
-            description: 'Gestión de taller y reparaciones principales.',
-            icon: Building2,
-            color: 'from-red-500 to-red-700',
-            borderColor: 'border-red-100',
-            bgLight: 'bg-red-50',
-            isUpcoming: false,
-
-        },
-        {
-            id: 'r2',
-            code: 'R2',
-            name: 'R2 - Naves (Próximamente)',
-            description: 'Control de inventario y activos en Planta (Naves). Estará disponible pronto.',
-            icon: Factory,
-            color: 'from-blue-600 to-blue-800',
-            borderColor: 'border-blue-100',
-            bgLight: 'bg-blue-50',
-            isUpcoming: false,
-        },
-        {
-            id: 'r3',
-            code: 'R3',
-            name: 'R3 - Frontera',
-            description: 'Operaciones y logística en zona Frontera.',
-            icon: Warehouse,
-            color: 'from-emerald-600 to-emerald-800',
-            borderColor: 'border-emerald-100',
-            bgLight: 'bg-emerald-50',
-        },
         {
             id: 'r4',
             code: 'R4',
@@ -145,7 +116,7 @@ export default function SiteSelectionPage() {
                         Selecciona un Centro de Control
                     </h1>
                     <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                        Bienvenido, <span className="font-semibold text-gray-900">{user.username}</span>.
+                        Bienvenido, <span className="font-semibold text-gray-900">{user.username || (user as any).firstName}</span>.
                         Por favor selecciona el sitio con el que deseas trabajar hoy.
                     </p>
                 </div>

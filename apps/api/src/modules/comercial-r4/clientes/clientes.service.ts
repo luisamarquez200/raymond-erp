@@ -16,7 +16,7 @@ export class ClientesService {
         return db;
     }
 
-    async obtenerClientes() {
+    async obtenerClientes(user?: any) {
         try {
             const db = this.getDb();
 
@@ -30,7 +30,7 @@ export class ClientesService {
                 orderBy: { created_at: 'desc' }
             });
 
-            return clientes.map(cliente => {
+            let mapped = clientes.map(cliente => {
                 const comercial = (cliente.datos_comerciales as any) || {};
                 const fiscal = (cliente.datos_fiscales as any) || {};
                 return {
@@ -63,6 +63,16 @@ export class ClientesService {
                     })
                 };
             });
+
+            if (user?.roles === 'ADC' && user?.first_name) {
+                const target = user.first_name.toLowerCase();
+                mapped = mapped.filter(c => {
+                    const cAdc = (c.adc || '').toLowerCase();
+                    return cAdc.includes(target);
+                });
+            }
+
+            return mapped;
         } catch (error: any) {
             this.logger.error(`Error en obtenerClientes: ${error.message}`);
             throw error;

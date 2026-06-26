@@ -34,7 +34,8 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
                 const hasR4Access = user.isSuperadmin || 
                     (user.role?.toLowerCase() === 'administrador' && (user as any).sitio?.includes('R4')) ||
                     (user as any).sitio?.includes('R4') ||
-                    user.role?.includes('R4');
+                    user.role?.includes('R4') ||
+                    user.role?.toUpperCase() === 'ADC';
                 
                 if (!hasR4Access) {
                     const locale = params.locale || 'es';

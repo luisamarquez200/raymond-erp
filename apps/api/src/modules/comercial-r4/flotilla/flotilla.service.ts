@@ -29,10 +29,18 @@ export class FlotillaService {
         return estatus;
     }
 
-    async obtenerFlotilla() {
+    async obtenerFlotilla(user?: any) {
         try {
             const db = this.getDb();
+            
+            let whereClause = {};
+            if (user?.roles === 'ADC' && user?.first_name) {
+                const fullName = `${user.first_name} ${user.last_name || ''}`.trim();
+                whereClause = { adc: { contains: user.first_name } };
+            }
+            
             const activos = await db.activo.findMany({
+                where: whereClause,
                 include: {
                     cliente: true,
                     sitio: true,

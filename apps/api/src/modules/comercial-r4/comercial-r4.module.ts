@@ -10,6 +10,9 @@ import { DashboardService } from './dashboard/dashboard.service';
 import { OrdenesController } from './ordenes/ordenes.controller';
 import { OrdenesService } from './ordenes/ordenes.service';
 import { PrismaDynamicService } from '../../database/prisma-dynamic.service';
+import { AdcsController } from './adcs/adcs.controller';
+import { AdcsService } from './adcs/adcs.service';
+import { PrismaService } from '../../database/prisma.service';
 
 @Module({
     imports: [
@@ -21,13 +24,16 @@ import { PrismaDynamicService } from '../../database/prisma-dynamic.service';
     controllers: [
         FlotillaController,
         DashboardController,
-        OrdenesController
+        OrdenesController,
+        AdcsController
     ],
     providers: [
         FlotillaService,
         DashboardService,
         OrdenesService,
-        PrismaDynamicService
+        PrismaDynamicService,
+        AdcsService,
+        PrismaService
     ]
 })
 export class ComercialR4Module {}

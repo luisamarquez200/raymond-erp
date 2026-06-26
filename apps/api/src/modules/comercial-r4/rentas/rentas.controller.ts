@@ -16,30 +16,13 @@ export class RentasController {
     constructor(private readonly rentasService: RentasService) { }
 
     @Get()
-    // @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard)
     async getRentas(@Req() req: any, @Res() res: Response) {
         try {
-            const role = req.user?.roles;
-            let adcName = undefined;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                const db = PrismaDynamicService.clients.r1;
-                if (db && req.user?.id) {
-                    try {
-                        const userObj = await db.usuarios.findUnique({ where: { IDUsuarios: req.user.id } });
-                        adcName = userObj?.Usuario || req.user.email?.split('@')[0];
-                    } catch (e) {
-                        console.error('Error fetching ADC user details', e);
-                        adcName = req.user.email?.split('@')[0];
-                    }
-                } else {
-                    adcName = req.user?.email?.split('@')[0];
-                }
-            }
-            const data = await this.rentasService.obtenerRentas(role, adcName);
+            const data = await this.rentasService.obtenerRentas(req.user);
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
             console.error('CRITICAL ERROR in getRentas:', error);
-            console.error(error.stack);
             return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }

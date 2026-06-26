@@ -56,7 +56,7 @@ async function bootstrap() {
         },
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
         credentials: true,
-        allowedHeaders: 'Content-Type, Accept, Authorization, x-site-id, x-taller-username',
+        allowedHeaders: 'Content-Type, Accept, Authorization, x-site-id, x-taller-username, x-org-id',
         exposedHeaders: ['Authorization', 'x-org-id', 'x-site-id'],
     });
 

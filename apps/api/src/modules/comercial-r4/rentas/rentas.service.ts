@@ -64,7 +64,7 @@ export class RentasService {
         };
     }
 
-    async obtenerRentas(role?: string, adcName?: string) {
+    async obtenerRentas(user?: any) {
         try {
             const db = this.getDb();
             const rentas = await db.renta.findMany({
@@ -82,14 +82,14 @@ export class RentasService {
             
             let mapped = rentas.map(r => this.mapRenta(r));
 
-            if (role?.toUpperCase() === 'ADMINISTRADOR' && adcName) {
-                const target = adcName.toLowerCase();
+            if (user?.roles === 'ADC' && user?.first_name) {
+                const target = user.first_name.toLowerCase();
                 mapped = mapped.filter(r => {
                     const rAdc = (r.adc || '').toLowerCase();
                     const clientComercial = (r.cliente?.datos_comerciales as any) || {};
                     const clientAdc = (clientComercial.adc || '').toLowerCase();
                     const siteAdc = (r.sitio?.adc || '').toLowerCase();
-                    return rAdc.includes(target) || clientAdc.includes(target) || siteAdc.includes(target) || target.includes(rAdc) || target.includes(clientAdc);
+                    return rAdc.includes(target) || clientAdc.includes(target) || siteAdc.includes(target);
                 });
             }
 
