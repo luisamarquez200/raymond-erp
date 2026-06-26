@@ -116,7 +116,7 @@ export default function SiteSelectionPage() {
                         Selecciona un Centro de Control
                     </h1>
                     <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                        Bienvenido, <span className="font-semibold text-gray-900">{user.username || (user as any).firstName}</span>.
+                        Bienvenido, <span className="font-semibold text-gray-900">{(user as any).username || (user as any).firstName}</span>.
                         Por favor selecciona el sitio con el que deseas trabajar hoy.
                     </p>
                 </div>
