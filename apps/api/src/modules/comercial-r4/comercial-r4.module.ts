@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { ActivosModule } from './activos/activos.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { RentasModule } from './rentas/rentas.module';
@@ -36,4 +36,8 @@ import { PrismaService } from '../../database/prisma.service';
         PrismaService
     ]
 })
-export class ComercialR4Module {}
+export class ComercialR4Module implements OnModuleInit {
+    async onModuleInit() {
+        await PrismaDynamicService.ensureClientsInitialized();
+    }
+}

@@ -6,7 +6,8 @@ import {
     DialogContent, 
     DialogHeader, 
     DialogTitle,
-    DialogFooter
+    DialogFooter,
+    DialogDescription
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +59,9 @@ export function CrearUsuarioAdcModal({ isOpen, onClose, adcName, onSuccess }: Cr
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Crear Usuario para {adcName}</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Completa los datos para crear un nuevo usuario ADC.
+                    </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 pt-4">
                     <div className="space-y-2">

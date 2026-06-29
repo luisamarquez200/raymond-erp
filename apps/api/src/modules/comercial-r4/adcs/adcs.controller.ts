@@ -12,7 +12,8 @@ export class AdcsController {
     async getAdcs(@Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
-            if (role?.toUpperCase() !== 'ADMINISTRADOR' && role?.toUpperCase() !== 'SUPERADMIN') {
+            const userRole = typeof role === 'string' ? role.toUpperCase() : '';
+            if (userRole !== 'ADMINISTRADOR' && userRole !== 'SUPERADMIN') {
                 throw new ForbiddenException('Solo los administradores pueden ver la lista de ADCs');
             }
             const data = await this.adcsService.obtenerTodos();
@@ -27,7 +28,8 @@ export class AdcsController {
     async crearUsuarioAdc(@Body() body: any, @Req() req: any, @Res() res: Response) {
         try {
             const role = req.user?.roles;
-            if (role?.toUpperCase() !== 'ADMINISTRADOR' && role?.toUpperCase() !== 'SUPERADMIN') {
+            const userRole = typeof role === 'string' ? role.toUpperCase() : '';
+            if (userRole !== 'ADMINISTRADOR' && userRole !== 'SUPERADMIN') {
                 throw new ForbiddenException('Solo los administradores pueden crear usuarios ADC');
             }
             if (!body.name || !body.email || !body.password) {
