@@ -57,6 +57,14 @@ export default function R4RentasPage() {
   const [openCliente, setOpenCliente] = useState(false);
   const [openSitio, setOpenSitio] = useState(false);
   const [openEquipo, setOpenEquipo] = useState(false);
+  const [openTipoRenta, setOpenTipoRenta] = useState(false);
+  const [openMoneda, setOpenMoneda] = useState(false);
+  const [equipoSearchTerm, setEquipoSearchTerm] = useState('');
+  const [clienteSearchTerm, setClienteSearchTerm] = useState('');
+  const [sitioSearchTerm, setSitioSearchTerm] = useState('');
+
+  const [fichaClienteSearchTerm, setFichaClienteSearchTerm] = useState('');
+  const [fichaSitioSearchTerm, setFichaSitioSearchTerm] = useState('');
   const selectedClienteObj = clientesDisponibles.find(c => c.id === newRentaFormData.cliente_id);
 
   const openEditModal = (renta: any) => {
@@ -179,7 +187,7 @@ export default function R4RentasPage() {
         detalles: {
           tipo_renta: newRentaFormData.tipo_renta,
           moneda: newRentaFormData.moneda,
-          mes_cobro: newRentaFormData.mes_cobertura || null,
+          mes_cobro: null,
           renta_base: Number(newRentaFormData.renta_base) || 0,
           mantenimiento: newRentaFormData.mantenimiento,
           comentarios: newRentaFormData.comentarios
@@ -581,37 +589,103 @@ export default function R4RentasPage() {
                 <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {/* Cliente select */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 relative">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente *</label>
-                      <select
-                        value={selectedFichaClienteId}
-                        onChange={e => {
-                          setSelectedFichaClienteId(e.target.value);
-                          setSelectedFichaSitioId('');
-                        }}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
+                      <button
+                        type="button"
+                        onClick={() => setOpenFichaCliente(!openFichaCliente)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
                       >
-                        <option value="">Seleccionar Cliente...</option>
-                        {clientesDisponibles.map((c) => (
-                          <option key={c.id} value={c.id}>{c.razonSocial}</option>
-                        ))}
-                      </select>
+                        {selectedFichaClienteId
+                          ? clientesDisponibles.find((c) => c.id === selectedFichaClienteId)?.razonSocial
+                          : "Seleccionar Cliente..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </button>
+                      
+                      {openFichaCliente && (
+                        <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                          <div className="relative mb-2">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Buscar cliente..."
+                              value={fichaClienteSearchTerm}
+                              onChange={(e) => setFichaClienteSearchTerm(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                            />
+                          </div>
+                          <div className="max-h-[200px] overflow-y-auto space-y-1">
+                            {clientesDisponibles
+                              .filter(c => c.razonSocial?.toLowerCase().includes(fichaClienteSearchTerm.toLowerCase()))
+                              .map(c => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedFichaClienteId(c.id);
+                                    setSelectedFichaSitioId('');
+                                    setOpenFichaCliente(false);
+                                    setFichaClienteSearchTerm('');
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                >
+                                  <span>{c.razonSocial}</span>
+                                  {selectedFichaClienteId === c.id && <Check className="w-4 h-4 text-red-600" />}
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Sitio select */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 relative">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio *</label>
-                      <select
-                        value={selectedFichaSitioId}
-                        onChange={e => setSelectedFichaSitioId(e.target.value)}
+                      <button
+                        type="button"
                         disabled={!selectedFichaClienteId}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all disabled:opacity-50"
+                        onClick={() => setOpenFichaSitio(!openFichaSitio)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
                       >
-                        <option value="">Seleccionar Sitio...</option>
-                        {clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.map((s: any) => (
-                          <option key={s.id} value={s.id}>{s.nombre}</option>
-                        ))}
-                      </select>
+                        {selectedFichaSitioId
+                          ? clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
+                          : "Seleccionar Sitio..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </button>
+                      
+                      {openFichaSitio && (
+                        <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                          <div className="relative mb-2">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Buscar sitio..."
+                              value={fichaSitioSearchTerm}
+                              onChange={(e) => setFichaSitioSearchTerm(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                            />
+                          </div>
+                          <div className="max-h-[200px] overflow-y-auto space-y-1">
+                            {clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios
+                              ?.filter((s: any) => s.nombre?.toLowerCase().includes(fichaSitioSearchTerm.toLowerCase()))
+                              .map((s: any) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedFichaSitioId(s.id);
+                                    setOpenFichaSitio(false);
+                                    setFichaSitioSearchTerm('');
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                >
+                                  <span>{s.nombre}</span>
+                                  {selectedFichaSitioId === s.id && <Check className="w-4 h-4 text-red-600" />}
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Folio OC */}
@@ -650,14 +724,13 @@ export default function R4RentasPage() {
                       />
                     </div>
 
-                    {/* Mes de Cobro */}
+                    {/* Mes de Cobertura */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes de Cobro</label>
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes de Cobertura</label>
                       <input
-                        type="text"
+                        type="month"
                         value={fichaMesCobro}
                         onChange={e => setFichaMesCobro(e.target.value)}
-                        placeholder="Ej. Junio 2026"
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
                       />
                     </div>
@@ -836,33 +909,101 @@ export default function R4RentasPage() {
                         Datos Generales
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente</label>
-                          <select
-                            value={newRentaFormData.cliente_id}
-                            onChange={e => setNewRentaFormData(prev => ({ ...prev, cliente_id: e.target.value, sitio_id: '' }))}
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                          <button
+                            type="button"
+                            onClick={() => setOpenCliente(!openCliente)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
                           >
-                            <option value="">Seleccionar Cliente...</option>
-                            {clientesDisponibles.map((c) => (
-                              <option key={c.id} value={c.id}>{c.razonSocial}</option>
-                            ))}
-                          </select>
+                            {newRentaFormData.cliente_id
+                              ? clientesDisponibles.find((c) => c.id === newRentaFormData.cliente_id)?.razonSocial
+                              : "Seleccionar Cliente..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                          
+                          {openCliente && (
+                            <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                              <div className="relative mb-2">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="text"
+                                  placeholder="Buscar cliente..."
+                                  value={clienteSearchTerm}
+                                  onChange={(e) => setClienteSearchTerm(e.target.value)}
+                                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                                />
+                              </div>
+                              <div className="max-h-[200px] overflow-y-auto space-y-1">
+                                {clientesDisponibles
+                                  .filter(c => c.razonSocial?.toLowerCase().includes(clienteSearchTerm.toLowerCase()))
+                                  .map(c => (
+                                    <button
+                                      key={c.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setNewRentaFormData(prev => ({ ...prev, cliente_id: c.id, sitio_id: '' }));
+                                        setOpenCliente(false);
+                                        setClienteSearchTerm('');
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                    >
+                                      <span>{c.razonSocial}</span>
+                                      {newRentaFormData.cliente_id === c.id && <Check className="w-4 h-4 text-red-600" />}
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio</label>
-                          <select
-                            value={newRentaFormData.sitio_id}
-                            onChange={e => setNewRentaFormData(prev => ({ ...prev, sitio_id: e.target.value }))}
+                          <button
+                            type="button"
                             disabled={!newRentaFormData.cliente_id}
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
+                            onClick={() => setOpenSitio(!openSitio)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
                           >
-                            <option value="">Seleccionar Sitio...</option>
-                            {selectedClienteObj?.sitios?.map((s: any) => (
-                              <option key={s.id} value={s.id}>{s.nombre}</option>
-                            ))}
-                          </select>
+                            {newRentaFormData.sitio_id
+                              ? selectedClienteObj?.sitios?.find((s: any) => s.id === newRentaFormData.sitio_id)?.nombre
+                              : "Seleccionar Sitio..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                          
+                          {openSitio && (
+                            <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                              <div className="relative mb-2">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="text"
+                                  placeholder="Buscar sitio..."
+                                  value={sitioSearchTerm}
+                                  onChange={(e) => setSitioSearchTerm(e.target.value)}
+                                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                                />
+                              </div>
+                              <div className="max-h-[200px] overflow-y-auto space-y-1">
+                                {selectedClienteObj?.sitios
+                                  ?.filter((s: any) => s.nombre?.toLowerCase().includes(sitioSearchTerm.toLowerCase()))
+                                  .map((s: any) => (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setNewRentaFormData(prev => ({ ...prev, sitio_id: s.id }));
+                                        setOpenSitio(false);
+                                        setSitioSearchTerm('');
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                    >
+                                      <span>{s.nombre}</span>
+                                      {newRentaFormData.sitio_id === s.id && <Check className="w-4 h-4 text-red-600" />}
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -875,22 +1016,73 @@ export default function R4RentasPage() {
                       </h3>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tipo de Renta</label>
-                          <select value={newRentaFormData.tipo_renta} onChange={e => setNewRentaFormData({ ...newRentaFormData, tipo_renta: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors">
-                            <option value="Mensual">Mensual</option>
-                            <option value="Bimestral">Bimestral</option>
-                            <option value="Trimestral">Trimestral</option>
-                            <option value="Anual">Anual</option>
-                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setOpenTipoRenta(!openTipoRenta)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
+                          >
+                            {newRentaFormData.tipo_renta || "Seleccionar Tipo..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                          
+                          {openTipoRenta && (
+                            <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                              <div className="max-h-[200px] overflow-y-auto space-y-1">
+                                {['Mensual', 'Bimestral', 'Trimestral', 'Anual'].map((tipo) => (
+                                  <button
+                                    key={tipo}
+                                    type="button"
+                                    onClick={() => {
+                                      setNewRentaFormData(prev => ({ ...prev, tipo_renta: tipo }));
+                                      setOpenTipoRenta(false);
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                  >
+                                    <span>{tipo}</span>
+                                    {newRentaFormData.tipo_renta === tipo && <Check className="w-4 h-4 text-red-600" />}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Moneda</label>
-                          <select value={newRentaFormData.moneda} onChange={e => setNewRentaFormData({ ...newRentaFormData, moneda: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors">
-                            <option value="MXN">MXN (Pesos Mexicanos)</option>
-                            <option value="USD">USD (Dólares)</option>
-                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setOpenMoneda(!openMoneda)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
+                          >
+                            {newRentaFormData.moneda === 'MXN' ? 'MXN (Pesos Mexicanos)' : 'USD (Dólares)'}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                          
+                          {openMoneda && (
+                            <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                              <div className="space-y-1">
+                                {[
+                                  { value: 'MXN', label: 'MXN (Pesos Mexicanos)' },
+                                  { value: 'USD', label: 'USD (Dólares)' }
+                                ].map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => {
+                                      setNewRentaFormData(prev => ({ ...prev, moneda: opt.value }));
+                                      setOpenMoneda(false);
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                  >
+                                    <span>{opt.label}</span>
+                                    {newRentaFormData.moneda === opt.value && <Check className="w-4 h-4 text-red-600" />}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -951,33 +1143,81 @@ export default function R4RentasPage() {
                           />
                         </div>
 
-                        <div className="space-y-2">
-                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes de Cobertura</label>
-                          <input
-                            type="month"
-                            value={newRentaFormData.mes_cobertura}
-                            onChange={e => setNewRentaFormData({ ...newRentaFormData, mes_cobertura: e.target.value })}
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
-                          />
-                        </div>
+
                       </div>
 
-                      <div className="space-y-2 mb-4">
+                      <div className="space-y-2 mb-4 relative">
                         <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Asignar Equipo (Serie)</label>
-                        <select
-                          value={newRentaFormData.activo_id}
-                          onChange={e => {
-                            const val = e.target.value;
-                            const assetPrice = equiposDisponibles.find(eq => eq.id === val)?.renta_precio || 0;
-                            setNewRentaFormData(prev => ({ ...prev, activo_id: val, renta_base: assetPrice.toString() }));
-                          }}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                        <button
+                          type="button"
+                          onClick={() => setOpenEquipo(!openEquipo)}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
                         >
-                          <option value="">Seleccionar Equipo...</option>
-                          {equiposDisponibles.map((e) => (
-                            <option key={e.id} value={e.id}>{e.serie} {e.modelo ? `- ${e.modelo}` : ''}</option>
-                          ))}
-                        </select>
+                          {newRentaFormData.activo_id
+                            ? equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.serie
+                            : "Seleccionar Equipo..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </button>
+
+                        {openEquipo && (
+                          <div className="absolute top-[100%] mt-2 left-0 w-full sm:w-[400px] z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="relative mb-2">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <input
+                                type="text"
+                                placeholder="Buscar por serie o modelo..."
+                                value={equipoSearchTerm}
+                                onChange={(e) => setEquipoSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                              />
+                            </div>
+                            <div className="max-h-[200px] overflow-y-auto space-y-1">
+                              {equiposDisponibles
+                                .filter((e) => {
+                                  const st = e.estatus?.toUpperCase();
+                                  if (st !== 'DISPONIBLE' && st !== 'BACK UP') return false;
+                                  const hasVigente = rentas.some((r: any) => r.activo?.id === e.id && r.estado === 'VIGENTE');
+                                  if (hasVigente) return false;
+                                  const term = equipoSearchTerm.toLowerCase();
+                                  return (e.serie?.toLowerCase().includes(term) || e.modelo?.toLowerCase().includes(term));
+                                })
+                                .map((e) => (
+                                  <button
+                                    key={e.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const assetPrice = e.renta_precio || 0;
+                                      setNewRentaFormData((prev) => ({
+                                        ...prev,
+                                        activo_id: e.id,
+                                        renta_base: assetPrice.toString(),
+                                      }));
+                                      setOpenEquipo(false);
+                                      setEquipoSearchTerm('');
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                  >
+                                    <span>{e.serie} {e.modelo ? `- ${e.modelo}` : ''}</span>
+                                    {newRentaFormData.activo_id === e.id && (
+                                      <Check className="w-4 h-4 text-red-600" />
+                                    )}
+                                  </button>
+                                ))}
+                                {equiposDisponibles.filter((e) => {
+                                  const st = e.estatus?.toUpperCase();
+                                  if (st !== 'DISPONIBLE' && st !== 'BACK UP') return false;
+                                  const hasVigente = rentas.some((r: any) => r.activo?.id === e.id && r.estado === 'VIGENTE');
+                                  if (hasVigente) return false;
+                                  const term = equipoSearchTerm.toLowerCase();
+                                  return (e.serie?.toLowerCase().includes(term) || e.modelo?.toLowerCase().includes(term));
+                                }).length === 0 && (
+                                  <div className="py-4 text-center text-sm text-slate-500">
+                                    No se encontraron equipos disponibles.
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-2">

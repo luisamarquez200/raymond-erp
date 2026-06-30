@@ -63,6 +63,7 @@ export class FlotillaService {
                     clase: activo.clase,
                     modelo: activo.modelo,
                     estatus: this.unificarEstatus(activo.estatus_operativo),
+                    estado_renta: activo.estado_renta,
                     cliente: activo.cliente?.razon_social || 'Sin Cliente',
                     cliente_id: activo.cliente_id,
                     sitio_id: activo.sitio_id,
