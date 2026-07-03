@@ -118,6 +118,8 @@ model entrada_detalle {
   comentario_4       String?                  @db.LongText
   estado             String?                  @db.VarChar(100)
   status_totvs       String?                  @db.VarChar(100)
+  cte_origen         String?                  @db.VarChar(100)
+  producto           String?                  @db.VarChar(100)
   calificacion       String?                  @db.VarChar(100)
   semanas_renovacion String?                  @db.VarChar(100)
   clase              String?                  @db.VarChar(100)

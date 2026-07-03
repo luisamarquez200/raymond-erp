@@ -116,7 +116,10 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
         comentarios: {}, // For multiple comments
         tarjeta_informacion: '',
         ocr_result: '',
-        evidencia: '' // Legacy/Single
+        evidencia: '', // Legacy/Single
+        status_totvs: '999',
+        cte_origen: '',
+        producto: '',
     });
 
     const [matchedData, setMatchedData] = useState<any>(null);
@@ -305,7 +308,13 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                         await entradasApi.updateDetalle(item.id_detalles, detailPayload);
                     } else {
                         console.log('[NuevaEntradaModal] Creating new detail');
-                        await entradasApi.createDetalle(entradaId, detailPayload);
+                        const createPayload = {
+                            ...detailPayload,
+                            status_totvs: item.status_totvs || '999',
+                            cte_origen: item.cte_origen,
+                            producto: item.producto,
+                        };
+                        await entradasApi.createDetalle(entradaId, createPayload);
                     }
                 } else { // Es un Accesorio
                     const accesorioPayload = {
@@ -383,7 +392,10 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
             comentarios: {},
             tarjeta_informacion: '',
             ocr_result: '',
-            evidencia: ''
+            evidencia: '',
+            status_totvs: '999',
+            cte_origen: '',
+            producto: '',
         });
     };
 
@@ -1471,6 +1483,43 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                                 </button>
                                             </div>
                                         )}
+
+                                        {/* TOTVS, Cte Origen y Producto */}
+                                        <div className="mt-6 space-y-4">
+                                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] border-b border-slate-100 pb-2">Datos TOTVS</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status TOTVS</label>
+                                                    <input
+                                                        type="text"
+                                                        value={itemFormData.status_totvs || '999'}
+                                                        onChange={(e) => setItemFormData({ ...itemFormData, status_totvs: e.target.value })}
+                                                        placeholder="999"
+                                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:border-red-500 outline-none font-medium text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cte Origen</label>
+                                                    <input
+                                                        type="text"
+                                                        value={itemFormData.cte_origen || ''}
+                                                        onChange={(e) => setItemFormData({ ...itemFormData, cte_origen: e.target.value })}
+                                                        placeholder="Número de cte origen"
+                                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:border-red-500 outline-none font-medium text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Producto</label>
+                                                    <input
+                                                        type="text"
+                                                        value={itemFormData.producto || ''}
+                                                        onChange={(e) => setItemFormData({ ...itemFormData, producto: e.target.value })}
+                                                        placeholder="Producto"
+                                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:border-red-500 outline-none font-medium text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
 
                                         {/* 3 Evidencias and 3 Comments for Equipment */}
                                         <div className="mt-6 space-y-4">

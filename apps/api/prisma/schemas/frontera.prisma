@@ -105,6 +105,9 @@ model entrada_detalle {
   fecha            DateTime? @db.Date
   filtro_equipo    String?   @db.VarChar(100)
   clase            String?   @db.VarChar(100)
+  status_totvs     String?   @db.VarChar(100)
+  cte_origen       String?   @db.VarChar(100)
+  producto         String?   @db.VarChar(100)
   entradas           entradas?          @relation(fields: [id_entrada], references: [id_entrada])
   rel_equipo         equipos?           @relation(fields: [id_equipo], references: [id_equipos], map: "fk_det_equipo")
   rel_sub_ubicacion  sub_ubicaciones?   @relation(fields: [id_sub_ubicacion], references: [id_sub_ubicacion], map: "fk_det_sub_ubicacion")

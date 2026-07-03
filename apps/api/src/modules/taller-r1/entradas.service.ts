@@ -797,6 +797,9 @@ export class EntradasService {
                         calificacion: null,
                         modelo: data.modelo,
                     }),
+                    status_totvs: data.status_totvs || '999',
+                    cte_origen: data.cte_origen,
+                    producto: data.producto,
                     pdf: false,
                     fecha: fechaIngreso,
                     ...savedPaths,
@@ -1274,6 +1277,9 @@ export class EntradasService {
                         modelo: data.modelo,
                         tipo_entrada: 'Renta',
                         estado: 'Ingresado',
+                        status_totvs: '999',
+                        cte_origen: data.cte_origen,
+                        producto: data.producto,
                         pdf: false,
                         fecha: data.fecha ? new Date(data.fecha) : new Date()
                     }

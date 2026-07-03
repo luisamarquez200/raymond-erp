@@ -323,6 +323,11 @@ export class RenovadosService implements OnModuleInit {
                     data: { estado: 'En mantenimiento' }
                 });
 
+                await tx.entrada_detalle.updateMany({
+                    where: { serial_equipo: dto.serial_equipo },
+                    data: { estado: 'En mantenimiento' }
+                });
+
                 if (dto.id_estacion) {
                     await tx.taller_estacion.update({
                         where: { id_estacion: dto.id_estacion },
@@ -721,17 +726,15 @@ export class RenovadosService implements OnModuleInit {
             if (equipoStock) {
                 await tx.equipo_ubicacion.update({
                     where: { id_equipo_ubicacion: equipoStock.id_equipo_ubicacion },
-                    data: { estado: 'Stock renovado' }
+                    data: { estado: 'Ingresado' }
                 });
             }
 
-            // Si el detalle estaba en estado "Renovar", pasa automáticamente a "Renovado"
             await tx.entrada_detalle.updateMany({
                 where: {
                     serial_equipo: solicitud.serial_equipo,
-                    estado: 'Renovar',
                 },
-                data: { estado: 'Renovado' }
+                data: { estado: '' }
             });
 
             if (solicitud.id_estacion) {

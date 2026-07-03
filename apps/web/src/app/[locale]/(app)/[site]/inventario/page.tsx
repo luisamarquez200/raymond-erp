@@ -54,6 +54,7 @@ export default function InventarioPage() {
         (tallerUser?.role && ['Superadmin', 'Admin', 'Administrador'].includes(tallerUser.role));
 
     const ESTADOS_EQUIPO = ['Renovado', 'Renovar', 'Venta AS IS', 'Chatarra', 'Scrap'];
+    const STATUS_TOTVS = ['999', '499'];
 
     const handleChangeEstado = async (item: InventarioItem, nuevoEstado: string) => {
         try {
@@ -62,6 +63,16 @@ export default function InventarioPage() {
             await loadData();
         } catch {
             toast.error('Error al cambiar el estado');
+        }
+    };
+
+    const handleChangeStatusTotvs = async (item: InventarioItem, nuevoStatus: string) => {
+        try {
+            await equipoUbicacionApi.updateEntradaDetalleStatusTotvs(item.serial_equipo || '', nuevoStatus);
+            toast.success(`Status TOTVS cambiado a "${nuevoStatus}"`);
+            await loadData();
+        } catch {
+            toast.error('Error al cambiar Status TOTVS');
         }
     };
 
@@ -264,6 +275,26 @@ export default function InventarioPage() {
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
+                    {isAdmin && isR1 && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-2 text-gray-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                                    title="Cambiar Status TOTVS"
+                                >
+                                    <span className="text-[10px] font-black">TOTVS</span>
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                {STATUS_TOTVS.map(st => (
+                                    <DropdownMenuItem key={st} onClick={() => handleChangeStatusTotvs(row.original, st)}>
+                                        {st}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
                 </div>
             )
         }
@@ -352,6 +383,26 @@ export default function InventarioPage() {
                                                     {ESTADOS_EQUIPO.map(estado => (
                                                         <DropdownMenuItem key={estado} onClick={() => handleChangeEstado(row, estado)}>
                                                             {estado}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
+                                        {isAdmin && isR1 && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="p-1.5 text-gray-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                                                        title="Cambiar Status TOTVS"
+                                                    >
+                                                        <span className="text-[10px] font-black">TOTVS</span>
+                                                    </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                                    {STATUS_TOTVS.map(st => (
+                                                        <DropdownMenuItem key={st} onClick={() => handleChangeStatusTotvs(row, st)}>
+                                                            {st}
                                                         </DropdownMenuItem>
                                                     ))}
                                                 </DropdownMenuContent>

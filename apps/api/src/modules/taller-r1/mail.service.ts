@@ -200,7 +200,7 @@ export class TallerR1MailService {
         </div>
         <div style="padding: 30px;">
           <p style="font-size: 16px;">Hola,</p>
-          <p>Se ha finalizado el proceso de renovación para el siguiente equipo. Queda liberado en el stock con estado <strong>Stock renovado</strong>.</p>
+          <p>Se ha finalizado el proceso de renovación para el siguiente equipo. Queda liberado en el stock con estado <strong>Renovado</strong>.</p>
           <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <tr style="background:#f8fafc">
               <td style="padding:12px 16px;font-weight:bold;font-size:11px;text-transform:uppercase;color:#64748b;width:40%">Número de Serie</td>

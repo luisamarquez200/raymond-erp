@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { equipoUbicacionApi } from '@/services/taller-r1/equipo-ubicacion.service';
 import { toast } from 'sonner';
-import { Plus, Search, Box, Loader2, Wrench, Edit2 } from 'lucide-react';
+import { Plus, Search, Box, Loader2, Wrench, Edit2, RefreshCw } from 'lucide-react';
 
 interface RefaccionCatalogo {
   id_refaccion: number;
@@ -16,6 +16,7 @@ interface RefaccionCatalogo {
 export default function RefaccionesPage() {
   const [data, setData] = useState<RefaccionCatalogo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals
@@ -86,6 +87,19 @@ export default function RefaccionesPage() {
     setShowModal(true);
   };
 
+  const handleSyncTotvs = async () => {
+    try {
+      setSyncing(true);
+      const result = await equipoUbicacionApi.syncRefaccionesTotvs();
+      toast.success(`Sincronización completada: ${result.creados} creados, ${result.actualizados} actualizados`);
+      await loadData();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Error al sincronizar con TOTVS');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
       <div className="mb-6">
@@ -94,13 +108,23 @@ export default function RefaccionesPage() {
             <h1 className="text-3xl font-black text-gray-900 tracking-tighter font-brand">Refacciones</h1>
             <p className="text-sm text-gray-400 font-medium font-brand">Catálogo base de refacciones y precios</p>
           </div>
-          <button
-            onClick={() => { setFormData({ refaccion: '', descripcion: '', precio: '' }); setIsEditing(false); setShowModal(true); }}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-red-600 text-white rounded-xl shadow-lg shadow-red-500/20 hover:bg-red-700 transition-colors font-brand font-black tracking-tighter"
-          >
-            <Plus className="w-5 h-5" />
-            Nueva Refacción
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSyncTotvs}
+              disabled={syncing}
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-colors font-brand font-black tracking-tighter disabled:opacity-50"
+            >
+              <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Sincronizando...' : 'Sincronizar TOTVS'}
+            </button>
+            <button
+              onClick={() => { setFormData({ refaccion: '', descripcion: '', precio: '' }); setIsEditing(false); setShowModal(true); }}
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-red-600 text-white rounded-xl shadow-lg shadow-red-500/20 hover:bg-red-700 transition-colors font-brand font-black tracking-tighter"
+            >
+              <Plus className="w-5 h-5" />
+              Nueva Refacción
+            </button>
+          </div>
         </div>
 
         {/* Search */}

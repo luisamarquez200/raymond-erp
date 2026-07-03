@@ -110,5 +110,13 @@ export const equipoUbicacionApi = {
     updateEntradaDetalleEstado: async (serial: string, estado: string) => {
         const response = await tallerApi.patch<any>(`${API_URL}/${encodeURIComponent(serial)}/update-estado`, { estado });
         return response.data?.data || response.data;
+    },
+    updateEntradaDetalleStatusTotvs: async (serial: string, status_totvs: string) => {
+        const response = await tallerApi.patch<any>(`${API_URL}/${encodeURIComponent(serial)}/update-status-totvs`, { status_totvs });
+        return response.data?.data || response.data;
+    },
+    syncRefaccionesTotvs: async () => {
+        const response = await tallerApi.post<any>('/taller-r1/totvs-sync/refacciones');
+        return response.data?.data || response.data;
     }
 };

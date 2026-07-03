@@ -431,6 +431,7 @@ export default function SalidaDetailsModal({ id, isOpen, onClose, onRefresh, onE
                         return claseValue === cancelEquipoClase.toLowerCase() || 
                                claseValue === '' || 
                                claseValue === 'todas' || 
+                               claseValue === 'todas las clases' || 
                                claseValue === 'todas las ubicaciones';
                     }));
                 } else {

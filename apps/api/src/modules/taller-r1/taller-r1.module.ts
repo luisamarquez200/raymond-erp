@@ -1,4 +1,5 @@
 import { Module, OnModuleInit } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { TallerR1Controller } from './taller-r1.controller';
 import { TallerR1Service } from './taller-r1.service';
 import { EntradasController } from './entradas.controller';
@@ -42,9 +43,11 @@ import { DashboardService } from './dashboard.service';
 import { AdcController } from './adc/adc.controller';
 import { AdcService } from './adc/adc.service';
 import { StorageService } from './storage.service';
+import { TotvsSyncController } from './totvs-sync.controller';
+import { TotvsSyncService } from './totvs-sync.service';
 
 @Module({
-    imports: [AuthModule],
+    imports: [AuthModule, HttpModule],
     controllers: [
         TallerR1Controller,
         EntradasController,
@@ -66,7 +69,8 @@ import { StorageService } from './storage.service';
         TallerR1MailController,
         AuditoriaController,
         DashboardController,
-        AdcController
+        AdcController,
+        TotvsSyncController,
     ],
     providers: [
         TallerR1Service,
@@ -91,7 +95,8 @@ import { StorageService } from './storage.service';
         AuditoriaService,
         DashboardService,
         AdcService,
-        StorageService
+        StorageService,
+        TotvsSyncService,
     ],
     exports: [
         TallerR1Service,
@@ -112,7 +117,7 @@ import { StorageService } from './storage.service';
         TallerR1MailService,
         DashboardService,
         AdcService,
-        StorageService
+        StorageService,
     ],
 })
 export class TallerR1Module implements OnModuleInit {

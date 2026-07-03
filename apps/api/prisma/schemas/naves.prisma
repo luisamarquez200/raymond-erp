@@ -160,6 +160,9 @@ model entrada_detalle {
   fecha            DateTime?  @db.Date
   filtro_equipo    String?    @db.VarChar(50)
   clase            String?    @db.VarChar(50)
+  status_totvs     String?    @db.VarChar(100)
+  cte_origen       String?    @db.VarChar(100)
+  producto         String?    @db.VarChar(100)
   evidencia_1      String?    @db.LongText
   evidencia_2      String?    @db.LongText
   QR_Link          String?    @map("QR-Link") @db.Text

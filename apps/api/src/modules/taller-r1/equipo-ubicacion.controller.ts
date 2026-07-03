@@ -79,4 +79,9 @@ export class EquipoUbicacionController {
     async updateEntradaDetalleEstado(@Param('serial') serial: string, @Body() data: { estado: string }) {
         return this.service.updateEntradaDetalleEstado(serial, data.estado);
     }
+
+    @Patch(':serial/update-status-totvs')
+    async updateEntradaDetalleStatusTotvs(@Param('serial') serial: string, @Body() data: { status_totvs: string }) {
+        return this.service.updateEntradaDetalleStatusTotvs(serial, data.status_totvs);
+    }
 }

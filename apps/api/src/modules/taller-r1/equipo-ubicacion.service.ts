@@ -214,6 +214,13 @@ export class EquipoUbicacionService {
         });
     }
 
+    async updateEntradaDetalleStatusTotvs(serial: string, status_totvs: string) {
+        return this.db.entrada_detalle.updateMany({
+            where: { serial_equipo: serial },
+            data: { status_totvs },
+        });
+    }
+
     async movilizarEquipo(data: MoverEquipoDto) {
         return this.db.$transaction(async (tx) => {
             // 1. Fetch current equipo_ubicacion details
