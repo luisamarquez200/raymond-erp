@@ -592,8 +592,8 @@ export default function Fleet() {
                   <SelectValue placeholder="Ejecutivo (ADC): Todos" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
-                  <SelectItem value="Todos" className="text-xs font-bold">Ejecutivo (ADC): Todos</SelectItem>
-                  {uniqueADCs.map(adc => <SelectItem key={adc} value={adc} className="text-xs">{formatFilterText(adc)}</SelectItem>)}
+                  <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Ejecutivo (ADC): Todos</SelectItem>
+                  {uniqueADCs.map(adc => <SelectItem key={adc} value={adc} className="text-xs text-slate-700">{formatFilterText(adc)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -605,8 +605,8 @@ export default function Fleet() {
                 <SelectValue placeholder="Cliente: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
-                <SelectItem value="Todos" className="text-xs font-bold">Cliente: Todos</SelectItem>
-                {uniqueClientes.map(c => <SelectItem key={c} value={c} className="text-xs">{formatFilterText(c)}</SelectItem>)}
+                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Cliente: Todos</SelectItem>
+                {uniqueClientes.map(c => <SelectItem key={c} value={c} className="text-xs text-slate-700">{formatFilterText(c)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -617,8 +617,8 @@ export default function Fleet() {
                 <SelectValue placeholder="Estatus: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
-                <SelectItem value="Todos" className="text-xs font-bold">Estatus: Todos</SelectItem>
-                {uniqueEstatus.map(e => <SelectItem key={e} value={e} className="text-xs">{formatFilterText(e)}</SelectItem>)}
+                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Estatus: Todos</SelectItem>
+                {uniqueEstatus.map(e => <SelectItem key={e} value={e} className="text-xs text-slate-700">{formatFilterText(e)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -629,8 +629,8 @@ export default function Fleet() {
                 <SelectValue placeholder="Modelo: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
-                <SelectItem value="Todos" className="text-xs font-bold">Modelo: Todos</SelectItem>
-                {uniqueModelos.map(m => <SelectItem key={m} value={m} className="text-xs">{formatFilterText(m)}</SelectItem>)}
+                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Modelo: Todos</SelectItem>
+                {uniqueModelos.map(m => <SelectItem key={m} value={m} className="text-xs text-slate-700">{formatFilterText(m)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -641,8 +641,8 @@ export default function Fleet() {
                 <SelectValue placeholder="Clase: Todas" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
-                <SelectItem value="Todos" className="text-xs font-bold">Clase: Todas</SelectItem>
-                {uniqueClases.map(c => <SelectItem key={c} value={c} className="text-xs">{formatFilterText(c)}</SelectItem>)}
+                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Clase: Todas</SelectItem>
+                {uniqueClases.map(c => <SelectItem key={c} value={c} className="text-xs text-slate-700">{formatFilterText(c)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -653,8 +653,8 @@ export default function Fleet() {
                 <SelectValue placeholder="Distribuidor: Todos" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
-                <SelectItem value="Todos" className="text-xs font-bold">Distribuidor: Todos</SelectItem>
-                {uniqueDistribuidores.map(d => <SelectItem key={d} value={d} className="text-xs">{formatFilterText(d)}</SelectItem>)}
+                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Distribuidor: Todos</SelectItem>
+                {uniqueDistribuidores.map(d => <SelectItem key={d} value={d} className="text-xs text-slate-700">{formatFilterText(d)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1208,7 +1208,7 @@ export default function Fleet() {
                     </SelectTrigger>
                     <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
                       {allSites.map(site => (
-                        <SelectItem key={site.id} value={site.id} className="text-xs">
+                        <SelectItem key={site.id} value={site.id} className="text-xs text-slate-700">
                           {site.cliente?.razon_social || 'Cliente'} - {site.nombre}
                         </SelectItem>
                       ))}
