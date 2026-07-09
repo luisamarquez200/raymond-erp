@@ -3,7 +3,7 @@
 import { 
   Search, Filter, Download, Grid3x3, List, Plus, Eye, Edit, 
   FileText, Clock, CheckCircle, Upload, X, FileSpreadsheet, 
-  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ShieldCheck, MapPin, Truck, HardDrive, Info
+  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -32,6 +32,60 @@ const formatFilterText = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
+const FilterCombobox = ({ 
+  label, value, onChange, options, open, setOpen, search, setSearch 
+}: {
+  label: string; value: string; onChange: (val: string) => void; options: string[]; open: boolean; setOpen: (val: boolean) => void; search: string; setSearch: (val: string) => void;
+}) => (
+  <div className="relative group flex-1 min-w-[160px]">
+    <button
+      type="button"
+      onClick={() => setOpen(!open)}
+      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-slate-300 transition-all h-[42px]"
+    >
+      <span className="truncate">{value === 'Todos' ? `${label}: Todos` : formatFilterText(value)}</span>
+      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+    </button>
+    {open && (
+      <div className="absolute top-[100%] mt-2 left-0 w-[240px] z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+        <div className="relative mb-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder={`Buscar ${label.toLowerCase()}...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-red-500"
+          />
+        </div>
+        <div className="max-h-[200px] overflow-y-auto space-y-1">
+          <button
+            type="button"
+            onClick={() => { onChange('Todos'); setOpen(false); setSearch(''); }}
+            className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-bold"
+          >
+            <span>Todos</span>
+            {value === 'Todos' && <Check className="w-4 h-4 text-red-600 shrink-0" />}
+          </button>
+          {options
+            .filter(opt => opt.toLowerCase().includes(search.toLowerCase()))
+            .map(opt => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => { onChange(opt); setOpen(false); setSearch(''); }}
+                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+              >
+                <span className="truncate pr-2">{formatFilterText(opt)}</span>
+                {value === opt && <Check className="w-4 h-4 text-red-600 shrink-0" />}
+              </button>
+            ))}
+        </div>
+      </div>
+    )}
+  </div>
+);
+
 export default function Fleet() {
   const { user } = useAuthStore();
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -52,11 +106,52 @@ export default function Fleet() {
 
   const [selectedADC, setSelectedADC] = useState<string>('Todos');
   const [selectedCliente, setSelectedCliente] = useState<string>('Todos');
+  const [selectedCuenta, setSelectedCuenta] = useState<string>('Todos');
   const [selectedEstatus, setSelectedEstatus] = useState<string>('Todos');
   const [selectedTipo, setSelectedTipo] = useState<string>('Todos');
   const [selectedModelo, setSelectedModelo] = useState<string>('Todos');
   const [selectedClase, setSelectedClase] = useState<string>('Todos');
   const [selectedDistribuidor, setSelectedDistribuidor] = useState<string>('Todos');
+
+  const [openFilterADC, setOpenFilterADC] = useState(false);
+  const [openFilterCliente, setOpenFilterCliente] = useState(false);
+  const [openFilterCuenta, setOpenFilterCuenta] = useState(false);
+  const [openFilterEstatus, setOpenFilterEstatus] = useState(false);
+  const [openFilterModelo, setOpenFilterModelo] = useState(false);
+  const [openFilterClase, setOpenFilterClase] = useState(false);
+  const [openFilterDistribuidor, setOpenFilterDistribuidor] = useState(false);
+
+  const [searchADC, setSearchADC] = useState('');
+  const [searchCliente, setSearchCliente] = useState('');
+  const [searchCuenta, setSearchCuenta] = useState('');
+  const [searchEstatus, setSearchEstatus] = useState('');
+  const [searchModelo, setSearchModelo] = useState('');
+  const [searchClase, setSearchClase] = useState('');
+  const [searchDistribuidor, setSearchDistribuidor] = useState('');
+
+  const hasActiveFilters = 
+    selectedADC !== 'Todos' ||
+    selectedCliente !== 'Todos' ||
+    selectedCuenta !== 'Todos' ||
+    selectedEstatus !== 'Todos' ||
+    selectedTipo !== 'Todos' ||
+    selectedModelo !== 'Todos' ||
+    selectedClase !== 'Todos' ||
+    selectedDistribuidor !== 'Todos' ||
+    searchTerm !== '';
+
+  const clearFilters = () => {
+    setSelectedADC('Todos');
+    setSelectedCliente('Todos');
+    setSelectedCuenta('Todos');
+    setSelectedEstatus('Todos');
+    setSelectedTipo('Todos');
+    setSelectedModelo('Todos');
+    setSelectedClase('Todos');
+    setSelectedDistribuidor('Todos');
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
 
   // New Asset Form State
   const [isNewAssetModalOpen, setIsNewAssetModalOpen] = useState(false);
@@ -363,18 +458,35 @@ export default function Fleet() {
   });
 
   const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
-  const uniqueADCs = Array.from(new Set(normalizedAssets.map(a => getValidString(a.adc)).filter((v): v is string => !!v))).sort();
-  const uniqueClientes = Array.from(new Set(normalizedAssets.map(a => getValidString(a.cliente)).filter((v): v is string => !!v))).sort();
-  const uniqueSites = Array.from(new Set(normalizedAssets.map(a => getValidString(a.site)).filter((v): v is string => !!v))).sort();
-  const uniqueDistribuidores = Array.from(new Set(normalizedAssets.map(a => getValidString(a.distribuidor)).filter((v): v is string => !!v))).sort();
-  const uniqueEstatus = Array.from(new Set(normalizedAssets.map(a => getValidString(a.estatus)).filter((v): v is string => !!v))).sort();
-  const uniqueTipos = Array.from(new Set(normalizedAssets.map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort();
-  const uniqueModelos = Array.from(new Set(normalizedAssets.map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort();
-  const uniqueClases = Array.from(new Set(normalizedAssets.map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort();
+  
+  const getFilteredFor = (skipFilterName: string) => {
+    return normalizedAssets.filter((asset: any) => {
+      if (skipFilterName !== 'adc' && selectedADC !== 'Todos' && asset.adc !== selectedADC) return false;
+      if (skipFilterName !== 'cliente' && selectedCliente !== 'Todos' && asset.cliente !== selectedCliente) return false;
+      if (skipFilterName !== 'cuenta' && selectedCuenta !== 'Todos' && asset.cuenta !== selectedCuenta) return false;
+      if (skipFilterName !== 'estatus' && selectedEstatus !== 'Todos' && asset.estatus !== selectedEstatus) return false;
+      if (skipFilterName !== 'tipo' && selectedTipo !== 'Todos' && asset.tipo !== selectedTipo) return false;
+      if (skipFilterName !== 'modelo' && selectedModelo !== 'Todos' && asset.modelo !== selectedModelo) return false;
+      if (skipFilterName !== 'clase' && selectedClase !== 'Todos' && asset.clase !== selectedClase) return false;
+      if (skipFilterName !== 'distribuidor' && selectedDistribuidor !== 'Todos' && asset.distribuidor !== selectedDistribuidor) return false;
+      return true;
+    });
+  };
+
+  const uniqueADCs = Array.from(new Set(getFilteredFor('adc').map(a => getValidString(a.adc)).filter((v): v is string => !!v))).sort();
+  const uniqueClientes = Array.from(new Set(getFilteredFor('cliente').map(a => getValidString(a.cliente)).filter((v): v is string => !!v))).sort();
+  const uniqueCuentas = Array.from(new Set(getFilteredFor('cuenta').map(a => getValidString(a.cuenta)).filter((v): v is string => !!v))).sort();
+  const uniqueSites = Array.from(new Set(getFilteredFor('site').map(a => getValidString(a.site)).filter((v): v is string => !!v))).sort();
+  const uniqueDistribuidores = Array.from(new Set(getFilteredFor('distribuidor').map(a => getValidString(a.distribuidor)).filter((v): v is string => !!v))).sort();
+  const uniqueEstatus = Array.from(new Set(getFilteredFor('estatus').map(a => getValidString(a.estatus)).filter((v): v is string => !!v))).sort();
+  const uniqueTipos = Array.from(new Set(getFilteredFor('tipo').map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort();
+  const uniqueModelos = Array.from(new Set(getFilteredFor('modelo').map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort();
+  const uniqueClases = Array.from(new Set(getFilteredFor('clase').map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort();
 
   const filteredAssets = normalizedAssets.filter((asset: any) => {
     if (selectedADC !== 'Todos' && asset.adc !== selectedADC) return false;
     if (selectedCliente !== 'Todos' && asset.cliente !== selectedCliente) return false;
+    if (selectedCuenta !== 'Todos' && asset.cuenta !== selectedCuenta) return false;
     if (selectedEstatus !== 'Todos' && asset.estatus !== selectedEstatus) return false;
     if (selectedTipo !== 'Todos' && asset.tipo !== selectedTipo) return false;
     if (selectedModelo !== 'Todos' && asset.modelo !== selectedModelo) return false;
@@ -462,7 +574,7 @@ export default function Fleet() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col -gap-1">
           <span className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Flotilla y Activos</h1>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Flotilla y Activos</h1>
           <p className="text-slate-500 font-medium mt-1">Gestión y control de inventario de equipos y accesorios</p>
         </div>
         <div className="flex items-center gap-3">
@@ -586,81 +698,92 @@ export default function Fleet() {
           </div>
 
           {!isAdc && (
-            <div className="relative group flex-1 min-w-[160px]">
-              <Select value={selectedADC} onValueChange={(val) => { setSelectedADC(val); setCurrentPage(1); }}>
-                <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
-                  <SelectValue placeholder="Ejecutivo (ADC): Todos" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
-                  <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Ejecutivo (ADC): Todos</SelectItem>
-                  {uniqueADCs.map(adc => <SelectItem key={adc} value={adc} className="text-xs text-slate-700">{formatFilterText(adc)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <FilterCombobox
+              label="Ejecutivo (ADC)"
+              value={selectedADC}
+              onChange={(val) => { setSelectedADC(val); setCurrentPage(1); }}
+              options={uniqueADCs}
+              open={openFilterADC}
+              setOpen={setOpenFilterADC}
+              search={searchADC}
+              setSearch={setSearchADC}
+            />
           )}
 
-          <div className="relative group flex-1 min-w-[160px]">
-            <Select value={selectedCliente} onValueChange={(val) => { setSelectedCliente(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
-                <SelectValue placeholder="Cliente: Todos" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
-                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Cliente: Todos</SelectItem>
-                {uniqueClientes.map(c => <SelectItem key={c} value={c} className="text-xs text-slate-700">{formatFilterText(c)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterCombobox
+            label="Cliente"
+            value={selectedCliente}
+            onChange={(val) => { setSelectedCliente(val); setCurrentPage(1); }}
+            options={uniqueClientes}
+            open={openFilterCliente}
+            setOpen={setOpenFilterCliente}
+            search={searchCliente}
+            setSearch={setSearchCliente}
+          />
+          
+          <FilterCombobox
+            label="Cuenta"
+            value={selectedCuenta}
+            onChange={(val) => { setSelectedCuenta(val); setCurrentPage(1); }}
+            options={uniqueCuentas}
+            open={openFilterCuenta}
+            setOpen={setOpenFilterCuenta}
+            search={searchCuenta}
+            setSearch={setSearchCuenta}
+          />
 
-          <div className="relative group flex-1 min-w-[160px]">
-            <Select value={selectedEstatus} onValueChange={(val) => { setSelectedEstatus(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
-                <SelectValue placeholder="Estatus: Todos" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
-                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Estatus: Todos</SelectItem>
-                {uniqueEstatus.map(e => <SelectItem key={e} value={e} className="text-xs text-slate-700">{formatFilterText(e)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterCombobox
+            label="Estatus"
+            value={selectedEstatus}
+            onChange={(val) => { setSelectedEstatus(val); setCurrentPage(1); }}
+            options={uniqueEstatus}
+            open={openFilterEstatus}
+            setOpen={setOpenFilterEstatus}
+            search={searchEstatus}
+            setSearch={setSearchEstatus}
+          />
 
-          <div className="relative group flex-1 min-w-[160px]">
-            <Select value={selectedModelo} onValueChange={(val) => { setSelectedModelo(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
-                <SelectValue placeholder="Modelo: Todos" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
-                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Modelo: Todos</SelectItem>
-                {uniqueModelos.map(m => <SelectItem key={m} value={m} className="text-xs text-slate-700">{formatFilterText(m)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterCombobox
+            label="Modelo"
+            value={selectedModelo}
+            onChange={(val) => { setSelectedModelo(val); setCurrentPage(1); }}
+            options={uniqueModelos}
+            open={openFilterModelo}
+            setOpen={setOpenFilterModelo}
+            search={searchModelo}
+            setSearch={setSearchModelo}
+          />
 
-          <div className="relative group flex-1 min-w-[160px]">
-            <Select value={selectedClase} onValueChange={(val) => { setSelectedClase(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
-                <SelectValue placeholder="Clase: Todas" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50">
-                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Clase: Todas</SelectItem>
-                {uniqueClases.map(c => <SelectItem key={c} value={c} className="text-xs text-slate-700">{formatFilterText(c)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterCombobox
+            label="Clase"
+            value={selectedClase}
+            onChange={(val) => { setSelectedClase(val); setCurrentPage(1); }}
+            options={uniqueClases}
+            open={openFilterClase}
+            setOpen={setOpenFilterClase}
+            search={searchClase}
+            setSearch={setSearchClase}
+          />
 
-          <div className="relative group flex-1 min-w-[160px]">
-            <Select value={selectedDistribuidor} onValueChange={(val) => { setSelectedDistribuidor(val); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
-                <SelectValue placeholder="Distribuidor: Todos" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
-                <SelectItem value="Todos" className="text-xs font-bold text-slate-700">Distribuidor: Todos</SelectItem>
-                {uniqueDistribuidores.map(d => <SelectItem key={d} value={d} className="text-xs text-slate-700">{formatFilterText(d)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterCombobox
+            label="Distribuidor"
+            value={selectedDistribuidor}
+            onChange={(val) => { setSelectedDistribuidor(val); setCurrentPage(1); }}
+            options={uniqueDistribuidores}
+            open={openFilterDistribuidor}
+            setOpen={setOpenFilterDistribuidor}
+            search={searchDistribuidor}
+            setSearch={setSearchDistribuidor}
+          />
 
           <div className="flex gap-2">
-            <button onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')} className="flex-1 p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 flex items-center justify-center transition-colors">
+            {hasActiveFilters && (
+              <button onClick={clearFilters} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-200 flex items-center justify-center gap-2 transition-colors font-bold text-xs uppercase tracking-widest" title="Limpiar filtros">
+                <X className="w-4 h-4" />
+                Limpiar
+              </button>
+            )}
+            <button onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')} className="px-3 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 flex items-center justify-center transition-colors" title="Cambiar vista">
               {viewMode === 'table' ? <Grid3x3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
             </button>
           </div>

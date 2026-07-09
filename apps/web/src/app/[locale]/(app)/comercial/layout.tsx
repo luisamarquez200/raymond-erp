@@ -36,7 +36,7 @@ export default function ComercialLayout({ children }: { children: React.ReactNod
             </button>
             <div>
               <span className="text-[10px] font-black text-violet-600 uppercase tracking-[0.2em]">Raymond Comercial</span>
-              <h1 className="text-lg font-black text-slate-900 tracking-tight">Centro de Control</h1>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Centro de Control</h1>
             </div>
           </div>
           <div className="flex items-center gap-4">

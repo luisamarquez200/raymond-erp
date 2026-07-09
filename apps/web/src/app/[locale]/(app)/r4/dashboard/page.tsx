@@ -97,7 +97,7 @@ export default function R4DashboardPage() {
       <div className="bg-white border-b border-slate-200 px-8 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sticky top-0 z-20">
         <div>
           <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1 block">RAYMOND</span>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Dashboard Ejecutivo</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Ejecutivo</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Vista estratégica y desempeño de flotilla</p>
         </div>
       </div>

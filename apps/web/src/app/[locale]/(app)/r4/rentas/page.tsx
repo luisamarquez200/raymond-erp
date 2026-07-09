@@ -46,7 +46,7 @@ export default function R4RentasPage() {
   const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
   const [equiposDisponibles, setEquiposDisponibles] = useState<any[]>([]);
   const [newRentaFormData, setNewRentaFormData] = useState({
-    cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: '', mes_cobertura: ''
+    cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, tipo_poliza: 'SMP', costo_poliza: '', moneda_poliza: 'MXN', comentarios: '', plazo_meses: '', mes_cobertura: ''
   });
   const [editRentaConfig, setEditRentaConfig] = useState<{ isOpen: boolean; id: string; formData: any }>({
     isOpen: false,
@@ -190,7 +190,15 @@ export default function R4RentasPage() {
           mes_cobro: null,
           renta_base: Number(newRentaFormData.renta_base) || 0,
           mantenimiento: newRentaFormData.mantenimiento,
+          tipo_poliza: newRentaFormData.tipo_poliza,
+          costo_poliza_distribuidor: Number(newRentaFormData.costo_poliza) || 0,
+          moneda_pago_distribuidor: newRentaFormData.moneda_poliza,
           comentarios: newRentaFormData.comentarios
+        },
+        condiciones: {
+          tipo_poliza: newRentaFormData.tipo_poliza,
+          costo_poliza_distribuidor: Number(newRentaFormData.costo_poliza) || 0,
+          moneda_pago_distribuidor: newRentaFormData.moneda_poliza
         }
       };
 
@@ -198,7 +206,7 @@ export default function R4RentasPage() {
       toast.success('Renta creada correctamente');
       setIsNewRentaModalOpen(false);
       setNewRentaFormData({
-        cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, comentarios: '', plazo_meses: '', mes_cobertura: ''
+        cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, tipo_poliza: 'SMP', costo_poliza: '', moneda_poliza: 'MXN', comentarios: '', plazo_meses: '', mes_cobertura: ''
       });
       fetchRentasYClientes();
     } catch (error: any) {
@@ -382,7 +390,7 @@ export default function R4RentasPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col -gap-1">
           <span className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestión de Rentas</h1>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión de Rentas</h1>
           <p className="text-slate-500 font-medium mt-1">Administración de contratos de renta, vigencias y asignación de activos</p>
         </div>
         <div className="flex items-center gap-3">
@@ -500,12 +508,12 @@ export default function R4RentasPage() {
                           ${(detalles.renta_base || renta.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-4 py-3.5 text-slate-500">{detalles.moneda || 'MXN'}</td>
-                        <td className="px-4 py-3.5 text-slate-600">{cond.tipo_poliza || 'SMP'}</td>
-                        <td className="px-4 py-3.5 text-slate-600">{renta.distribuidor || '-'}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{cond.tipo_poliza || renta.activo?.tipo_poliza || 'SMP'}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{renta.distribuidor || renta.activo?.distribuidor || '-'}</td>
                         <td className="px-4 py-3.5 text-slate-600">
-                          ${(cond.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          ${(cond.costo_poliza_distribuidor || renta.activo?.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="px-4 py-3.5 text-slate-500">{cond.moneda_pago_distribuidor || 'MXN'}</td>
+                        <td className="px-4 py-3.5 text-slate-500">{cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN'}</td>
                         <td className="px-4 py-3.5 text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); openEditModal(renta); }}
@@ -1225,9 +1233,9 @@ export default function R4RentasPage() {
                         <input
                           type="number"
                           value={newRentaFormData.renta_base}
-                          readOnly
+                          onChange={e => setNewRentaFormData({ ...newRentaFormData, renta_base: e.target.value })}
                           placeholder="0.00"
-                          className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 focus:outline-none cursor-not-allowed opacity-80"
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
                         />
                       </div>
                     </div>
@@ -1239,10 +1247,41 @@ export default function R4RentasPage() {
                         Adicionales
                       </h3>
                       <div className="space-y-4">
-                        <label className="flex items-center gap-3 p-4 border-2 border-slate-100 rounded-xl cursor-pointer hover:border-red-500 transition-colors bg-white">
-                          <input type="checkbox" checked={newRentaFormData.mantenimiento} onChange={e => setNewRentaFormData({ ...newRentaFormData, mantenimiento: e.target.checked })} className="w-5 h-5 rounded text-red-600 focus:ring-red-500" />
-                          <span className="text-sm font-bold text-slate-700">Incluye Mantenimiento Preventivo (SMP)</span>
-                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="space-y-2 relative">
+                            <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tipo Póliza (SMP)</label>
+                            <select
+                              value={newRentaFormData.tipo_poliza}
+                              onChange={e => setNewRentaFormData({ ...newRentaFormData, tipo_poliza: e.target.value })}
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                            >
+                              <option value="CFPM">CFPM</option>
+                              <option value="SMP">SMP</option>
+                              <option value="NA">NA</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Tarifa Póliza</label>
+                            <input
+                              type="number"
+                              value={newRentaFormData.costo_poliza}
+                              onChange={e => setNewRentaFormData({ ...newRentaFormData, costo_poliza: e.target.value })}
+                              placeholder="0.00"
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                            />
+                          </div>
+                          <div className="space-y-2 relative">
+                            <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Moneda Póliza</label>
+                            <select
+                              value={newRentaFormData.moneda_poliza}
+                              onChange={e => setNewRentaFormData({ ...newRentaFormData, moneda_poliza: e.target.value })}
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
+                            >
+                              <option value="MXN">MXN</option>
+                              <option value="USD">USD</option>
+                            </select>
+                          </div>
+                        </div>
                         <div className="space-y-2">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Comentarios</label>
                           <textarea

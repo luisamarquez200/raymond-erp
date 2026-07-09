@@ -71,7 +71,7 @@ export default function AdcsPage() {
                             <Users className="w-6 h-6" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Gestión de Usuarios ADC</h1>
+                            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gestión de Usuarios ADC</h1>
                             <p className="text-slate-500 font-medium mt-1">
                                 Asigna correos y contraseñas a los Asesores Comerciales (ADC) detectados en el sistema.
                             </p>

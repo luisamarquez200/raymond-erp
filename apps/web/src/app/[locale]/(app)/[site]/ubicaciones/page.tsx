@@ -132,7 +132,7 @@ export default function UbicacionesPage() {
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tighter font-brand">Ubicaciones</h1>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tighter font-brand">Ubicaciones</h1>
             <p className="text-sm text-gray-400 font-medium font-brand">Gestión de espacios en almacén y generación de QRs</p>
           </div>
           <button

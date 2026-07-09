@@ -127,24 +127,17 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
 
                     {/* Footer Banner */}
                     <div className={cn(
-                        "fixed bottom-0 right-0 bg-red-500 text-white text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-center py-1.5 px-4 shadow-md z-40 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 h-auto min-h-[40px] transition-all duration-300",
+                        "fixed bottom-0 right-0 bg-red-500 text-white text-[10px] sm:text-[11px] font-normal uppercase tracking-widest text-center py-1.5 px-4 shadow-md z-40 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 h-auto min-h-[40px] transition-all duration-300",
                         !isIsolated && (sidebarCollapsed ? "lg:left-16 left-0" : "lg:left-64 left-0"),
                         isIsolated && "left-0"
                     )}>
-                        <span>Ambiente SandBox solo destinado para pruebas</span>
-                        <span className="hidden sm:inline opacity-50">•</span>
-                        <span>Software Prueba Beta Funcionalidad Limitada</span>
+                        <span>Software Beta</span>
                         <span className="hidden sm:inline opacity-50">•</span>
                         <a href="https://www.runsolutions-services.com" target="_blank" rel="noreferrer" className="hover:underline hover:text-red-100 transition-colors">
                             www.runsolutions-Services.com
                         </a>
                         <span className="hidden sm:inline opacity-50">•</span>
-                        <span>Software v1.0 pruebas</span>
-                        
-                        {/* Logo without 'Desarrollado por' text */}
-                        <div className="ml-0 sm:ml-2 bg-white px-2 py-0.5 rounded flex items-center justify-center">
-                            <Image src="/logos/run-solutions.png" alt="RUN SOLUTIONS" width={90} height={20} className="h-4 w-auto object-contain" />
-                        </div>
+                        <span>Software v1.1</span>
                     </div>
 
                 </div>

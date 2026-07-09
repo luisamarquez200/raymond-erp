@@ -105,7 +105,7 @@ export default function AssetCarnetPage() {
         </Link>
         <div>
           <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-0.5 block">CARNET DE EQUIPO</span>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
             Serie: {asset.serie}
             <span className="text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg">
               Clase {asset.clase || '-'}

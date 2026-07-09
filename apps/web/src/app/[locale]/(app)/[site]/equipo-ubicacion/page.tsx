@@ -256,7 +256,7 @@ export default function EquipoUbicacionPage() {
         <div className="max-w-7xl mx-auto px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-black text-gray-900 tracking-tight">
+              <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
                 Locaciones de Inventario
               </h1>
               <p className="text-gray-600 mt-2 font-medium">

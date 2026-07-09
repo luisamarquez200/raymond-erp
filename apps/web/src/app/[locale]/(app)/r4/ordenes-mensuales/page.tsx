@@ -51,7 +51,7 @@ export default function OrdenesMensualesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col -gap-1">
           <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1">FACTURACIÓN</span>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Órdenes Mensuales</h1>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Órdenes Mensuales</h1>
           <p className="text-slate-500 font-medium mt-1">Control detallado de órdenes de compra (POs) y facturación por periodo</p>
         </div>
       </div>

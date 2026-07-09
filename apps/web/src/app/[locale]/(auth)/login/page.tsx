@@ -77,96 +77,105 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen w-full relative bg-white flex flex-col items-center justify-center font-sans overflow-hidden">
-
-            {/* Background Image - Centered and covering necessary area */}
-            <div className="absolute inset-0 z-0 flex items-center justify-center">
-                <div className="relative w-full h-full">
+        <div className="min-h-screen w-full flex flex-col lg:flex-row font-sans overflow-hidden bg-white">
+            {/* Left Side - Login Form */}
+            <div className="relative w-full lg:w-1/2 flex flex-col justify-between bg-[#E5E5E5] min-h-screen">
+                {/* Logo Top Left */}
+                <div className="pt-8 pl-8 z-20">
                     <Image
-                        src="/login_background.png"
-                        alt="Background"
-                        fill
-                        className="object-contain object-center"
+                        src="/fsimage.png"
+                        alt="RAYMOND"
+                        width={180}
+                        height={50}
+                        className="object-contain object-left"
                         priority
                     />
                 </div>
-            </div>
 
-            {/* Logo Top Left */}
-            <div className="absolute top-8 left-8 z-20 w-48 h-12">
-                <Image
-                    src="/fsimage.png"
-                    alt="RAYMOND"
-                    width={180}
-                    height={50}
-                    className="object-contain object-left"
-                    priority
-                />
-            </div>
+                {/* Login Card */}
+                <div className="flex-1 flex items-center justify-center p-6">
+                    <div className="w-full max-w-[400px] bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] p-10 border border-gray-100/50">
+                        <div className="text-center mb-10">
+                            <h2 className="text-2xl font-semibold text-gray-800 mb-2 tracking-tight">
+                                Iniciar sesión
+                            </h2>
+                            <p className="text-gray-500 text-sm font-medium">
+                                Ingresa tus credenciales para continuar
+                            </p>
+                        </div>
 
-            {/* Login Card */}
-            <div className="relative z-10 w-full max-w-[400px] bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-10 border border-gray-100/50">
-                <div className="text-center mb-8">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                        Iniciar sesión
-                    </h2>
-                    <p className="text-gray-500 text-sm">
-                        Iniciar sesión o crea una cuenta
-                    </p>
+                        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                            {/* Input: Username */}
+                            <div className="space-y-1.5">
+                                <input
+                                    {...register('email')}
+                                    type="text"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-[#D92D20] focus:ring-1 focus:ring-[#D92D20] outline-none transition-all text-sm font-medium"
+                                    placeholder="Nombre de usuario"
+                                />
+                                {errors.email && (
+                                    <p className="text-red-500 text-xs mt-1">
+                                        {errors.email.message}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Input: Password */}
+                            <div className="space-y-1.5">
+                                <input
+                                    {...register('password')}
+                                    type="password"
+                                    className="w-full px-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-[#D92D20] focus:ring-1 focus:ring-[#D92D20] outline-none transition-all text-sm font-medium"
+                                    placeholder="Contraseña"
+                                />
+                                {errors.password && (
+                                    <p className="text-red-500 text-xs mt-1">
+                                        {errors.password.message}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Submit Button */}
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="w-full bg-[#D92D20] text-white font-semibold py-3.5 rounded-xl hover:bg-[#B91C1C] transition-all disabled:opacity-50 text-sm shadow-md mt-2"
+                            >
+                                {isSubmitting ? 'Iniciando...' : 'Iniciar sesión'}
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                    {/* Input: Username */}
-                    <div className="space-y-1">
-                        <input
-                            {...register('email')}
-                            type="text"
-                            autoComplete="off"
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-all text-sm"
-                            placeholder="Nombre de usuario"
+                {/* Footer Bar */}
+                <div className="bg-white border-t border-gray-200 text-gray-900 h-20 flex flex-col sm:flex-row items-center justify-between px-6 sm:px-8 py-2 z-20 shadow-sm">
+                    <div className="flex items-center">
+                        <Image 
+                            src="/fsimage.png" 
+                            alt="RAYMOND" 
+                            width={140} 
+                            height={40} 
+                            className="object-contain"
                         />
-                        {errors.email && (
-                            <p className="text-red-500 text-xs mt-1">
-                                {errors.email.message}
-                            </p>
-                        )}
                     </div>
-
-                    {/* Input: Password */}
-                    <div className="space-y-1">
-                        <input
-                            {...register('password')}
-                            type="password"
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-all text-sm"
-                            placeholder="Contraseña"
-                        />
-                        {errors.password && (
-                            <p className="text-red-500 text-xs mt-1">
-                                {errors.password.message}
-                            </p>
-                        )}
+                    <div className="text-[10px] sm:text-xs font-bold tracking-wide text-center sm:text-right flex flex-col gap-1">
+                        <span className="uppercase text-slate-800">Plataforma Comercial Corporación Raymond de México</span>
+                        <span className="text-gray-500 text-[8px] uppercase tracking-widest font-normal">RUN SOLUTIONS | TÉRMINOS DE USO</span>
                     </div>
-
-
-
-                    {/* Submit Button */}
-                    <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="w-full bg-[#D92D20] text-white font-medium py-3 rounded-lg hover:bg-[#B91C1C] transition-colors disabled:opacity-50 text-sm shadow-sm mt-2"
-                    >
-                        {isSubmitting ? 'Iniciando...' : 'Inciar sesión'}
-                    </button>
-                </form>
+                </div>
             </div>
 
-            {/* Footer */}
-            <div className="absolute bottom-8 left-0 right-0 z-20 text-center">
-                <p className="text-gray-500 text-sm">
-                    Raymond &nbsp; 2026 &nbsp; | &nbsp; policy
-                </p>
+            {/* Right Side - Image */}
+            <div className="hidden lg:block lg:w-1/2 relative bg-slate-900">
+                <div className="absolute inset-0 bg-black/20 z-10" /> {/* Dark overlay for premium feel */}
+                <img
+                    src="https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=2070&auto=format&fit=crop"
+                    alt="Logistics Background"
+                    className="absolute inset-0 w-full h-full object-cover object-center"
+                />
             </div>
-
+            
             {/* Error Toast/Message */}
             {error && (
                 <div className="absolute top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm shadow-sm animate-in fade-in slide-in-from-top-2">

@@ -322,7 +322,7 @@ export default function ClientesSitios() {
               <Building2 className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Catálogo de Clientes y Sitios</h1>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Catálogo de Clientes y Sitios</h1>
               <p className="text-slate-500 font-medium mt-1">Administración de empresas, ubicaciones y asignación de distribuidores de servicio.</p>
             </div>
           </div>

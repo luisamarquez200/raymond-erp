@@ -99,89 +99,94 @@ export default function SiteSelectionPage() {
     if (!user) return null;
 
     return (
-        <div className="min-h-screen bg-[#F9FAFB] flex flex-col items-center justify-center p-6 relative overflow-hidden">
-            {/* Background pattern */}
-            <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none">
-                <svg width="100%" height="100%">
-                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
-                    </pattern>
-                    <rect width="100%" height="100%" fill="url(#grid)" />
-                </svg>
+        <div className="min-h-screen w-full flex flex-col lg:flex-row font-sans overflow-hidden bg-white">
+            
+            {/* Left Side - Content */}
+            <div className="relative w-full lg:w-1/2 flex flex-col bg-white min-h-screen">
+                
+                {/* Main Content Centered */}
+                <div className="flex-1 flex flex-col items-center justify-center p-6">
+                    <div className="w-full max-w-xl relative z-10">
+                        <div className="text-center mb-12">
+                            <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+                                Selecciona un Centro de Control
+                            </h1>
+                            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                                Bienvenido, <span className="font-semibold text-gray-900">{(user as any).username || (user as any).firstName}</span>.
+                                Por favor selecciona el sitio con el que deseas trabajar hoy.
+                            </p>
+                        </div>
+
+                        <div className={cn(
+                            "grid gap-8 mx-auto",
+                            availableOptions.length === 1 ? "grid-cols-1 max-w-sm" :
+                            availableOptions.length === 2 ? "grid-cols-1 md:grid-cols-2 max-w-2xl" :
+                            availableOptions.length === 4 ? "grid-cols-1 md:grid-cols-4" : 
+                            "grid-cols-1 md:grid-cols-3"
+                        )}>
+                            {availableOptions.map((site) => (
+                                <button
+                                    key={site.id}
+                                    onClick={() => handleSelect(site)}
+                                    disabled={false}
+                                    className={cn(
+                                        `group relative flex flex-col text-left bg-white rounded-3xl p-8 border ${site.borderColor} shadow-sm transition-all duration-300 ease-out overflow-hidden`,
+                                        site.isUpcoming
+                                            ? "opacity-60 grayscale cursor-not-allowed border-gray-100"
+                                            : "hover:shadow-xl hover:-translate-y-2"
+                                    )}
+                                >
+                                    {/* Accent Background Gradient */}
+                                    {!site.isUpcoming && (
+                                        <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${site.color} opacity-0 group-hover:opacity-5 rounded-bl-full transition-opacity duration-300`} />
+                                    )}
+
+                                    <div className={cn(
+                                        `w-16 h-16 rounded-2xl ${site.bgLight} flex items-center justify-center mb-8`,
+                                        !site.isUpcoming && "group-hover:scale-110 transition-transform duration-300"
+                                    )}>
+                                        <site.icon className={cn(
+                                            `w-8 h-8 rounded-lg p-1.5`,
+                                            site.isUpcoming
+                                                ? "bg-gray-400 text-white"
+                                                : `bg-gradient-to-br ${site.color} text-white`
+                                        )} fill="currentColor" />
+                                    </div>
+
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                                        {site.name}
+                                    </h3>
+
+                                    <div className={cn(
+                                        "mt-auto flex items-center text-sm font-semibold transition-colors",
+                                        site.isUpcoming
+                                            ? "text-gray-400"
+                                            : "text-gray-900 group-hover:text-red-600"
+                                    )}>
+                                        {site.isUpcoming ? "Bloqueado" : "Entrar ahora"}
+                                        {!site.isUpcoming && <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+
+                        {availableOptions.length === 0 && (
+                            <div className="text-center mt-12 p-8 bg-red-50 rounded-2xl border border-red-100 italic text-red-600">
+                                No tienes sitios asignados. Por favor, contacta al administrador.
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            <div className="w-full max-w-5xl relative z-10">
-                <div className="text-center mb-12">
-                    <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-                        Selecciona un Centro de Control
-                    </h1>
-                    <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                        Bienvenido, <span className="font-semibold text-gray-900">{(user as any).username || (user as any).firstName}</span>.
-                        Por favor selecciona el sitio con el que deseas trabajar hoy.
-                    </p>
-                </div>
-
-                <div className={cn(
-                    "grid gap-8 mx-auto",
-                    availableOptions.length === 1 ? "grid-cols-1 max-w-sm" :
-                    availableOptions.length === 2 ? "grid-cols-1 md:grid-cols-2 max-w-2xl" :
-                    availableOptions.length === 4 ? "grid-cols-1 md:grid-cols-4" : 
-                    "grid-cols-1 md:grid-cols-3"
-                )}>
-                    {availableOptions.map((site) => (
-                        <button
-                            key={site.id}
-                            onClick={() => handleSelect(site)}
-                            disabled={false}
-                            className={cn(
-                                `group relative flex flex-col text-left bg-white rounded-3xl p-8 border ${site.borderColor} shadow-sm transition-all duration-300 ease-out overflow-hidden`,
-                                site.isUpcoming
-                                    ? "opacity-60 grayscale cursor-not-allowed border-gray-100"
-                                    : "hover:shadow-xl hover:-translate-y-2"
-                            )}
-                        >
-                            {/* Accent Background Gradient */}
-                            {!site.isUpcoming && (
-                                <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${site.color} opacity-0 group-hover:opacity-5 rounded-bl-full transition-opacity duration-300`} />
-                            )}
-
-                            <div className={cn(
-                                `w-16 h-16 rounded-2xl ${site.bgLight} flex items-center justify-center mb-8`,
-                                !site.isUpcoming && "group-hover:scale-110 transition-transform duration-300"
-                            )}>
-                                <site.icon className={cn(
-                                    `w-8 h-8 rounded-lg p-1.5`,
-                                    site.isUpcoming
-                                        ? "bg-gray-400 text-white"
-                                        : `bg-gradient-to-br ${site.color} text-white`
-                                )} fill="currentColor" />
-                            </div>
-
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">
-                                {site.name}
-                            </h3>
-                            {/* <p className="text-gray-500 text-sm leading-relaxed mb-8">
-                                {site.description}
-                            </p> */}
-
-                            <div className={cn(
-                                "mt-auto flex items-center text-sm font-semibold transition-colors",
-                                site.isUpcoming
-                                    ? "text-gray-400"
-                                    : "text-gray-900 group-hover:text-red-600"
-                            )}>
-                                {site.isUpcoming ? "Bloqueado" : "Entrar ahora"}
-                                {!site.isUpcoming && <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />}
-                            </div>
-                        </button>
-                    ))}
-                </div>
-
-                {availableOptions.length === 0 && (
-                    <div className="text-center mt-12 p-8 bg-red-50 rounded-2xl border border-red-100 italic text-red-600">
-                        No tienes sitios asignados. Por favor, contacta al administrador.
-                    </div>
-                )}
+            {/* Right Side - Image */}
+            <div className="hidden lg:block lg:w-1/2 relative bg-slate-900">
+                <div className="absolute inset-0 bg-black/20 z-10" /> {/* Dark overlay for premium feel */}
+                <img
+                    src="https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=2070&auto=format&fit=crop"
+                    alt="Logistics Background"
+                    className="absolute inset-0 w-full h-full object-cover object-center"
+                />
             </div>
 
         </div>

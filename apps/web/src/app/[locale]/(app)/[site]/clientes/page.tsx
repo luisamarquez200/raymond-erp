@@ -108,7 +108,7 @@ export default function ClientesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Cartera de Clientes</h1>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tighter">Cartera de Clientes</h1>
           <p className="text-sm text-gray-500 font-medium mt-1">
             Gestión del Padrón de Clientes de Taller R1
           </p>

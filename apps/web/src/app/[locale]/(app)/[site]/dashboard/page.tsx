@@ -264,7 +264,7 @@ export default function DashboardR1() {
       <div className="bg-white border-b border-gray-100 shadow-sm">
         <div className="mx-auto px-4 md:px-8 py-6 max-w-5xl w-full flex items-center justify-between">
           <div>
-            <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tight">Dashboard Central</h1>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">Dashboard Central</h1>
             <p className="text-gray-500 mt-1 text-sm font-medium">
               Busca seriales manualmente o escanea un QR para obtener datos al instante.
             </p>

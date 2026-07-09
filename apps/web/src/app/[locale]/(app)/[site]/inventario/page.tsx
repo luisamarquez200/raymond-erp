@@ -164,7 +164,7 @@ export default function InventarioPage() {
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col -gap-1">
                             <span className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
-                            <h1 className="text-4xl font-black text-gray-900 tracking-tight">
+                            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
                                 Inventario General
                             </h1>
                         </div>
