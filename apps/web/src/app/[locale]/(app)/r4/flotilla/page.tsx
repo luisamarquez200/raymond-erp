@@ -1103,7 +1103,7 @@ export default function Fleet() {
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Clase *</label>
-                    <select value={newAssetClase} onChange={(e) => setNewAssetClase(e.target.value)} disabled className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 focus:outline-none cursor-not-allowed disabled:opacity-70">
+                    <select value={newAssetClase} onChange={(e) => setNewAssetClase(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
                       <option>Clase I</option>
                       <option>Clase II</option>
                       <option>Clase III</option>

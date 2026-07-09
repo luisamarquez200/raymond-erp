@@ -36,6 +36,7 @@ export default function R4RentasPage() {
   const [fichaFechaTotvs, setFichaFechaTotvs] = useState("");
   const [fichaMesCobro, setFichaMesCobro] = useState("");
   const [fichaPdfFile, setFichaPdfFile] = useState<File | null>(null);
+  const [isFichaDragging, setIsFichaDragging] = useState(false);
   const [fichaSeriesGrid, setFichaSeriesGrid] = useState<any[]>([]); // Array of { assetId, serie, modelo, clase, checked, renta_base, dias_caidos, descuento, renta_final }
   const [isSubmittingFicha, setIsSubmittingFicha] = useState(false);
 
@@ -65,7 +66,17 @@ export default function R4RentasPage() {
 
   const [fichaClienteSearchTerm, setFichaClienteSearchTerm] = useState('');
   const [fichaSitioSearchTerm, setFichaSitioSearchTerm] = useState('');
-  const selectedClienteObj = clientesDisponibles.find(c => c.id === newRentaFormData.cliente_id);
+
+  // ADC Visual Filtering Logic for Clientes
+  const filteredClientesDisponibles = isAdc
+    ? clientesDisponibles.filter((c: any) => {
+        const adcLower = c.adc?.toLowerCase() || '';
+        const userLower = loggedInAdcName.toLowerCase();
+        return adcLower === userLower || userLower.includes(adcLower) || adcLower.includes(user?.firstName?.toLowerCase() || '');
+      })
+    : clientesDisponibles;
+
+  const selectedClienteObj = filteredClientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id);
 
   const openEditModal = (renta: any) => {
     setEditRentaConfig({
@@ -317,6 +328,7 @@ export default function R4RentasPage() {
       setFichaFechaTotvs("");
       setFichaMesCobro("");
       setFichaPdfFile(null);
+      setIsFichaDragging(false);
       fetchRentasYClientes();
     } catch (error: any) {
       console.error(error);
@@ -605,7 +617,7 @@ export default function R4RentasPage() {
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
                       >
                         {selectedFichaClienteId
-                          ? clientesDisponibles.find((c) => c.id === selectedFichaClienteId)?.razonSocial
+                          ? filteredClientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razonSocial
                           : "Seleccionar Cliente..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </button>
@@ -623,9 +635,9 @@ export default function R4RentasPage() {
                             />
                           </div>
                           <div className="max-h-[200px] overflow-y-auto space-y-1">
-                            {clientesDisponibles
-                              .filter(c => c.razonSocial?.toLowerCase().includes(fichaClienteSearchTerm.toLowerCase()))
-                              .map(c => (
+                            {filteredClientesDisponibles
+                              .filter((c: any) => c.razonSocial?.toLowerCase().includes(fichaClienteSearchTerm.toLowerCase()))
+                              .map((c: any) => (
                                 <button
                                   key={c.id}
                                   type="button"
@@ -656,7 +668,7 @@ export default function R4RentasPage() {
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
                       >
                         {selectedFichaSitioId
-                          ? clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
+                          ? filteredClientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
                           : "Seleccionar Sitio..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </button>
@@ -674,7 +686,7 @@ export default function R4RentasPage() {
                             />
                           </div>
                           <div className="max-h-[200px] overflow-y-auto space-y-1">
-                            {clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios
+                            {filteredClientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios
                               ?.filter((s: any) => s.nombre?.toLowerCase().includes(fichaSitioSearchTerm.toLowerCase()))
                               .map((s: any) => (
                                 <button
@@ -746,7 +758,42 @@ export default function R4RentasPage() {
                     {/* PDF Upload */}
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cargar PDF de la OC del Cliente</label>
-                      <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center hover:border-red-400 transition-all bg-slate-50/50">
+                      <div
+                        onClick={() => document.getElementById('fichaPdfUpload')?.click()}
+                        className={cn(
+                          "cursor-pointer flex flex-col items-center justify-center gap-1.5 border-2 border-dashed rounded-2xl p-4 text-center transition-all w-full",
+                          isFichaDragging ? "border-red-500 bg-red-50/50" : "border-slate-200 bg-slate-50/50 hover:border-red-400"
+                        )}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsFichaDragging(true);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.dataTransfer.dropEffect = 'copy';
+                          setIsFichaDragging(true);
+                        }}
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsFichaDragging(false);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsFichaDragging(false);
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            const droppedFile = e.dataTransfer.files[0];
+                            if (droppedFile.type === "application/pdf") {
+                              setFichaPdfFile(droppedFile);
+                            } else {
+                              toast.error("Solo se permiten archivos PDF");
+                            }
+                          }
+                        }}
+                      >
                         <input
                           type="file"
                           accept="application/pdf"
@@ -758,13 +805,13 @@ export default function R4RentasPage() {
                             }
                           }}
                         />
-                        <label htmlFor="fichaPdfUpload" className="cursor-pointer flex flex-col items-center justify-center gap-1.5">
-                          <FileText className="w-8 h-8 text-slate-400" />
-                          <span className="text-sm font-bold text-slate-700">
-                            {fichaPdfFile ? fichaPdfFile.name : "Seleccionar Archivo PDF..."}
+                        <div className="pointer-events-none flex flex-col items-center gap-1.5">
+                          <FileText className={cn("w-8 h-8 transition-colors", isFichaDragging ? "text-red-500" : "text-slate-400")} />
+                          <span className={cn("text-sm font-bold", isFichaDragging ? "text-red-600" : "text-slate-700")}>
+                            {fichaPdfFile ? fichaPdfFile.name : (isFichaDragging ? "¡Suelta el archivo aquí!" : "Seleccionar Archivo PDF o Arrastrar y Soltar")}
                           </span>
                           <span className="text-xs text-slate-400">PDF máximo 10MB</span>
-                        </label>
+                        </div>
                       </div>
                     </div>
                   </div>
