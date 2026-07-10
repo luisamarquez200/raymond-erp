@@ -192,7 +192,8 @@ export class RentasService {
                 estado: 'VIGENTE',
                 origen: 'MANUAL',
                 condiciones: {
-                    plazo_meses: dto.plazo_meses ?? null
+                    plazo_meses: dto.plazo_meses ?? null,
+                    ...(dto.condiciones || {})
                 }
             },
         });

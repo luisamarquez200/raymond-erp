@@ -201,9 +201,6 @@ export default function R4RentasPage() {
           mes_cobro: null,
           renta_base: Number(newRentaFormData.renta_base) || 0,
           mantenimiento: newRentaFormData.mantenimiento,
-          tipo_poliza: newRentaFormData.tipo_poliza,
-          costo_poliza_distribuidor: Number(newRentaFormData.costo_poliza) || 0,
-          moneda_pago_distribuidor: newRentaFormData.moneda_poliza,
           comentarios: newRentaFormData.comentarios
         },
         condiciones: {

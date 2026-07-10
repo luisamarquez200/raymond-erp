@@ -107,4 +107,7 @@ export class CreateRentaDto {
     @Type(() => CreateDetallesRentaDto)
     @IsOptional()
     detalles?: CreateDetallesRentaDto;
+
+    @IsOptional()
+    condiciones?: any;
 }
