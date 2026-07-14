@@ -62,7 +62,7 @@ RUN find /app/node_modules/.bin/next /app/apps/web/node_modules/.bin/next -maxde
 
 # Build de Next.js
 WORKDIR /app/apps/web
-RUN NODE_ENV=production node_modules/.bin/next build
+RUN NODE_ENV=production pnpm run build
 
 WORKDIR /app
 
@@ -105,4 +105,4 @@ EXPOSE 8000
 ENV PORT=8000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node_modules/.bin/next", "start", "--port", "8000", "-H", "0.0.0.0"]
+CMD ["node_modules/.bin/next", "start", "apps/web", "--port", "8000", "-H", "0.0.0.0"]
