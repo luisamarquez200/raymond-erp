@@ -551,6 +551,44 @@ export default function Fleet() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0] || null;
+    setFile(selected);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dropped = e.dataTransfer.files?.[0] || null;
+    if (dropped) setFile(dropped);
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.post('/r4/flotilla/importar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Archivo procesado correctamente');
+      setFile(null);
+      setIsUploadModalOpen(false);
+      fetchFlotilla();
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast.error('Error al procesar el archivo');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
       
