@@ -49,6 +49,11 @@ COPY turbo.json tsconfig.json ./
 
 # Build de la aplicación
 WORKDIR /app/apps/api
+
+# Proveer un DATABASE_URL dummy o por build-arg para que prisma generate no falle (P1012)
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL:-"postgresql://postgres:postgres@localhost:5432/postgres"}
+
 # Generar todos los clientes de Prisma antes del build (con retry para errores de red)
 RUN (npx prisma@5.19.1 generate --schema=./prisma/schema.prisma && \
     npx prisma@5.19.1 generate --schema=./prisma/schemas/taller-r1.prisma && \
@@ -91,6 +96,10 @@ COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
 
 RUN pnpm add -D -w prisma@5.19.1 --shamefully-hoist --fetch-timeout=600000
+
+# Asegurar que DATABASE_URL esté disponible para el generate del runner
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL:-"postgresql://postgres:postgres@localhost:5432/postgres"}
 
 RUN echo "🔧 Generating all Prisma clients..." && \
     npx prisma@5.19.1 generate --schema=./apps/api/prisma/schema.prisma && \

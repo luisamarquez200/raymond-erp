@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: ./apps/api/Dockerfile
+      args:
+        - DATABASE_URL=${DATABASE_URL}
     container_name: raymond-api
     ports:
       - "8001:8001"
