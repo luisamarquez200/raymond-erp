@@ -58,6 +58,61 @@ export class AdcsService {
         }
     }
 
+    async obtenerResumenAdc(name: string) {
+        try {
+            const db = this.getDb();
+            
+            // 1. Get user details from main database
+            const user = await this.prismaService.users.findFirst({
+                where: { 
+                    first_name: name,
+                    roles: { name: 'ADC' }
+                },
+                select: {
+                    email: true,
+                    last_login_at: true
+                }
+            });
+
+            // 2. Get unique clients associated with this ADC from R4 database (from sitios and activos)
+            const sitios = await db.sitio.findMany({
+                where: { adc: name },
+                include: { cliente: true }
+            });
+
+            const activos = await db.activo.findMany({
+                where: { adc: name },
+                include: { cliente: true }
+            });
+
+            const uniqueClientNames = new Set<string>();
+            
+            sitios.forEach(s => {
+                if (s.cliente?.razon_social) {
+                    uniqueClientNames.add(s.cliente.razon_social);
+                }
+            });
+
+            activos.forEach(a => {
+                if (a.cliente?.razon_social) {
+                    uniqueClientNames.add(a.cliente.razon_social);
+                }
+            });
+
+            return {
+                name,
+                email: user?.email || null,
+                lastLoginAt: user?.last_login_at || null,
+                clientesAsociados: Array.from(uniqueClientNames).sort(),
+                totalClientes: uniqueClientNames.size
+            };
+
+        } catch (error: any) {
+            this.logger.error(`Error en obtenerResumenAdc: ${error.message}`);
+            throw error;
+        }
+    }
+
     async crearUsuarioAdc(dto: { name: string, email: string, password: string }, organizationId: string) {
         try {
             // First, find if the ADC role exists in this organization

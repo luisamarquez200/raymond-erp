@@ -9,9 +9,11 @@ import MobileSidebar from '../navigation/MobileSidebar'
 import Navbar from '../navigation/Navbar'
 import { useAuthStore } from '@/store/auth.store'
 import { useOrganizationStore } from '@/store/organization.store'
+import { useConfigStore } from '@/store/config.store'
 import OrganizationProvider from '@/providers/organization-provider'
 import Loader from '../ui/loader'
 import Image from 'next/image'
+import { ThemeSwitcher } from '../ui/theme-switcher'
 
 const queryClient = new QueryClient()
 
@@ -23,6 +25,7 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
     const router = useRouter()
     const { user, isLoading, restoreSession } = useAuthStore()
     const { currentOrganization } = useOrganizationStore()
+    const { roleColors } = useConfigStore()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const pathname = usePathname()
 
@@ -126,14 +129,17 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
                     </div>
 
                     {/* Footer Banner */}
-                    <div className={cn(
-                        "fixed bottom-0 right-0 bg-red-500 text-white text-[10px] sm:text-[11px] font-normal uppercase tracking-widest text-center py-1.5 px-4 shadow-md z-40 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 h-auto min-h-[40px] transition-all duration-300",
-                        !isIsolated && (sidebarCollapsed ? "lg:left-16 left-0" : "lg:left-64 left-0"),
-                        isIsolated && "left-0"
-                    )}>
+                    <div 
+                        className={cn(
+                            "fixed bottom-0 right-0 text-white text-[10px] sm:text-[11px] font-normal uppercase tracking-widest text-center py-1.5 px-4 shadow-md z-40 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 h-auto min-h-[40px] transition-all duration-300",
+                            !isIsolated && (sidebarCollapsed ? "lg:left-16 left-0" : "lg:left-64 left-0"),
+                            isIsolated && "left-0"
+                        )}
+                        style={{ backgroundColor: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador }}
+                    >
                         <span>Software Beta</span>
                         <span className="hidden sm:inline opacity-50">•</span>
-                        <a href="https://www.runsolutions-services.com" target="_blank" rel="noreferrer" className="hover:underline hover:text-red-100 transition-colors">
+                        <a href="https://www.runsolutions-services.com" target="_blank" rel="noreferrer" className="hover:underline hover:text-white/80 transition-colors">
                             www.runsolutions-Services.com
                         </a>
                         <span className="hidden sm:inline opacity-50">•</span>

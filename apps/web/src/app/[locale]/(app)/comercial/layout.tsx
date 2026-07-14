@@ -4,6 +4,7 @@ import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LogOut, ArrowLeft } from 'lucide-react';
+import { ThemeSwitcher } from '@/components/ui/theme-switcher';
 
 export default function ComercialLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuthTallerStore();
@@ -53,6 +54,7 @@ export default function ComercialLayout({ children }: { children: React.ReactNod
       <main className="max-w-7xl mx-auto px-6 py-8">
         {children}
       </main>
+      <ThemeSwitcher />
     </div>
   );
 }

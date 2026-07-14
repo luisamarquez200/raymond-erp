@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -12,6 +12,8 @@ import {
   User, Briefcase, Percent, CheckCircle2, Clock, ShieldCheck, ArrowUpRight
 } from 'lucide-react';
 import api from '@/lib/api';
+import { useConfigStore } from '@/store/config.store';
+import { useAuthStore } from '@/store/auth.store';
 
 // --- FALLBACK MOCK DATA ---
 const donutChartData = [
@@ -31,6 +33,10 @@ const barChartData = [
 ];
 
 export default function R4DashboardPage() {
+  const { user } = useAuthStore();
+  const { roleColors } = useConfigStore();
+  const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
+
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<any>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -64,7 +70,7 @@ export default function R4DashboardPage() {
   );
 
   const dynamicDonutData = [
-    { name: 'En Renta / Activo', value: metrics?.flotillaStatus?.activosRentados || 0, color: '#dc2626' },
+    { name: 'En Renta / Activo', value: metrics?.flotillaStatus?.activosRentados || 0, color: currentColor },
     { name: 'Mantenimiento / Inactivo c/ Cliente', value: metrics?.flotillaStatus?.mantenimiento || 0, color: '#f59e0b' },
     { name: 'Disponibles / Back Up', value: metrics?.flotillaStatus?.backUp || 0, color: '#3b82f6' },
     { name: 'Inactivos', value: metrics?.flotillaStatus?.inactivos || 0, color: '#525252' },
@@ -78,9 +84,9 @@ export default function R4DashboardPage() {
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col items-center gap-6 max-w-sm w-full animate-in fade-in zoom-in duration-500">
           <div className="relative w-24 h-24">
-             <div className="absolute inset-0 border-4 border-red-50 rounded-full"></div>
-             <div className="absolute inset-0 border-4 border-[#E1000F] rounded-full border-t-transparent animate-spin"></div>
-             <Truck className="absolute inset-0 m-auto w-10 h-10 text-[#E1000F] animate-pulse" />
+             <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+             <div className="absolute inset-0 border-4 rounded-full border-t-transparent animate-spin" style={{ borderColor: `${currentColor} transparent` }}></div>
+             <Truck className="absolute inset-0 m-auto w-10 h-10 animate-pulse" style={{ color: currentColor }} />
           </div>
           <div className="text-center">
             <h2 className="text-xl font-black text-slate-900 tracking-tight">Procesando datos</h2>
@@ -96,7 +102,7 @@ export default function R4DashboardPage() {
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-8 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sticky top-0 z-20">
         <div>
-          <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1 block">RAYMOND</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 block" style={{ color: currentColor }}>RAYMOND</span>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Ejecutivo</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Vista estratégica y desempeño de flotilla</p>
         </div>
@@ -235,28 +241,47 @@ export default function R4DashboardPage() {
                 <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
                   {metrics?.presupuestoAdcCliente?.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">No hay equipos activos registrados.</td>
+                      <td colSpan={4} className="px-4 py-8 text-center text-slate-400">No hay equipos activos registrados.</td>
                     </tr>
                   ) : (
-                    metrics?.presupuestoAdcCliente?.map((item: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-2.5">
-                          <span className="text-slate-900 font-black">{item.adc}</span>
-                        </td>
-                        <td className="px-4 py-2.5 max-w-[150px] truncate">{item.cliente}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md text-[10px]">
-                            {item.equiposCount}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-slate-900">
-                          ${item.mxn.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-emerald-600">
-                          ${item.usd.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
+                    (() => {
+                      const grouped = (metrics?.presupuestoAdcCliente || []).reduce((acc: any, item: any) => {
+                        if (!acc[item.adc]) acc[item.adc] = [];
+                        acc[item.adc].push(item);
+                        return acc;
+                      }, {});
+                      
+                      return Object.entries(grouped).map(([adc, items]: [string, any], idx: number) => (
+                        <Fragment key={idx}>
+                          {/* Header de ADC */}
+                          <tr className="bg-slate-50/80 font-black text-slate-800 border-y border-slate-100">
+                            <td colSpan={4} className="px-4 py-3 text-xs text-[#E5222D]">
+                              ADC: {adc}
+                              <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded border ml-2">
+                                {items.length} cliente(s)
+                              </span>
+                            </td>
+                          </tr>
+                          {/* Filas de clientes */}
+                          {items.map((item: any, subIdx: number) => (
+                            <tr key={`${idx}-${subIdx}`} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-2.5 max-w-[150px] truncate pl-8">{item.cliente}</td>
+                              <td className="px-4 py-2.5 text-center">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md text-[10px]">
+                                  {item.equiposCount}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-right text-slate-900">
+                                ${item.mxn.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-4 py-2.5 text-right text-emerald-600">
+                                ${item.usd.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ));
+                    })()
                   )}
                 </tbody>
               </table>

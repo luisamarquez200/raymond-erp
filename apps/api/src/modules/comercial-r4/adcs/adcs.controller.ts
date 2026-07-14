@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Res, HttpStatus, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Res, HttpStatus, UseGuards, Req, ForbiddenException, Param } from '@nestjs/common';
 import { Response } from 'express';
 import { AdcsService } from './adcs.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -20,6 +20,22 @@ export class AdcsController {
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
             return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+        }
+    }
+
+    @Get(':name/summary')
+    @UseGuards(JwtAuthGuard)
+    async getAdcSummary(@Param('name') name: string, @Req() req: any, @Res() res: Response) {
+        try {
+            const role = req.user?.roles;
+            const userRole = typeof role === 'string' ? role.toUpperCase() : '';
+            if (userRole !== 'ADMINISTRADOR' && userRole !== 'SUPERADMIN') {
+                throw new ForbiddenException('Solo los administradores pueden ver el resumen del ADC');
+            }
+            const data = await this.adcsService.obtenerResumenAdc(name);
+            return res.status(HttpStatus.OK).json({ success: true, data });
+        } catch (error: any) {
+            return res.status(error.status || HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }
 

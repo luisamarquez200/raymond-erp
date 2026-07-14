@@ -13,10 +13,12 @@ import {
     Truck,
     Receipt,
     CircleDollarSign,
-    Users
+    Users,
+    Settings
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { useConfigStore } from '@/store/config.store';
 import {
     Dialog,
     DialogContent,
@@ -51,10 +53,11 @@ const menuItems = [
         icon: Receipt,
         href: '/es/r4/rentas',
     },
+
     {
-        label: 'Gestión ADCs',
-        icon: Users,
-        href: '/es/r4/adcs',
+        label: 'Configuración',
+        icon: Settings,
+        href: '/es/r4/configuracion',
     }
 ];
 
@@ -63,6 +66,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
     const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const { user, signOut } = useAuthStore();
+    const { roleColors } = useConfigStore();
 
     const handleConfirmLogout = async () => {
         await signOut();
@@ -82,7 +86,12 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
             <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
                 {!isCollapsed && (
                     <div className="flex flex-col -gap-1">
-                        <span className="text-2xl font-black text-red-600 font-brand tracking-tighter leading-none">RAYMOND</span>
+                        <span 
+                            className="text-2xl font-black font-brand tracking-tighter leading-none"
+                            style={{ color: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador }}
+                        >
+                            RAYMOND
+                        </span>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">
                             Admin Comercial
                         </span>
@@ -115,7 +124,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
             <nav className="flex-1 overflow-y-auto py-4">
                 <ul className="space-y-1 px-2">
                     {menuItems.filter(item => {
-                        if (item.label === 'Gestión ADCs') {
+                        if (item.label === 'Configuración') {
                             return user?.role?.toLowerCase() === 'administrador' || user?.isSuperadmin;
                         }
                         return true;
@@ -130,13 +139,20 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                                     className={cn(
                                         'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
                                         isActive
-                                            ? 'bg-red-50 text-red-600 font-semibold'
+                                            ? 'font-semibold'
                                             : 'text-gray-700 hover:bg-gray-100',
                                         isCollapsed && 'justify-center'
                                     )}
+                                    style={isActive ? {
+                                        backgroundColor: `${user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador}15`,
+                                        color: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador
+                                    } : {}}
                                     title={isCollapsed ? item.label : undefined}
                                 >
-                                    <Icon className={cn('w-5 h-5 flex-shrink-0', isActive && 'text-red-600')} />
+                                    <Icon 
+                                        className={cn('w-5 h-5 flex-shrink-0')} 
+                                        style={isActive ? { color: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador } : {}}
+                                    />
                                     {!isCollapsed && <span>{item.label}</span>}
                                 </Link>
                             </li>
@@ -152,17 +168,23 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                     title="Cerrar sesión"
                     className={cn(
                         "w-full flex items-center gap-3 p-2 rounded-xl transition-all h-12 text-left",
-                        !isCollapsed ? "hover:bg-red-50 group" : "justify-center hover:bg-red-50"
+                        !isCollapsed ? "hover:bg-slate-50 group" : "justify-center hover:bg-slate-50"
                     )}>
-                    <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg border-2 border-white group-hover:bg-red-700 transition-colors">
+                    <div 
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg border-2 border-white transition-opacity hover:opacity-80"
+                        style={{ backgroundColor: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador }}
+                    >
                         {isCollapsed ? <LogOut className="w-5 h-5" /> : (user ? getInitials(user.firstName || user.email, user.lastName || '', user.email) : 'AC')}
                     </div>
                     {!isCollapsed && (
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-black text-gray-900 truncate leading-none group-hover:text-red-700 transition-colors">
+                            <p className="text-sm font-black text-gray-900 truncate leading-none transition-colors">
                                 {user ? `${user.firstName || user.email.split('@')[0]} ${user.lastName || ''}`.trim() : 'Admin'}
                             </p>
-                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <div 
+                                className="flex items-center gap-1 mt-1"
+                                style={{ color: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador }}
+                            >
                                 <p className="text-[10px] font-black uppercase tracking-widest flex-1 truncate">
                                     {user?.role || 'Admin'}
                                 </p>

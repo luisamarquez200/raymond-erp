@@ -5,7 +5,10 @@ import { Users, Plus, ShieldCheck, Mail } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
+import { useConfigStore } from '@/store/config.store';
 import { CrearUsuarioAdcModal } from '@/components/comercial-r4/adcs/CrearUsuarioAdcModal';
+import { AdcSummaryModal } from '@/components/comercial-r4/adcs/AdcSummaryModal';
+import { Info } from 'lucide-react';
 
 interface AdcEntry {
     name: string;
@@ -15,6 +18,8 @@ interface AdcEntry {
 export default function AdcsPage() {
     const { user } = useAuthStore();
     const isAdmin = user?.role?.toUpperCase() === 'ADMINISTRADOR' || user?.role?.toUpperCase() === 'SUPERADMIN';
+    const { roleColors } = useConfigStore();
+    const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
 
     const [adcs, setAdcs] = useState<AdcEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -22,6 +27,10 @@ export default function AdcsPage() {
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAdcName, setSelectedAdcName] = useState('');
+
+    // Summary Modal state
+    const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+    const [summaryAdcName, setSummaryAdcName] = useState('');
 
     const fetchAdcs = async () => {
         try {
@@ -49,6 +58,11 @@ export default function AdcsPage() {
         setIsModalOpen(true);
     };
 
+    const handleOpenSummary = (adcName: string) => {
+        setSummaryAdcName(adcName);
+        setIsSummaryModalOpen(true);
+    };
+
     if (!isAdmin) {
         return (
             <div className="min-h-screen bg-[#F9FAFB] p-8 flex items-center justify-center">
@@ -64,10 +78,10 @@ export default function AdcsPage() {
     return (
         <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-[#E5222D]"></div>
+                <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: currentColor }}></div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-start gap-4">
-                        <div className="p-3 bg-red-50 text-red-600 rounded-2xl">
+                        <div className="p-3 rounded-2xl" style={{ backgroundColor: `${currentColor}15`, color: currentColor }}>
                             <Users className="w-6 h-6" />
                         </div>
                         <div>
@@ -89,11 +103,11 @@ export default function AdcsPage() {
                         </h3>
                     </div>
                     
-                    <div className="bg-red-50/50 border border-red-100 rounded-2xl p-5 flex flex-col justify-between">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E5222D] mb-2 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-red-500"></span> PENDIENTES DE CREAR
+                    <div className="rounded-2xl p-5 flex flex-col justify-between" style={{ backgroundColor: `${currentColor}05`, borderColor: `${currentColor}30`, borderWidth: 1 }}>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 flex items-center gap-2" style={{ color: currentColor }}>
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentColor }}></span> PENDIENTES DE CREAR
                         </p>
-                        <h3 className="text-4xl font-black text-red-900">
+                        <h3 className="text-4xl font-black" style={{ color: currentColor }}>
                             {adcs.filter(a => a.status === 'Sin Usuario').length}
                         </h3>
                     </div>
@@ -135,32 +149,41 @@ export default function AdcsPage() {
                                             </div>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border ${
-                                                adc.status === 'Usuario Creado' 
-                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                                                    : 'bg-red-50 text-red-600 border-red-100'
-                                            }`}>
+                                            <span 
+                                                className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border ${adc.status === 'Usuario Creado' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : ''}`}
+                                                style={adc.status === 'Sin Usuario' ? { backgroundColor: `${currentColor}15`, color: currentColor, borderColor: `${currentColor}30` } : {}}
+                                            >
                                                 {adc.status}
                                             </span>
                                         </td>
                                         <td className="p-4 text-right">
-                                            {adc.status === 'Sin Usuario' ? (
+                                            <div className="flex items-center justify-end gap-2">
                                                 <button
-                                                    onClick={() => handleOpenModal(adc.name)}
-                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-red-200"
+                                                    onClick={() => handleOpenSummary(adc.name)}
+                                                    className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
+                                                    title="Ver Resumen"
                                                 >
-                                                    <Plus className="w-3.5 h-3.5" />
-                                                    Asignar Usuario
+                                                    <Info className="w-4 h-4" />
                                                 </button>
-                                            ) : (
-                                                <button
-                                                    disabled
-                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs cursor-not-allowed"
-                                                >
-                                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                                    Cuenta Activa
-                                                </button>
-                                            )}
+                                                {adc.status === 'Sin Usuario' ? (
+                                                    <button
+                                                        onClick={() => handleOpenModal(adc.name)}
+                                                        className="inline-flex items-center gap-2 px-4 py-2 text-white rounded-xl font-bold text-xs transition-all shadow-md hover:opacity-80"
+                                                        style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5" />
+                                                        Asignar Usuario
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        disabled
+                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs cursor-not-allowed"
+                                                    >
+                                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                                        Cuenta Activa
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -175,6 +198,12 @@ export default function AdcsPage() {
                 onClose={() => setIsModalOpen(false)}
                 adcName={selectedAdcName}
                 onSuccess={fetchAdcs}
+            />
+
+            <AdcSummaryModal
+                isOpen={isSummaryModalOpen}
+                onClose={() => setIsSummaryModalOpen(false)}
+                adcName={summaryAdcName}
             />
         </div>
     );

@@ -10,6 +10,7 @@ import { useState, useEffect, Fragment } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth.store";
+import { useConfigStore } from "@/store/config.store";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function R4RentasPage() {
@@ -21,6 +22,9 @@ export default function R4RentasPage() {
   
   const isAdc = userRole !== 'administrador' && !userRole.includes('geren') && !userRole.includes('coordinaci');
   const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
+
+  const { roleColors } = useConfigStore();
+  const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
 
   const [rentas, setRentas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -396,23 +400,24 @@ export default function R4RentasPage() {
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start gap-4">
         <div className="flex flex-col -gap-1">
-          <span className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: currentColor }}>RAYMOND</span>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión de Rentas</h1>
           <p className="text-slate-500 font-medium mt-1">Administración de contratos de renta, vigencias y asignación de activos</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex gap-3">
           <button
             onClick={() => setIsFichaOcModalOpen(true)}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-100"
+            className="px-6 py-3 text-white rounded-2xl font-bold text-sm transition-all shadow-md hover:opacity-90 flex items-center gap-2 uppercase tracking-widest"
+            style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
           >
             <FileText className="w-4 h-4" />
             Registro OC
           </button>
           <button
             onClick={() => setIsNewRentaModalOpen(true)}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg"
+            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-sm transition-all shadow-md shadow-slate-900/20 flex items-center gap-2 uppercase tracking-widest"
           >
             <Plus className="w-4 h-4" />
             Nueva Renta
@@ -421,13 +426,15 @@ export default function R4RentasPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-red-100 hover:shadow-md transition-all">
-          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Receipt className="w-24 h-24 text-red-600" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-12">
+        <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
+          <div className="absolute -right-8 -top-8 text-slate-50/50 transform group-hover:scale-110 transition-transform duration-500">
+            <Receipt className="w-48 h-48" style={{ color: `${currentColor}10` }} />
           </div>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total de Rentas {isAdc && '(Mi ADC)'}</p>
-          <h3 className="text-3xl font-black text-red-600">{totalRentas}</h3>
+          <div className="relative z-10">
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total de Rentas {isAdc && '(Mi ADC)'}</p>
+            <h3 className="text-3xl font-black" style={{ color: currentColor }}>{totalRentas}</h3>
+          </div>
         </div>
 
         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-emerald-100 hover:shadow-md transition-all">
@@ -482,7 +489,18 @@ export default function R4RentasPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={14} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando rentas...</td></tr>
+                <tr>
+                  <td colSpan={14}>
+                    <div className="py-24 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+                      <div className="relative w-16 h-16">
+                        <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                        <div className="absolute inset-0 border-4 rounded-full border-t-transparent animate-spin" style={{ borderColor: `${currentColor} transparent` }}></div>
+                        <Receipt className="absolute inset-0 m-auto w-6 h-6 animate-pulse" style={{ color: currentColor }} />
+                      </div>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cargando rentas...</p>
+                    </div>
+                  </td>
+                </tr>
               ) : Object.keys(groupedRentas).length === 0 ? (
                 <tr><td colSpan={14} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron rentas.</td></tr>
               ) : Object.entries(groupedRentas).map(([clienteNombre, clientRentas]) => (
@@ -603,24 +621,29 @@ export default function R4RentasPage() {
                   </button>
                 </div>
 
-                <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                <div className="p-8 pt-0 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+                
+                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6">
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2" style={{ color: currentColor }}>
+                    <Building2 className="w-4 h-4"/> 1. Información del Cliente
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {/* Cliente select */}
-                    <div className="space-y-1.5 relative">
+                    <div className="space-y-1.5 flex flex-col">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente *</label>
-                      <button
-                        type="button"
-                        onClick={() => setOpenFichaCliente(!openFichaCliente)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
-                      >
-                        {selectedFichaClienteId
-                          ? filteredClientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razonSocial
-                          : "Seleccionar Cliente..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </button>
-                      
-                      {openFichaCliente && (
-                        <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                      <Popover open={openFichaCliente} onOpenChange={setOpenFichaCliente}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
+                          >
+                            {selectedFichaClienteId
+                              ? (clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razonSocial || clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razon_social)
+                              : "Seleccionar Cliente..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-2 z-[99999]" align="start">
                           <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <input
@@ -631,47 +654,53 @@ export default function R4RentasPage() {
                               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
                             />
                           </div>
-                          <div className="max-h-[200px] overflow-y-auto space-y-1">
-                            {filteredClientesDisponibles
-                              .filter((c: any) => c.razonSocial?.toLowerCase().includes(fichaClienteSearchTerm.toLowerCase()))
-                              .map((c: any) => (
-                                <button
-                                  key={c.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedFichaClienteId(c.id);
-                                    setSelectedFichaSitioId('');
-                                    setOpenFichaCliente(false);
-                                    setFichaClienteSearchTerm('');
-                                  }}
-                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
-                                >
-                                  <span>{c.razonSocial}</span>
-                                  {selectedFichaClienteId === c.id && <Check className="w-4 h-4 text-red-600" />}
-                                </button>
-                              ))}
+                          <div className="max-h-[250px] overflow-y-auto space-y-1">
+                            {clientesDisponibles
+                              .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
+                              .length === 0 ? (
+                                <div className="p-4 text-center text-sm text-slate-500">No se encontraron clientes.</div>
+                              ) : (
+                                clientesDisponibles
+                                  .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
+                                  .map((c: any) => (
+                                    <button
+                                      key={c.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedFichaClienteId(c.id);
+                                        setSelectedFichaSitioId('');
+                                        setOpenFichaCliente(false);
+                                        setFichaClienteSearchTerm('');
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                    >
+                                      <span>{c.razonSocial || c.razon_social}</span>
+                                      {selectedFichaClienteId === c.id && <Check className="w-4 h-4 text-red-600" />}
+                                    </button>
+                                  ))
+                              )}
                           </div>
-                        </div>
-                      )}
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     {/* Sitio select */}
-                    <div className="space-y-1.5 relative">
+                    <div className="space-y-1.5 flex flex-col">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio *</label>
-                      <button
-                        type="button"
-                        disabled={!selectedFichaClienteId}
-                        onClick={() => setOpenFichaSitio(!openFichaSitio)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
-                      >
-                        {selectedFichaSitioId
-                          ? filteredClientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
-                          : "Seleccionar Sitio..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </button>
-                      
-                      {openFichaSitio && (
-                        <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                      <Popover open={openFichaSitio} onOpenChange={setOpenFichaSitio}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!selectedFichaClienteId}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
+                          >
+                            {selectedFichaSitioId
+                              ? clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
+                              : "Seleccionar Sitio..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-2 z-[99999]" align="start">
                           <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <input
@@ -682,27 +711,32 @@ export default function R4RentasPage() {
                               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
                             />
                           </div>
-                          <div className="max-h-[200px] overflow-y-auto space-y-1">
-                            {filteredClientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios
-                              ?.filter((s: any) => s.nombre?.toLowerCase().includes(fichaSitioSearchTerm.toLowerCase()))
-                              .map((s: any) => (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedFichaSitioId(s.id);
-                                    setOpenFichaSitio(false);
-                                    setFichaSitioSearchTerm('');
-                                  }}
-                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
-                                >
-                                  <span>{s.nombre}</span>
-                                  {selectedFichaSitioId === s.id && <Check className="w-4 h-4 text-red-600" />}
-                                </button>
-                              ))}
+                          <div className="max-h-[250px] overflow-y-auto space-y-1">
+                            {clientesDisponibles.find((c: any) => c && c.id === selectedFichaClienteId)?.sitios
+                              ?.filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase())).length === 0 ? (
+                                <div className="p-4 text-center text-sm text-slate-500">No se encontraron sitios.</div>
+                              ) : (
+                                clientesDisponibles.find((c: any) => c && c.id === selectedFichaClienteId)?.sitios
+                                  ?.filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase()))
+                                  .map((s: any) => (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedFichaSitioId(s.id);
+                                        setOpenFichaSitio(false);
+                                        setFichaSitioSearchTerm('');
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                    >
+                                      <span>{s.nombre}</span>
+                                      {selectedFichaSitioId === s.id && <Check className="w-4 h-4 text-red-600" />}
+                                    </button>
+                                  ))
+                              )}
                           </div>
-                        </div>
-                      )}
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     {/* Folio OC */}
@@ -714,7 +748,6 @@ export default function R4RentasPage() {
                         onChange={e => setFichaFolioOc(e.target.value)}
                         placeholder="Escribe el folio de la OC"
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
-                        required
                       />
                     </div>
 
@@ -812,18 +845,14 @@ export default function R4RentasPage() {
                       </div>
                     </div>
                   </div>
+                  </div>
 
                   {/* Grid of Series & Days Discount Calculator */}
                   {selectedFichaSitioId && (
-                    <div className="space-y-4 pt-4 border-t border-slate-100">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                          <Truck className="w-4 h-4 text-red-500" />
-                          Equipos del Sitio y Descuento por Días Caídos
-                        </h3>
-                        <span className="text-xs text-slate-400 font-bold">{fichaSeriesGrid.length} equipos encontrados</span>
-                      </div>
-
+                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6">
+                  <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2" style={{ color: currentColor }}>
+                    <Truck className="w-4 h-4"/> 2. Selección de Equipo
+                  </h3>
                       <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
                         <table className="w-full text-left text-xs whitespace-nowrap">
                           <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-wider border-b border-slate-100">
@@ -855,8 +884,10 @@ export default function R4RentasPage() {
                                   )}
                                 </td>
                                 <td className="p-3 text-slate-600">
-                                  <div>Clase {item.clase}</div>
-                                  <div className="text-[10px] text-slate-400 font-medium">{item.modelo}</div>
+                                  <div className="flex flex-col text-xs mt-0.5">
+                                    <span className="font-bold text-slate-800">{item.modelo || '-'}</span>
+                                    <span style={{ color: currentColor }}>{item.clase || '-'}</span>
+                                  </div>
                                 </td>
                                 <td className="p-3">
                                   <input
@@ -969,7 +1000,7 @@ export default function R4RentasPage() {
                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
                           >
                             {newRentaFormData.cliente_id
-                              ? clientesDisponibles.find((c) => c.id === newRentaFormData.cliente_id)?.razonSocial
+                              ? (clientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id)?.razonSocial || clientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id)?.razon_social)
                               : "Seleccionar Cliente..."}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </button>
@@ -988,8 +1019,8 @@ export default function R4RentasPage() {
                               </div>
                               <div className="max-h-[200px] overflow-y-auto space-y-1">
                                 {clientesDisponibles
-                                  .filter(c => c.razonSocial?.toLowerCase().includes(clienteSearchTerm.toLowerCase()))
-                                  .map(c => (
+                                  .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((clienteSearchTerm || '').toLowerCase()))
+                                  .map((c: any) => (
                                     <button
                                       key={c.id}
                                       type="button"
@@ -1000,7 +1031,7 @@ export default function R4RentasPage() {
                                       }}
                                       className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
                                     >
-                                      <span>{c.razonSocial}</span>
+                                      <span>{c.razonSocial || c.razon_social}</span>
                                       {newRentaFormData.cliente_id === c.id && <Check className="w-4 h-4 text-red-600" />}
                                     </button>
                                   ))}
@@ -1036,8 +1067,8 @@ export default function R4RentasPage() {
                                 />
                               </div>
                               <div className="max-h-[200px] overflow-y-auto space-y-1">
-                                {selectedClienteObj?.sitios
-                                  ?.filter((s: any) => s.nombre?.toLowerCase().includes(sitioSearchTerm.toLowerCase()))
+                                {clientesDisponibles.find((c: any) => c && c.id === newRentaFormData.cliente_id)?.sitios
+                                  ?.filter((s: any) => s && (s.nombre || '').toLowerCase().includes((sitioSearchTerm || '').toLowerCase()))
                                   .map((s: any) => (
                                     <button
                                       key={s.id}

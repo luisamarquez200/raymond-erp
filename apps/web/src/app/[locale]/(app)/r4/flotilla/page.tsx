@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
+import { useConfigStore } from '@/store/config.store';
 
 const statusColors = {
   'Activo': 'bg-emerald-50 text-emerald-700 border-emerald-100',
@@ -77,7 +78,7 @@ const FilterCombobox = ({
                 className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
               >
                 <span className="truncate pr-2">{formatFilterText(opt)}</span>
-                {value === opt && <Check className="w-4 h-4 text-red-600 shrink-0" />}
+                {value === opt && <Check className="w-4 h-4 shrink-0" style={{ color: currentColor }} />}
               </button>
             ))}
         </div>
@@ -88,6 +89,8 @@ const FilterCombobox = ({
 
 export default function Fleet() {
   const { user } = useAuthStore();
+  const { roleColors } = useConfigStore();
+  const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -217,13 +220,23 @@ export default function Fleet() {
       const res = await api.get('/r4/clientes');
       const clientes = res.data?.data || res.data || [];
       setClientesDisponibles(clientes);
-      const sites = clientes.flatMap((c: any) => 
+      let sites = clientes.flatMap((c: any) => 
         (c.sitios || []).map((s: any) => ({
           ...s,
           cliente: { razon_social: c.razonSocial || c.razon_social },
           adc: c.adc && c.adc !== '-' ? c.adc : ''
         }))
       );
+      
+      // Filter sites by ADC if user is an ADC
+      if (isAdc) {
+        const userLower = loggedInAdcName.toLowerCase();
+        sites = sites.filter((s: any) => {
+          const adcLower = s.adc?.toLowerCase() || '';
+          return adcLower === userLower || userLower.includes(adcLower) || adcLower.includes(user?.firstName?.toLowerCase() || '');
+        });
+      }
+      
       setAllSites(sites);
     } catch (error) {
       console.error('Error fetching sites:', error);
@@ -518,66 +531,38 @@ export default function Fleet() {
     inactivos: getEstatusCount(['INACTIVO'])
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const droppedFiles = Array.from(e.dataTransfer.files);
-      if (droppedFiles.length > 0) {
-          const currentFile = droppedFiles[0];
-          if (currentFile.name.endsWith('.xlsx') || currentFile.name.endsWith('.csv') || currentFile.name.endsWith('.xls')) {
-              setFile(currentFile);
-          } else {
-              toast.error('Formato no soportado. Sube un archivo Excel.');
-          }
-      }
-  }, []);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-          setFile(e.target.files[0]);
-      }
-  };
-
-  const handleUpload = async () => {
-      if (!file) {
-          toast.error('Por favor, selecciona un archivo primero.');
-          return;
-      }
-      setIsUploading(true);
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-          const res = await api.post('/r4/carga-masiva', formData, {
-              headers: { 'Content-Type': 'multipart/form-data' },
-          });
-          toast.success(res.data.message || 'Carga completada con éxito');
-          setFile(null);
-          setIsUploadModalOpen(false);
-          fetchFlotilla();
-      } catch (err: any) {
-          console.error('Upload Error:', err);
-          toast.error(err.response?.data?.message || 'Error al subir el archivo');
-      } finally {
-          setIsUploading(false);
-      }
+  const handleDownloadExcel = async () => {
+    try {
+      toast.info('Generando Excel...');
+      const response = await api.get('/r4/flotilla/exportar/excel', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Flotilla_${new Date().getTime()}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Excel descargado correctamente');
+    } catch (error) {
+      console.error('Error downloading excel', error);
+      toast.error('Error al exportar');
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div className="flex flex-col -gap-1">
-          <span className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">RAYMOND</span>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Flotilla y Activos</h1>
-          <p className="text-slate-500 font-medium mt-1">Gestión y control de inventario de equipos y accesorios</p>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: currentColor }}>RAYMOND</span>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Flotilla Rental</h1>
+          <p className="text-slate-500 font-medium mt-1">Gestión integral de equipos, mantenimientos y ubicaciones</p>
         </div>
-        <div className="flex items-center gap-3">
+        
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full md:w-auto">
           {!isAdc && pendingApprovals.length > 0 && (
             <button
               onClick={() => setShowApprovalsTab(!showApprovalsTab)}
@@ -589,32 +574,44 @@ export default function Fleet() {
           )}
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest border-2 border-slate-100 transition-all shadow-sm"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-sm whitespace-nowrap"
           >
-            <Upload className="w-4 h-4" />
-            Carga Masiva
+            <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Carga Masiva</span>
+            <span className="sm:hidden">Masiva</span>
           </button>
-          <button className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest border-2 border-slate-100 transition-all shadow-sm">
-            <Download className="w-4 h-4" />
+          <button
+            onClick={handleDownloadExcel}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-sm whitespace-nowrap"
+          >
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Exportar
           </button>
           {!isAdc && (
-            <button onClick={() => setIsNewAssetModalOpen(true)} className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-100">
-              <Plus className="w-4 h-4" />
+            <button 
+              onClick={() => setIsNewAssetModalOpen(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:py-3 text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md whitespace-nowrap hover:opacity-90 mt-2 sm:mt-0"
+              style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
+            >
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Alta de Equipo
             </button>
           )}
         </div>
       </div>
 
-      {/* Summary Cards (Mantenimiento, Movimientos and Docs removed) */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-red-100 hover:shadow-md transition-all">
-          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Truck className="w-24 h-24 text-red-600" />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mt-8 sm:mt-12">
+        <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 lg:p-8 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+          <div className="absolute -right-4 -bottom-4 sm:-right-8 sm:-bottom-8 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500">
+            <Truck className="w-24 h-24 sm:w-32 sm:h-32 lg:w-48 lg:h-48" style={{ color: currentColor }} />
           </div>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total Activos</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-red-600">{statusCounts.totalActivos}</h3>
+          <div className="relative z-10">
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total Activos</p>
+            <h3 className="text-2xl sm:text-3xl font-black" style={{ color: currentColor }}>
+              {loading ? <span className="text-slate-200">--</span> : statusCounts.totalActivos}
+            </h3>
+          </div>
         </div>
         
         <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-emerald-100 hover:shadow-md transition-all">
@@ -816,7 +813,18 @@ export default function Fleet() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
-                  <tr><td colSpan={15} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando flotilla...</td></tr>
+                  <tr>
+                    <td colSpan={15}>
+                      <div className="py-24 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+                        <div className="relative w-16 h-16">
+                          <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                          <div className="absolute inset-0 border-4 rounded-full border-t-transparent animate-spin" style={{ borderColor: `${currentColor} transparent` }}></div>
+                          <Truck className="absolute inset-0 m-auto w-6 h-6 animate-pulse" style={{ color: currentColor }} />
+                        </div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cargando flotilla...</p>
+                      </div>
+                    </td>
+                  </tr>
                 ) : filteredAssets.length === 0 ? (
                   <tr><td colSpan={15} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron activos.</td></tr>
                 ) : paginatedAssets.map((asset) => (

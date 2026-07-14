@@ -8,11 +8,14 @@ import { useState, useEffect } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth.store";
+import { useConfigStore } from "@/store/config.store";
 
 
 export default function ClientesSitios() {
   const { user } = useAuthStore();
   const isReadOnly = user?.role?.toUpperCase() === 'ADMINISTRADOR';
+  const { roleColors } = useConfigStore();
+  const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
 
   const [activeTab, setActiveTab] = useState<'clientes' | 'directorio'>('clientes');
   const [clientes, setClientes] = useState<any[]>([]);
@@ -304,21 +307,19 @@ export default function ClientesSitios() {
     .map((site: any) => site.distribuidor)
     .filter((d: any) => Boolean(d) && String(d) !== '[object Object]' && String(d) !== '-');
   const baseDistribuidores = ['Raymond GDL', 'Raymond Monterrey', 'Raymond Centro', 'Raymond Bajío', 'Raymond Norte', 'Raymond Occidente'];
-  
   const uniqueDistribuidores = Array.from(new Set([...baseDistribuidores, ...loadedDistribuidores])).sort();
 
   const totalPagesDirectorio = Math.ceil(allSites.length / itemsPerPageDirectorio);
   const paginatedAllSites = allSites.slice((currentPageDirectorio - 1) * itemsPerPageDirectorio, currentPageDirectorio * itemsPerPageDirectorio);
-
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
       
       {/* HEADER SECTION */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-[#E5222D]"></div>
+        <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: currentColor }}></div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-red-50 text-red-600 rounded-2xl">
+            <div className="p-3 rounded-2xl" style={{ backgroundColor: `${currentColor}15`, color: currentColor }}>
               <Building2 className="w-6 h-6" />
             </div>
             <div>
@@ -337,7 +338,8 @@ export default function ClientesSitios() {
             {!isReadOnly && (
               <button 
                 onClick={() => setIsNewClientModalOpen(true)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200"
+                className="flex items-center gap-2 px-5 py-2.5 text-white rounded-xl font-bold text-sm transition-all shadow-md"
+                style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
               >
                 <Plus className="w-4 h-4" />
                 Nuevo Cliente
@@ -367,24 +369,26 @@ export default function ClientesSitios() {
       </div>
 
       {/* TABS SELECTOR */}
-      <div className="flex border-b border-slate-200 bg-white p-2 rounded-2xl shadow-sm border">
+      <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-slate-100 w-full sm:w-auto overflow-x-auto">
         <button
           onClick={() => setActiveTab('clientes')}
-          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
             activeTab === 'clientes'
-              ? 'bg-[#E5222D] text-white shadow-md'
-              : 'text-slate-500 hover:text-slate-700'
+              ? 'text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
           }`}
+          style={activeTab === 'clientes' ? { backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` } : {}}
         >
           Clientes y Sitios
         </button>
         <button
           onClick={() => setActiveTab('directorio')}
-          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
             activeTab === 'directorio'
-              ? 'bg-[#E5222D] text-white shadow-md'
-              : 'text-slate-500 hover:text-slate-700'
+              ? 'text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
           }`}
+          style={activeTab === 'directorio' ? { backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` } : {}}
         >
           Directorio de Distribuidores
         </button>
@@ -442,9 +446,9 @@ export default function ClientesSitios() {
                 {loading ? (
                   <div className="py-16 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
                     <div className="relative w-12 h-12">
-                       <div className="absolute inset-0 border-4 border-red-50 rounded-full"></div>
-                       <div className="absolute inset-0 border-4 border-[#E5222D] rounded-full border-t-transparent animate-spin"></div>
-                       <Building2 className="absolute inset-0 m-auto w-5 h-5 text-[#E5222D] animate-pulse" />
+                       <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                       <div className="absolute inset-0 border-4 rounded-full border-t-transparent animate-spin" style={{ borderColor: `${currentColor} transparent` }}></div>
+                       <Building2 className="absolute inset-0 m-auto w-5 h-5 animate-pulse" style={{ color: currentColor }} />
                     </div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando directorio...</p>
                   </div>
@@ -456,9 +460,10 @@ export default function ClientesSitios() {
                     onClick={() => setSelectedClienteId(cliente.id)}
                     className={`p-4 rounded-2xl cursor-pointer transition-all border-2 flex flex-col gap-3 ${
                       selectedClienteId === cliente.id 
-                        ? 'border-red-100 bg-red-50/30 shadow-sm' 
+                        ? 'bg-slate-50 shadow-sm' 
                         : 'border-slate-50 bg-white hover:border-slate-100 hover:shadow-sm'
                     }`}
+                    style={selectedClienteId === cliente.id ? { borderColor: currentColor } : {}}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex flex-col">
@@ -517,8 +522,8 @@ export default function ClientesSitios() {
                 <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm">
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div className="flex gap-5 items-center">
-                      <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center shrink-0 border border-red-100">
-                        <Building2 className="w-8 h-8 text-red-500" />
+                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border" style={{ backgroundColor: `${currentColor}15`, color: currentColor, borderColor: `${currentColor}30` }}>
+                        <Building2 className="w-8 h-8" />
                       </div>
                       <div>
                         <h2 className="text-2xl font-black text-slate-900">{selectedCliente.razonSocial}</h2>
@@ -577,13 +582,14 @@ export default function ClientesSitios() {
                 <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm flex flex-col gap-6">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-red-500"/>
+                      <MapPin className="w-5 h-5" style={{ color: currentColor }}/>
                       Sitios de Operación ({selectedCliente.sitios?.length || 0})
                     </h3>
                     {!isReadOnly && (
                       <button 
                         onClick={() => setIsNewSitioModalOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E5222D] text-white hover:bg-[#CC1E28] rounded-xl font-bold text-xs transition-all shadow-sm"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl font-bold text-xs transition-all shadow-sm"
+                        style={{ backgroundColor: currentColor }}
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Agregar Sitio
@@ -594,17 +600,17 @@ export default function ClientesSitios() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {selectedCliente.sitios?.length > 0 ? selectedCliente.sitios.map((sitio: any, idx: number) => (
                       <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
-                        <div className="p-5 border-l-4 border-l-[#E5222D] flex-1 space-y-3">
+                        <div className="p-5 flex-1 space-y-3" style={{ borderLeft: `4px solid ${currentColor}` }}>
                           <div className="flex justify-between items-start mb-2">
                             <div>
-                              <h4 className="font-black text-slate-900 text-lg">{sitio.nombre}</h4>
+                              <h4 className="font-black text-slate-900 text-lg">{selectedCliente.razonSocial} / {sitio.nombre}</h4>
                               <p className="text-[10px] font-bold text-slate-500 mt-0.5">TOTVS: {sitio.no_totvs || '-'}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               {!isReadOnly && (
                                 <button
                                   onClick={() => requestDeleteSitio(sitio.id, sitio.nombre)}
-                                  className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100"
+                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-transparent"
                                   title="Eliminar sitio"
                                 >
                                   <Trash className="w-4 h-4" />
@@ -623,7 +629,7 @@ export default function ClientesSitios() {
                           <div className="bg-slate-50/80 border border-slate-100 p-3.5 rounded-xl space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Distribuidor</span>
-                              <span className="text-xs font-bold text-[#E5222D] flex items-center gap-1"><Truck className="w-3.5 h-3.5"/> {sitio.distribuidor && String(sitio.distribuidor) !== '[object Object]' && String(sitio.distribuidor) !== '-' ? sitio.distribuidor : 'No asignado'}</span>
+                              <span className="text-xs font-bold flex items-center gap-1" style={{ color: currentColor }}><Truck className="w-3.5 h-3.5"/> {sitio.distribuidor && String(sitio.distribuidor) !== '[object Object]' && String(sitio.distribuidor) !== '-' ? sitio.distribuidor : 'No asignado'}</span>
                             </div>
                             {sitio.distribuidor_contacto_nombre && sitio.distribuidor_contacto_nombre !== '-' && (
                               <div className="pt-2 border-t border-slate-200/50 space-y-1.5">
@@ -668,7 +674,8 @@ export default function ClientesSitios() {
             </div>
             <button
               onClick={handleDownloadExcel}
-              className="flex items-center justify-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm transition-all shadow-md shadow-emerald-100 self-start sm:self-auto"
+              className="flex items-center justify-center gap-2 px-5 py-3 text-white rounded-2xl font-bold text-sm transition-all shadow-md self-start sm:self-auto"
+              style={{ backgroundColor: currentColor }}
             >
               <FileSpreadsheet className="w-4 h-4" />
               Descargar Excel Completo
@@ -715,7 +722,7 @@ export default function ClientesSitios() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-bold">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 border rounded-xl text-xs font-bold" style={{ color: currentColor, borderColor: `${currentColor}30`, backgroundColor: `${currentColor}10` }}>
                         <Truck className="w-3.5 h-3.5"/>
                         {site.distribuidor && String(site.distribuidor) !== '[object Object]' && String(site.distribuidor) !== '-' ? site.distribuidor : 'No asignado'}
                       </span>
@@ -725,7 +732,7 @@ export default function ClientesSitios() {
                         <div className="flex flex-col text-xs">
                           <span className="font-bold text-slate-800">{site.distribuidor_contacto_nombre}</span>
                           <span className="text-slate-500">{site.distribuidor_contacto_telefono || '-'}</span>
-                          <span className="text-red-500">{site.distribuidor_contacto_correo || '-'}</span>
+                          <span style={{ color: currentColor }}>{site.distribuidor_contacto_correo || '-'}</span>
                         </div>
                       ) : (
                         <span className="text-slate-400 text-xs italic">Sin contacto registrado</span>
@@ -786,7 +793,7 @@ export default function ClientesSitios() {
             <div className="p-8 overflow-y-auto flex-1 custom-scrollbar space-y-8">
               
               <section className="space-y-4">
-                <h3 className="text-sm font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-4" style={{ color: currentColor }}>
                   <Building2 className="w-4 h-4" /> Información Fiscal y Comercial
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -815,7 +822,7 @@ export default function ClientesSitios() {
               <hr className="border-slate-100" />
 
               <section className="space-y-4">
-                <h3 className="text-sm font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-4" style={{ color: currentColor }}>
                   <MapPin className="w-4 h-4" /> Dirección del Cliente (Fiscal)
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -841,22 +848,6 @@ export default function ClientesSitios() {
                   </div>
                 </div>
               </section>
-
-              <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl mt-4">
-                <h4 className="text-sm font-black text-slate-800 mb-1">Sitio Principal de Operación (Opcional)</h4>
-                <p className="text-xs text-slate-500 font-medium mb-4">Puedes dar de alta la dirección del sitio donde operarán los equipos, si es diferente a la fiscal.</p>
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700">Nombre del Sitio</label>
-                    <input type="text" value={newClientFormData.sitio_nombre} onChange={e => setNewClientFormData({...newClientFormData, sitio_nombre: e.target.value})} placeholder="Escribe el nombre del sitio" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700">Dirección del sitio del cliente</label>
-                    <input type="text" value={newClientFormData.sitio_direccion} onChange={e => setNewClientFormData({...newClientFormData, sitio_direccion: e.target.value})} placeholder="Calle, Número, CP, Ciudad, Estado" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all" />
-                  </div>
-                </div>
-              </div>
-
             </div>
 
             <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end gap-3 rounded-b-[2rem]">
@@ -870,7 +861,8 @@ export default function ClientesSitios() {
               <button 
                 type="submit"
                 disabled={isSubmittingClient}
-                className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
+                className="px-8 py-3 text-white rounded-xl font-bold text-sm transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
               >
                 <Building2 className="w-4 h-4"/> {isSubmittingClient ? 'Guardando...' : 'Guardar Cliente'}
               </button>
@@ -885,22 +877,16 @@ export default function ClientesSitios() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col relative border border-slate-100">
             <form onSubmit={handleEditClient} className="flex flex-col h-full overflow-hidden">
-            <button 
-              type="button"
-              onClick={() => setIsEditClientModalOpen(false)}
-              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="p-8 border-b border-slate-100 shrink-0">
-              <h2 className="text-2xl font-black text-slate-900">Editar Cliente</h2>
-              <p className="text-slate-500 font-medium mt-1">Modifica la información corporativa y fiscal de {selectedCliente.razonSocial}.</p>
+            <div className="flex justify-between items-center p-8 pb-4">
+              <h3 className="text-sm font-black uppercase tracking-widest" style={{ color: currentColor }}>Editar Cliente</h3>
+              <button type="button" onClick={() => setIsEditClientModalOpen(false)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="p-8 overflow-y-auto flex-1 custom-scrollbar space-y-8">
+            <div className="p-8 pt-0 overflow-y-auto flex-1 custom-scrollbar space-y-8">
               <section className="space-y-4">
-                <h3 className="text-sm font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-4" style={{ color: currentColor }}>
                   <Building2 className="w-4 h-4" /> Información Fiscal y Comercial
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -929,7 +915,7 @@ export default function ClientesSitios() {
               <hr className="border-slate-100" />
 
               <section className="space-y-4">
-                <h3 className="text-sm font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-4" style={{ color: currentColor }}>
                   <MapPin className="w-4 h-4" /> Dirección del Cliente (Fiscal)
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -968,7 +954,8 @@ export default function ClientesSitios() {
               <button 
                 type="submit"
                 disabled={isSubmittingEditClient}
-                className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
+                className="px-8 py-3 text-white rounded-xl font-bold text-sm transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
               >
                 <Settings className="w-4 h-4"/> {isSubmittingEditClient ? 'Guardando...' : 'Guardar Cambios'}
               </button>
@@ -1019,7 +1006,7 @@ export default function ClientesSitios() {
               </div>
 
               <hr className="border-slate-100 my-4" />
-              <h3 className="text-xs font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2" style={{ color: currentColor }}>
                 <Truck className="w-4 h-4"/> Asignación de Distribuidor
               </h3>
 
@@ -1061,7 +1048,8 @@ export default function ClientesSitios() {
               <button 
                 type="submit"
                 disabled={isSubmittingSitio}
-                className="px-8 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200 flex items-center gap-2"
+                className="px-8 py-3 text-white rounded-xl font-bold text-sm transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
               >
                 <MapPin className="w-4 h-4"/> {isSubmittingSitio ? 'Guardando...' : 'Guardar Sitio'}
               </button>
@@ -1098,10 +1086,11 @@ export default function ClientesSitios() {
               </button>
               <button 
                 onClick={confirmDelete}
-                disabled={isDeleting}
-                className="flex-1 py-3 bg-[#E5222D] hover:bg-[#CC1E28] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-200"
+                disabled={isDeleting || (deleteModalConfig.type === 'cliente' && (deleteModalConfig.sitiosCount || 0) > 0)}
+                className="flex-1 py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
               >
-                {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
+                {isDeleting ? 'Eliminando...' : 'Sí, Eliminar'}
               </button>
             </div>
           </div>
