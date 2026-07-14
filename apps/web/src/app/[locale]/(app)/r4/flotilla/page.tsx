@@ -34,9 +34,9 @@ const formatFilterText = (str: string) => {
 };
 
 const FilterCombobox = ({ 
-  label, value, onChange, options, open, setOpen, search, setSearch 
+  label, value, onChange, options, open, setOpen, search, setSearch, currentColor 
 }: {
-  label: string; value: string; onChange: (val: string) => void; options: string[]; open: boolean; setOpen: (val: boolean) => void; search: string; setSearch: (val: string) => void;
+  label: string; value: string; onChange: (val: string) => void; options: string[]; open: boolean; setOpen: (val: boolean) => void; search: string; setSearch: (val: string) => void; currentColor?: string;
 }) => (
   <div className="relative group flex-1 min-w-[160px]">
     <button
@@ -66,7 +66,7 @@ const FilterCombobox = ({
             className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-bold"
           >
             <span>Todos</span>
-            {value === 'Todos' && <Check className="w-4 h-4 text-red-600 shrink-0" />}
+            {value === 'Todos' && <Check className="w-4 h-4 shrink-0" style={{ color: currentColor || '#dc2626' }} />}
           </button>
           {options
             .filter(opt => opt.toLowerCase().includes(search.toLowerCase()))
@@ -78,7 +78,7 @@ const FilterCombobox = ({
                 className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
               >
                 <span className="truncate pr-2">{formatFilterText(opt)}</span>
-                {value === opt && <Check className="w-4 h-4 shrink-0" style={{ color: currentColor }} />}
+                {value === opt && <Check className="w-4 h-4 shrink-0" style={{ color: currentColor || '#dc2626' }} />}
               </button>
             ))}
         </div>
@@ -704,6 +704,7 @@ export default function Fleet() {
               setOpen={setOpenFilterADC}
               search={searchADC}
               setSearch={setSearchADC}
+              currentColor={currentColor}
             />
           )}
 
@@ -716,6 +717,7 @@ export default function Fleet() {
             setOpen={setOpenFilterCliente}
             search={searchCliente}
             setSearch={setSearchCliente}
+            currentColor={currentColor}
           />
           
           <FilterCombobox
@@ -727,6 +729,7 @@ export default function Fleet() {
             setOpen={setOpenFilterCuenta}
             search={searchCuenta}
             setSearch={setSearchCuenta}
+            currentColor={currentColor}
           />
 
           <FilterCombobox
@@ -738,6 +741,7 @@ export default function Fleet() {
             setOpen={setOpenFilterEstatus}
             search={searchEstatus}
             setSearch={setSearchEstatus}
+            currentColor={currentColor}
           />
 
           <FilterCombobox
@@ -749,6 +753,7 @@ export default function Fleet() {
             setOpen={setOpenFilterModelo}
             search={searchModelo}
             setSearch={setSearchModelo}
+            currentColor={currentColor}
           />
 
           <FilterCombobox
@@ -760,6 +765,7 @@ export default function Fleet() {
             setOpen={setOpenFilterClase}
             search={searchClase}
             setSearch={setSearchClase}
+            currentColor={currentColor}
           />
 
           <FilterCombobox
@@ -771,6 +777,7 @@ export default function Fleet() {
             setOpen={setOpenFilterDistribuidor}
             search={searchDistribuidor}
             setSearch={setSearchDistribuidor}
+            currentColor={currentColor}
           />
 
           <div className="flex gap-2">
