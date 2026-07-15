@@ -95,6 +95,10 @@ RUN pnpm install --prod --shamefully-hoist --fetch-timeout=600000
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
 
+# Copiar y preparar entrypoint
+COPY apps/api/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 RUN pnpm add -D -w prisma@5.19.1 --shamefully-hoist --fetch-timeout=600000
 
 # Asegurar que DATABASE_URL esté disponible para el generate del runner
@@ -132,5 +136,5 @@ USER nestjs
 
 EXPOSE 8001
 
-CMD ["node", "dist/src/main.js"]
+CMD ["sh", "./entrypoint.sh"]
 
