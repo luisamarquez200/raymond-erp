@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Search, LayoutGrid, FileText, MapPin, Download, Clock, Calendar, Globe, Wrench } from 'lucide-react';
+import { Search, LayoutGrid, FileText, MapPin, Download, Clock, Calendar, Globe, Wrench, Move } from 'lucide-react';
 import { QrScannerButton } from '@/components/ui/qr-scanner-button';
 import { inventarioApi, InventarioItem } from '@/services/taller-r1/inventario.service';
 import { evaluacionesApi } from '@/services/taller-r1/evaluaciones.service';
-import { equipoUbicacionApi } from '@/services/taller-r1/equipo-ubicacion.service';
+import { equipoUbicacionApi, EquipoUbicacion } from '@/services/taller-r1/equipo-ubicacion.service';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { useParams } from 'next/navigation';
 import {
@@ -18,6 +18,7 @@ import {
 import { TableList } from '@/components/shared/TableList';
 import { DataTableColumnHeader } from '@/components/ui/data-table/data-table-column-header';
 import { DataTableViewOptions } from '@/components/ui/data-table/data-table-view-options';
+import { MovilizacionModal } from '../equipo-ubicacion/MovilizacionModal';
 import * as XLSX from 'xlsx';
 import { ColumnDef } from '@tanstack/react-table';
 
@@ -31,6 +32,10 @@ export default function InventarioPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [table, setTable] = useState<any>(null);
+
+    // Estados para Movilización
+    const [movilizarModalOpen, setMovilizarModalOpen] = useState(false);
+    const [itemToMovilizar, setItemToMovilizar] = useState<EquipoUbicacion | null>(null);
 
     useEffect(() => {
         loadData();
@@ -252,9 +257,30 @@ export default function InventarioPage() {
         {
             id: 'acciones',
             header: 'Acciones',
-            size: 60,
+            size: 80,
             cell: ({ row }) => (
                 <div className="flex items-center gap-1">
+                    {row.original.id_equipo_ubicacion && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                // Crear objeto parcial para el modal de movilización
+                                const equipoData: EquipoUbicacion = {
+                                    id_equipo_ubicacion: row.original.id_equipo_ubicacion,
+                                    serial_equipo: row.original.serial_equipo,
+                                    id_ubicacion: row.original.ubicacion,
+                                    id_sub_ubicacion: row.original.sub_ubicacion,
+                                    estado: row.original.estado,
+                                } as EquipoUbicacion;
+                                setItemToMovilizar(equipoData);
+                                setMovilizarModalOpen(true);
+                            }}
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                            title="Trasladar equipo"
+                        >
+                            <Move className="w-5 h-5" />
+                        </button>
+                    )}
                     {isAdmin && isR1 && ['Clase I', 'Clase II', 'Clase III', 'Otros'].includes(row.original.clase) && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -432,6 +458,13 @@ export default function InventarioPage() {
                     />
                 </div>
             </div>
+
+            <MovilizacionModal
+                open={movilizarModalOpen}
+                onOpenChange={setMovilizarModalOpen}
+                equipo={itemToMovilizar}
+                onSuccess={loadData}
+            />
         </div>
     );
 }

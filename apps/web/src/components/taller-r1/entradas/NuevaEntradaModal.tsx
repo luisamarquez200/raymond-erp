@@ -10,11 +10,12 @@ import { accesoriosApi } from '@/services/taller-r1/accesorios.service';
 import { cargueMasivoApi } from '@/services/taller-r1/cargue-masivo.service';
 import { adcApi, Adc } from '@/services/taller-r1/adc.service';
 import { clientesApi } from '@/services/taller-r1/clientes.service';
-import api from '@/lib/api-taller'; // Using tallerApi to fetch clients
+import api from '@/lib/api-taller';
 import { createWorker } from 'tesseract.js';
 import { Camera, Image as ImageIcon, Loader2, QrCode, RotateCw } from 'lucide-react';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import { AutocompleteInput } from '@/components/ui/autocomplete-input';
 
 
 interface NuevaEntradaModalProps {
@@ -1011,18 +1012,17 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                             <Plus className="w-3 h-3" /> Añadir nuevo
                                         </button>
                                     </div>
-                                    <select
+                                    <AutocompleteInput
+                                        options={(Array.isArray(clientes) ? clientes : []).map(c => ({
+                                            value: c.id_cliente,
+                                            label: c.nombre_cliente
+                                        }))}
                                         value={formData.cliente || ''}
-                                        onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                                        className="w-full appearance-none px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:border-red-500 focus:ring-4 focus:ring-red-100 transition-all outline-none font-medium text-slate-700"
-                                    >
-                                        <option value="">Seleccione un cliente...</option>
-                                        {Array.isArray(clientes) && clientes.map((c) => (
-                                            <option key={c.id_cliente} value={c.id_cliente}>
-                                                {c.nombre_cliente}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onValueChange={(val) => setFormData({ ...formData, cliente: val })}
+                                        placeholder="Buscar cliente..."
+                                        searchPlaceholder="Escriba para filtrar..."
+                                        emptyMessage="No se encontró el cliente"
+                                    />
 
 
                                     {formData.cliente && (
@@ -1329,19 +1329,18 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                                         <Plus className="w-3 h-3" /> Añadir nuevo
                                                     </button>
                                                 </div>
-                                                <select
-                                                    value={itemFormData.modelo}
-                                                    onChange={(e) => setItemFormData({ ...itemFormData, modelo: e.target.value })}
+                                                <AutocompleteInput
+                                                    options={(Array.isArray(filteredModelos) ? filteredModelos : []).map(m => ({
+                                                        value: m.modelo,
+                                                        label: m.modelo
+                                                    }))}
+                                                    value={itemFormData.modelo || ''}
+                                                    onValueChange={(val) => setItemFormData({ ...itemFormData, modelo: val })}
+                                                    placeholder="Seleccionar Modelo..."
+                                                    searchPlaceholder="Buscar modelo..."
+                                                    emptyMessage="No hay coincidencia"
                                                     disabled={!itemFormData.clase}
-                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:border-red-500 transition-all outline-none disabled:opacity-50"
-                                                >
-                                                    <option value="">Seleccionar Modelo...</option>
-                                                    {filteredModelos.map((m) => (
-                                                        <option key={m.id_modelo} value={m.modelo}>
-                                                            {m.modelo}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center">
@@ -1596,19 +1595,18 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                                         <Plus className="w-3 h-3" /> Añadir nuevo
                                                     </button>
                                                 </div>
-                                                <select
-                                                    value={itemFormData.modelo}
-                                                    onChange={(e) => setItemFormData({ ...itemFormData, modelo: e.target.value })}
+                                                <AutocompleteInput
+                                                    options={(Array.isArray(filteredModelos) ? filteredModelos : []).map(m => ({
+                                                        value: m.modelo,
+                                                        label: m.modelo
+                                                    }))}
+                                                    value={itemFormData.modelo || ''}
+                                                    onValueChange={(val) => setItemFormData({ ...itemFormData, modelo: val })}
+                                                    placeholder="Seleccionar Modelo..."
+                                                    searchPlaceholder="Buscar modelo..."
+                                                    emptyMessage="No hay coincidencia"
                                                     disabled={!itemFormData.tipo}
-                                                    className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-red-500 transition-all outline-none disabled:opacity-50 font-bold"
-                                                >
-                                                    <option value="">Seleccionar Modelo...</option>
-                                                    {filteredModelos.map((m) => (
-                                                        <option key={m.id_modelo} value={m.modelo}>
-                                                            {m.modelo}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número de Serie <span className="text-red-500">*</span></label>

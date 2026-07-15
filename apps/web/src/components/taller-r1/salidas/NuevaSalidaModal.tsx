@@ -23,6 +23,7 @@ import { cn, getErrorMessage } from '@/lib/utils';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { useAuthStore } from '@/store/auth.store';
+import { AutocompleteInput, AutocompleteOption } from '@/components/ui/autocomplete-input';
 
 const OBLIGATORY_PHOTOS = [
     { key: 'foto_llave', label: 'Llave' },
@@ -504,7 +505,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
         setLoading(true);
         try {
             if (editingSalidaId) {
-                // UPDATE
+                // UPDATE HEADER
                 const updateData: any = {
                     numero_transporte: basicInfo.numero_transporte,
                     pedido: basicInfo.pedido_venta,
@@ -528,6 +529,86 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
                 }
 
                 await salidasApi.update(editingSalidaId, updateData);
+
+                // SYNC ITEMS: load existing items to diff against current selectedItems
+                const existingSalida = await salidasApi.getById(editingSalidaId);
+                const existingDetalles = existingSalida.detalles || existingSalida.salida_detalle || [];
+                const existingAccesorios = existingSalida.accesorios || existingSalida.salida_accesorios || [];
+                const existingItemIds = new Set(
+                    existingDetalles.map((d: any) => d.id_equipo_ubicacion || d.id_detalle).filter(Boolean)
+                );
+                const existingAccIds = new Set(
+                    existingAccesorios.map((a: any) => a.id_accesorio || a.accesorio_id).filter(Boolean)
+                );
+
+                const currentItemIds = new Set(
+                    selectedItems
+                        .filter((i: any) => i._type === 'equipo')
+                        .map((i: any) => i.id_equipo_ubicacion || i.id_detalles)
+                        .filter(Boolean)
+                );
+                const currentAccIds = new Set(
+                    selectedItems
+                        .filter((i: any) => i._type === 'accesorio')
+                        .map((i: any) => i.id_accesorio)
+                        .filter(Boolean)
+                );
+
+                // Remove detalles that are no longer in selectedItems
+                for (const detalle of existingDetalles) {
+                    const detId = detalle.id_equipo_ubicacion || detalle.id_detalle;
+                    if (detId && !currentItemIds.has(detId)) {
+                        try {
+                            await salidasApi.removeDetalle(editingSalidaId, detalle.id_detalle);
+                        } catch (e) {
+                            console.warn('Could not remove detalle:', detId, e);
+                        }
+                    }
+                }
+
+                // Remove accessories that are no longer in selectedItems
+                for (const acc of existingAccesorios) {
+                    const accId = acc.id_accesorio || acc.accesorio_id;
+                    if (accId && !currentAccIds.has(accId)) {
+                        try {
+                            await salidasApi.removeAccesorio(editingSalidaId, accId);
+                        } catch (e) {
+                            console.warn('Could not remove accesorio:', accId, e);
+                        }
+                    }
+                }
+
+                // Add new items that weren't in the existing salida
+                for (const item of selectedItems) {
+                    if (item._type === 'equipo') {
+                        const itemId = item.id_equipo_ubicacion || item.id_detalles;
+                        if (!existingItemIds.has(itemId)) {
+                            const detalleData: CreateDetalleDto = {
+                                id_equipo: item.id_detalles || item.id_equipo,
+                                id_equipo_ubicacion: item.id_equipo_ubicacion,
+                                tipo_salida: item.tipo_salida || 'Embarque',
+                                serial_equipos: item.serial_equipo,
+                                id_ubicacion: item.id_ubicacion,
+                                id_sub_ubicacion: item.id_sub_ubicacion,
+                                checklist_entrega: item.checklist_entrega,
+                                ...item.photos
+                            };
+                            await salidasApi.addDetalle(editingSalidaId, detalleData);
+                        }
+                    } else {
+                        const accId = item.id_accesorio;
+                        if (!existingAccIds.has(accId)) {
+                            const accData: CreateAccesorioDto = {
+                                id_accesorio: item.id_accesorio,
+                                modelo: item.modelo,
+                                serial: item.serial,
+                                voltaje: item.voltaje,
+                            };
+                            await salidasApi.addAccesorio(editingSalidaId, accData);
+                        }
+                    }
+                }
+
                 toast.success(`Salida ${nextFolio} actualizada correctamente`);
             } else {
                 // CREATE
@@ -723,32 +804,36 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
                                                 <Plus className="w-3 h-3" /> Añadir nuevo
                                             </button>
                                         </div>
-                                        <select
+                                        <AutocompleteInput
+                                            options={clientes.map(c => ({
+                                                value: c.id_cliente,
+                                                label: c.nombre_cliente
+                                            }))}
                                             value={basicInfo.cliente || ''}
-                                            onChange={(e) => setBasicInfo({ ...basicInfo, cliente: e.target.value })}
-                                            className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-red-500/10 focus:border-red-500 transition-all font-medium text-slate-900 appearance-none"
-                                        >
-                                            <option value="">Seleccione un cliente...</option>
-                                            {clientes.map(c => (
-                                                <option key={c.id_cliente} value={c.id_cliente}>
-                                                    {c.nombre_cliente}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            onValueChange={(val) => setBasicInfo({ ...basicInfo, cliente: val })}
+                                            placeholder="Buscar cliente..."
+                                            searchPlaceholder="Escriba para filtrar..."
+                                            emptyMessage="No se encontró el cliente"
+                                        />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5 px-1">
                                             Destino <span className="text-red-500 ml-1">*</span>
                                         </label>
-                                        <select
+                                        <AutocompleteInput
+                                            options={[
+                                                { value: 'Distribuidor', label: 'Distribuidor' },
+                                                ...(selectedSite?.toUpperCase() !== 'R1' ? [{ value: 'R1', label: 'R1' }] : []),
+                                                { value: 'R2', label: 'R2' },
+                                                { value: 'Cliente directo', label: 'Cliente directo' },
+                                            ]}
                                             value={basicInfo.destino || 'Distribuidor'}
-                                            onChange={(e) => setBasicInfo({ ...basicInfo, destino: e.target.value })}
-                                            className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-red-500/10 focus:border-red-500 transition-all font-medium text-slate-900 appearance-none"
-                                        >
-                                            <option value="Distribuidor">Distribuidor</option>
-                                            <option value="R2">R2</option>
-                                            <option value="Cliente directo">Cliente directo</option>
-                                        </select>
+                                            onValueChange={(val) => setBasicInfo({ ...basicInfo, destino: val })}
+                                            placeholder="Seleccionar destino..."
+                                            searchPlaceholder="Buscar destino..."
+                                            emptyMessage="Escriba un destino personalizado"
+                                            allowCustom={true}
+                                        />
                                     </div>
                                 </div>
                             </div>

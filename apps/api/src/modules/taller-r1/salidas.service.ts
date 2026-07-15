@@ -1139,7 +1139,7 @@ export class SalidasService {
 
         // Update salida status
         const hasRemision = salida.remision_confirmacion === 1 || Boolean(salida.remision);
-        const finalEstado = hasRemision ? 'Entregado' : salida.estado;
+        const finalEstado = hasRemision ? 'Entregado' : 'En espera de remisión';
 
         return this.db.salidas.update({
             where: { id_salida: id },

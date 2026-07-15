@@ -197,7 +197,6 @@ export default function EvaluacionesPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              {/* COMENTADO TEMPORALMENTE - Evaluación Rápida
               {currentSite.toLowerCase() === 'r1' && (
                 <button
                   onClick={handleBulkGeneric}
@@ -208,7 +207,6 @@ export default function EvaluacionesPage() {
                   {isBulkLoading ? 'Procesando...' : 'Evaluación Rápida'}
                 </button>
               )}
-              */}
               <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2">
                     <p className="text-red-800 font-bold text-sm">
                         {activeMainTab === 'Equipos'

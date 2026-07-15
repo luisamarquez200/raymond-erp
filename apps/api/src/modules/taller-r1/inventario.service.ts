@@ -61,7 +61,7 @@ export class InventarioService {
                 serial_equipo: row.serial || 'S/N',
                 marca: eq?.marca || 'N/D',
                 modelo: row.modelo || 'N/D',
-                clase: row.tipo || 'N/D',
+                clase: eq?.clase || row.tipo || 'N/D',
                 ubicacion: row.ubicacion ? ubicacionesMap.get(row.ubicacion) || 'N/D' : 'N/D',
                 sub_ubicacion: row.sub_ubicacion ? subUbicacionesMap.get(row.sub_ubicacion) || 'N/D' : 'N/D',
                 estado: row.estado || 'N/D',

@@ -68,7 +68,7 @@ export class TallerR1MailService {
         }
 
         // Default fallback
-        return ['soportetaller@raymond.com.mx'];
+        return ['g.garzon@runsolutions-services.com'];
     }
 
     private async sendWithBrevo(payload: {

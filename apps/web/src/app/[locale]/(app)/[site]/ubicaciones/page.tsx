@@ -9,7 +9,7 @@ import {
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import { ubicacionesApi, Ubicacion } from '@/services/taller-r1/ubicaciones.service';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Tag, Box, Loader2, AlertCircle, X, ExternalLink } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Tag, Box, Loader2, AlertCircle, X, ExternalLink, Move } from 'lucide-react';
 import { QrScannerButton } from '@/components/ui/qr-scanner-button';
 import { useAuthStore } from '@/store/auth.store';
 import QRCode from 'qrcode';
@@ -429,19 +429,39 @@ export default function UbicacionesPage() {
                           <div className="p-8 text-center text-gray-400 text-sm font-medium">No hay sub-ubicaciones ocupadas</div>
                         ) : (
                           <div className="divide-y divide-gray-50">
-                            {occupiedSubs.map(sub => (
-                              <div 
-                                key={sub.id_sub_ubicacion} 
-                                onClick={() => handleOpenEquipo(sub.id_sub_ubicacion)}
-                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors group"
-                              >
-                                <span className="font-black text-red-600 tracking-tighter flex items-center gap-2">
-                                  {sub.nombre}
-                                  <ExternalLink className="w-3 h-3 text-gray-300 group-hover:text-red-500 transition-colors" />
-                                </span>
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">En Uso</span>
-                              </div>
-                            ))}
+                            {occupiedSubs.map(sub => {
+                              const equipoEnSub = equipos.find(e => e.id_sub_ubicacion === sub.id_sub_ubicacion);
+                              return (
+                                <div 
+                                  key={sub.id_sub_ubicacion} 
+                                  className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group"
+                                >
+                                  <span 
+                                    className="font-black text-red-600 tracking-tighter flex items-center gap-2 cursor-pointer flex-1"
+                                    onClick={() => handleOpenEquipo(sub.id_sub_ubicacion)}
+                                  >
+                                    {sub.nombre}
+                                    <ExternalLink className="w-3 h-3 text-gray-300 group-hover:text-red-500 transition-colors" />
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    {equipoEnSub && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setItemToMovilizar(equipoEnSub);
+                                          setMovilizarModalOpen(true);
+                                        }}
+                                        className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                        title="Trasladar equipo"
+                                      >
+                                        <Move className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">En Uso</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

@@ -34,8 +34,8 @@ export default function EscanearAuditoriaModal({ isOpen, idAuditoria, onClose }:
         if (!selectedSite || !idAuditoria || !serial) return;
         
         // Prevent double scanning locally to save API calls
-        if (scanLogs.some(log => log.serial.toLowerCase() === serial.toLowerCase() && log.status === 'success')) {
-            toast.warning(`El serial ${serial} ya fue escaneado con éxito.`);
+        if (scanLogs.some(log => log.serial.toLowerCase() === serial.toLowerCase())) {
+            toast.warning(`El serial ${serial} ya fue escaneado en esta auditoría.`);
             return;
         }
 
@@ -67,9 +67,10 @@ export default function EscanearAuditoriaModal({ isOpen, idAuditoria, onClose }:
             
             // Add a log for the error
             if (error?.response?.status === 400 && errMsg.includes('ya fue escaneado')) {
+                 toast.info(`El equipo ${serial} ya fue contabilizado en esta auditoría.`);
                  setScanLogs(prev => [{
                     serial: serial,
-                    status: 'error',
+                    status: 'warning',
                     message: 'Ya escaneado en esta auditoría',
                     timestamp: new Date()
                 }, ...prev]);
