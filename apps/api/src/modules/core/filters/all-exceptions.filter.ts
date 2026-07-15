@@ -19,7 +19,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         const request = ctx.getRequest<Request>();
 
         // Ignore Next.js internal routes silently (HMR, webpack, etc.)
-        if (request.url.startsWith('/_next/') || request.url.startsWith('/_vercel/')) {
+        // Also ignore browser auto-requests (favicon, root) that are not real API routes
+        if (
+            request.url.startsWith('/_next/') ||
+            request.url.startsWith('/_vercel/') ||
+            request.url === '/favicon.ico' ||
+            request.url === '/'
+        ) {
             response.status(404).end();
             return;
         }

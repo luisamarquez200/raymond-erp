@@ -107,24 +107,116 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response Interceptor (SILENT FOR DEV BYPASS)
+// Flag to prevent infinite refresh loops
+let isRefreshing = false;
+let pendingRequests: Array<(token: string) => void> = [];
+
+const processPendingRequests = (token: string) => {
+    pendingRequests.forEach((cb) => cb(token));
+    pendingRequests = [];
+};
+
+// Response Interceptor — Auto Token Refresh
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
-        // BYPASS ALL AUTOMATIC REDIRECTS AND ERRORS FOR DEVELOPMENT
-        if (error.response?.status === 401) {
-            console.warn('[API] 401 Unauthorized suppressed for development');
+        const originalRequest = error.config;
 
-            // Return a "fake" successful response for certain GET requests to prevent UI crashes
-            if (error.config?.method === 'get') {
-                // If it looks like a list request, return empty array directly as response.data
-                if (error.config.url?.endsWith('s') || error.config.url?.includes('list') || error.config.url?.includes('entradas')) {
-                    return { data: [] };
+        // Only handle 401 errors that haven't already been retried
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            // Skip refresh for auth endpoints to avoid infinite loops
+            if (
+                originalRequest.url?.includes('/auth/login') ||
+                originalRequest.url?.includes('/auth/refresh') ||
+                originalRequest.url?.includes('/auth/logout')
+            ) {
+                return Promise.reject(error);
+            }
+
+            if (isRefreshing) {
+                // Queue the request and resolve it when token is refreshed
+                return new Promise((resolve) => {
+                    pendingRequests.push((token: string) => {
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        resolve(api(originalRequest));
+                    });
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                const storedRefreshToken = typeof window !== 'undefined'
+                    ? localStorage.getItem('refreshToken')
+                    : null;
+
+                if (!storedRefreshToken || storedRefreshToken === 'null' || storedRefreshToken === 'undefined') {
+                    throw new Error('No refresh token available');
                 }
-                // Default empty object
-                return { data: {} };
+
+                // Call refresh endpoint directly (without interceptor looping)
+                const refreshResponse = await api.post<{ success: boolean; data: any }>(
+                    '/auth/refresh',
+                    { refreshToken: storedRefreshToken }
+                );
+
+                const newAccessToken = refreshResponse.data?.data?.accessToken;
+                const newRefreshToken = refreshResponse.data?.data?.refreshToken;
+
+                if (!newAccessToken) {
+                    throw new Error('No access token returned');
+                }
+
+                // Store new tokens
+                localStorage.setItem('accessToken', newAccessToken);
+                if (newRefreshToken) {
+                    localStorage.setItem('refreshToken', newRefreshToken);
+                }
+
+                // Update auth store in memory
+                try {
+                    const { useAuthStore } = require('@/store/auth.store');
+                    useAuthStore.setState({
+                        accessToken: newAccessToken,
+                        refreshToken: newRefreshToken || storedRefreshToken,
+                    });
+                } catch (_) { /* store may not be available */ }
+
+                // Resolve any queued requests
+                processPendingRequests(newAccessToken);
+
+                // Retry the original failed request
+                originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                return api(originalRequest);
+            } catch (refreshError) {
+                // Refresh failed — session is expired, force logout
+                pendingRequests = [];
+
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    localStorage.removeItem('user');
+
+                    // Clear auth store
+                    try {
+                        const { useAuthStore } = require('@/store/auth.store');
+                        useAuthStore.setState({ user: null, accessToken: null, refreshToken: null });
+                    } catch (_) { /* ignore */ }
+
+                    // Redirect to login
+                    const currentPath = window.location.pathname;
+                    if (!currentPath.includes('/login') && !currentPath.includes('/auth')) {
+                        window.location.href = '/login';
+                    }
+                }
+
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
             }
         }
+
         return Promise.reject(error);
     }
 );
