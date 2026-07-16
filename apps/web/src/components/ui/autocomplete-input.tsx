@@ -14,6 +14,7 @@ interface AutocompleteInputProps {
     value: string;
     onValueChange: (value: string) => void;
     placeholder?: string;
+    searchPlaceholder?: string;
     emptyMessage?: string;
     className?: string;
     disabled?: boolean;
@@ -24,6 +25,7 @@ export function AutocompleteInput({
     value,
     onValueChange,
     placeholder = "Seleccionar...",
+    searchPlaceholder = "Buscar...",
     emptyMessage = "No hay coincidencia",
     className,
     disabled = false,
@@ -86,7 +88,7 @@ export function AutocompleteInput({
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Buscar..."
+                            placeholder={searchPlaceholder}
                             autoFocus
                             className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all"
                         />
