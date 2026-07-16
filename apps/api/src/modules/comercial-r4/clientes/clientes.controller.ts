@@ -10,9 +10,10 @@ export class ClientesController {
     constructor(private readonly clientesService: ClientesService) {}
 
     @Get()
-    async getClientes(@Res() res: Response) {
+    @UseGuards(JwtAuthGuard)
+    async getClientes(@Req() req: any, @Res() res: Response) {
         try {
-            const data = await this.clientesService.obtenerClientes();
+            const data = await this.clientesService.obtenerClientes(req.user);
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
             return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });

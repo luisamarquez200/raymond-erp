@@ -30,15 +30,30 @@ export class ClientesService {
                 orderBy: { created_at: 'desc' }
             });
 
-            let mapped = clientes.map(cliente => {
+            let filteredClientes = clientes;
+
+            if (user?.roles === 'ADC' && user?.first_name) {
+                const target = user.first_name.toLowerCase();
+                filteredClientes = clientes.filter(cliente => {
+                    const comercial = (cliente.datos_comerciales as any) || {};
+                    const clientAdc = (comercial.adc || '').toLowerCase();
+                    const hasMatchingSitio = cliente.sitios?.some(s => (s.adc || '').toLowerCase().includes(target));
+                    const hasMatchingActivo = cliente.activos?.some(a => (a.adc || '').toLowerCase().includes(target));
+                    return clientAdc.includes(target) || hasMatchingSitio || hasMatchingActivo;
+                });
+            }
+
+            let mapped = filteredClientes.map(cliente => {
                 const comercial = (cliente.datos_comerciales as any) || {};
                 const fiscal = (cliente.datos_fiscales as any) || {};
+                const firstSiteWithAdc = cliente.sitios?.find(s => s.adc);
+                
                 return {
                     id: cliente.id,
                     razonSocial: cliente.razon_social,
                     rfc: cliente.rfc || '-',
                     estatus: cliente.estado || 'ACTIVO',
-                    adc: comercial.adc || '-',
+                    adc: comercial.adc || firstSiteWithAdc?.adc || '-',
                     moneda: comercial.moneda || 'MXN',
                     ciudad: fiscal.ciudad || '-',
                     estado_fiscal: fiscal.estado || '-',
@@ -63,14 +78,6 @@ export class ClientesService {
                     })
                 };
             });
-
-            if (user?.roles === 'ADC' && user?.first_name) {
-                const target = user.first_name.toLowerCase();
-                mapped = mapped.filter(c => {
-                    const cAdc = (c.adc || '').toLowerCase();
-                    return cAdc.includes(target);
-                });
-            }
 
             return mapped;
         } catch (error: any) {

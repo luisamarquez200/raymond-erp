@@ -163,8 +163,13 @@ export class RentasService {
     async crearRenta(dto: CreateRentaDto) {
         const db = this.getDb();
 
-        const activo = await db.activo.findUnique({ where: { id: dto.activo_id } });
+        const [activo, sitio] = await Promise.all([
+            db.activo.findUnique({ where: { id: dto.activo_id } }),
+            db.sitio.findUnique({ where: { id: dto.sitio_id } }),
+        ]);
+
         if (!activo) throw new NotFoundException(`Activo ${dto.activo_id} no encontrado`);
+        if (!sitio) throw new NotFoundException(`Sitio ${dto.sitio_id} no encontrado`);
 
         const rentaVigente = await db.renta.findFirst({
             where: { activo_id: dto.activo_id, estado: 'VIGENTE' },
@@ -181,9 +186,9 @@ export class RentasService {
                 sitio_id: dto.sitio_id,
                 activo_id: dto.activo_id,
                 contrato_id: dto.contrato_id ?? null,
-                cuenta: dto.cuenta ?? null,
-                adc: dto.adc ?? null,
-                distribuidor: dto.distribuidor ?? null,
+                cuenta: dto.cuenta ?? sitio.cuenta ?? null,
+                adc: dto.adc ?? sitio.adc ?? activo.adc ?? null,
+                distribuidor: dto.distribuidor ?? sitio.distribuidor ?? activo.distribuidor ?? null,
                 no_registro_totvs: dto.no_registro_totvs ?? null,
                 fecha_recepcion: dto.fecha_recepcion ? new Date(dto.fecha_recepcion) : null,
                 fecha_pedido_totvs: dto.fecha_pedido_totvs ? new Date(dto.fecha_pedido_totvs) : null,

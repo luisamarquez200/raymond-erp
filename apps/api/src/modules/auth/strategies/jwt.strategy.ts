@@ -110,6 +110,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             email: user.email,
             role_id: user.role_id,
             roles: user.roles.name,
+            first_name: user.first_name,
+            last_name: user.last_name,
             organization_id,
             isSuperadmin, // Add flag for guards and services
             isCEO, // Add CEO flag for role-specific validations

@@ -291,11 +291,11 @@ export default function R4RentasPage() {
             activo_id: item.assetId,
             fecha_inicio: new Date().toISOString().split('T')[0], // Default today
             fecha_fin: new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0], // Default 1 year
-            no_registro_totvs: fichaPedidoTotvs || null,
-            fecha_pedido_totvs: fichaFechaTotvs || null,
+            no_registro_totvs: fichaPedidoTotvs || undefined,
+            fecha_pedido_totvs: fichaFechaTotvs || undefined,
             detalles: {
               oc_cliente: fichaFolioOc,
-              mes_cobro: fichaMesCobro || null,
+              mes_cobro: fichaMesCobro || undefined,
               descuento_dias_caidos: item.descuento,
               renta_base: item.renta_base,
               renta_real: item.renta_final,
@@ -655,12 +655,12 @@ export default function R4RentasPage() {
                             />
                           </div>
                           <div className="max-h-[250px] overflow-y-auto space-y-1">
-                            {clientesDisponibles
+                            {filteredClientesDisponibles
                               .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
                               .length === 0 ? (
                                 <div className="p-4 text-center text-sm text-slate-500">No se encontraron clientes.</div>
                               ) : (
-                                clientesDisponibles
+                                filteredClientesDisponibles
                                   .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
                                   .map((c: any) => (
                                     <button
@@ -1018,7 +1018,7 @@ export default function R4RentasPage() {
                                 />
                               </div>
                               <div className="max-h-[200px] overflow-y-auto space-y-1">
-                                {clientesDisponibles
+                                {filteredClientesDisponibles
                                   .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((clienteSearchTerm || '').toLowerCase()))
                                   .map((c: any) => (
                                     <button

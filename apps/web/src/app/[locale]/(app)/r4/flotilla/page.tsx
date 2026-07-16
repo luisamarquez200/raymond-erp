@@ -27,10 +27,7 @@ const statusColors = {
 
 const formatFilterText = (str: string) => {
   if (!str) return '-';
-  if (str === str.toUpperCase() && str.length > 3) {
-    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-  }
-  return str.charAt(0).toUpperCase() + str.slice(1);
+  return str.toUpperCase();
 };
 
 const FilterCombobox = ({ 
@@ -44,7 +41,7 @@ const FilterCombobox = ({
       onClick={() => setOpen(!open)}
       className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-slate-300 transition-all h-[42px]"
     >
-      <span className="truncate">{value === 'Todos' ? `${label}: Todos` : formatFilterText(value)}</span>
+      <span className="truncate">{value === 'Todos' ? `${label}: TODOS` : formatFilterText(value)}</span>
       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
     </button>
     {open && (
@@ -65,7 +62,7 @@ const FilterCombobox = ({
             onClick={() => { onChange('Todos'); setOpen(false); setSearch(''); }}
             className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-bold"
           >
-            <span>Todos</span>
+            <span>TODOS</span>
             {value === 'Todos' && <Check className="w-4 h-4 shrink-0" style={{ color: currentColor || '#dc2626' }} />}
           </button>
           {options
@@ -574,7 +571,7 @@ export default function Fleet() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      await api.post('/r4/flotilla/importar', formData, {
+      await api.post('/r4/carga-masiva', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       toast.success('Archivo procesado correctamente');
