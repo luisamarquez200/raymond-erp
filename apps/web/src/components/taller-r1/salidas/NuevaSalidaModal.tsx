@@ -831,8 +831,7 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
                                             onValueChange={(val) => setBasicInfo({ ...basicInfo, destino: val })}
                                             placeholder="Seleccionar destino..."
                                             searchPlaceholder="Buscar destino..."
-                                            emptyMessage="Escriba un destino personalizado"
-                                            allowCustom={true}
+                                            emptyMessage="No hay coincidencia"
                                         />
                                     </div>
                                 </div>
