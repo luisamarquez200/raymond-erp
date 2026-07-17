@@ -42,6 +42,21 @@ async function main() {
         } as any,
     });
 
+    // Create GERENCIA role
+    const gerenciaRole = await prisma.roles.upsert({
+        where: { name_organization_id: { name: 'GERENCIA', organization_id: org.id } },
+        update: {},
+        create: {
+            id: require('crypto').randomUUID(),
+            name: 'GERENCIA',
+            description: 'Gerencia R4',
+            level: 20,
+            is_system: false,
+            organization_id: org.id,
+            updated_at: new Date()
+        } as any,
+    });
+
     // Create comercial.admin2@run.com
     await prisma.users.upsert({
         where: { email_organization_id: { email: 'comercial.admin2@run.com', organization_id: org.id } },
@@ -88,7 +103,30 @@ async function main() {
         } as any,
     });
 
-    console.log("Created comercial.admin2@run.com (Administrador) and comercial.adc2@run.com (ADC)");
+    // Create gerencia@run.com
+    await prisma.users.upsert({
+        where: { email_organization_id: { email: 'gerencia@run.com', organization_id: org.id } },
+        update: {
+            password: hashedPassword,
+            role_id: gerenciaRole.id,
+            first_name: 'Gerencia',
+            last_name: 'General',
+            updated_at: new Date(),
+        },
+        create: {
+            id: '3f303c01-91a3-4601-816b-7a76542c9535', // Force the exact UUID from the token
+            email: 'gerencia@run.com',
+            password: hashedPassword,
+            first_name: 'Gerencia',
+            last_name: 'General',
+            role_id: gerenciaRole.id,
+            organization_id: org.id,
+            is_active: true,
+            updated_at: new Date(),
+        } as any,
+    });
+
+    console.log("Created comercial.admin2@run.com (Administrador), comercial.adc2@run.com (ADC) and gerencia@run.com (GERENCIA)");
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
