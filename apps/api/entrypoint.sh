@@ -28,11 +28,13 @@ else
   $PRISMA db push --schema="$SCHEMA" --accept-data-loss
 
   echo "🌱 Running seed to populate initial data..."
-  # Check if ts-node is available
-  if [ -f "/app/node_modules/.bin/ts-node" ]; then
+  # Check if tsx is available to avoid typescript resolution errors
+  if [ -f "/app/node_modules/.bin/tsx" ]; then
+    TS_NODE="/app/node_modules/.bin/tsx"
+  elif [ -f "/app/node_modules/.bin/ts-node" ]; then
     TS_NODE="/app/node_modules/.bin/ts-node"
   else
-    TS_NODE="npx ts-node@10"
+    TS_NODE="npx -y tsx"
   fi
 
   # Run main seed (org, roles, users)

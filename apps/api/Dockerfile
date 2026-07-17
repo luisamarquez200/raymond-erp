@@ -128,6 +128,8 @@ RUN node -e "require('@nestjs/core'); console.log('✅ @nestjs/core accessible')
 # Asegurar permisos correctos
 RUN chown -R nestjs:nodejs ./node_modules/.cache 2>/dev/null || true
 RUN chown -R nestjs:nodejs ./node_modules/@prisma 2>/dev/null || true
+RUN chown -R nestjs:nodejs ./node_modules/.prisma 2>/dev/null || true
+RUN chown -R nestjs:nodejs ./node_modules/.pnpm 2>/dev/null || true
 
 # NODE_PATH para resolución de módulos
 ENV NODE_PATH=/app/node_modules
