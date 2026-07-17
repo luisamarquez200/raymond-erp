@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class FlotillaService {
@@ -93,6 +94,48 @@ export class FlotillaService {
             this.logger.error(`Error en obtenerFlotilla: ${error.message}`);
             throw error;
         }
+    }
+
+    async exportarExcel(user?: any) {
+        const activos = await this.obtenerFlotilla(user);
+        
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Flotilla');
+        
+        worksheet.columns = [
+            { header: 'Serie', key: 'serie', width: 20 },
+            { header: 'Cliente', key: 'cliente', width: 30 },
+            { header: 'Sitio', key: 'site', width: 25 },
+            { header: 'Clase', key: 'clase', width: 15 },
+            { header: 'Modelo', key: 'modelo', width: 20 },
+            { header: 'Estatus', key: 'estatus', width: 20 },
+            { header: 'Renta Mensual', key: 'renta_precio', width: 15 },
+            { header: 'Moneda', key: 'renta_moneda', width: 10 },
+            { header: 'Tipo Póliza', key: 'tipo_poliza', width: 15 },
+            { header: 'Costo Póliza', key: 'costo_poliza_distribuidor', width: 15 },
+            { header: 'Moneda Pago Dist.', key: 'moneda_pago_distribuidor', width: 15 },
+            { header: 'Cuenta', key: 'cuenta', width: 15 },
+            { header: 'ADC', key: 'adc', width: 20 },
+            { header: 'Distribuidor', key: 'distribuidor', width: 20 },
+            { header: 'Fecha Ingreso', key: 'fechaIngreso', width: 15 },
+            { header: 'Fecha Venc.', key: 'fechaVencimiento', width: 15 },
+            { header: 'Plazo', key: 'plazo', width: 10 },
+        ];
+
+        worksheet.addRows(activos);
+
+        // Styling headers
+        worksheet.getRow(1).eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF000000' }
+            };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        return workbook;
     }
 
     async obtenerCarnetEquipo(id: string) {

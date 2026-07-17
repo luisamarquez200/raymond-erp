@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Body, Param, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Request, Res, HttpStatus } from '@nestjs/common';
+import { Response } from 'express';
 import { FlotillaService } from './flotilla.service';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 
@@ -39,6 +40,25 @@ export class FlotillaController {
     @Post('solicitudes/:id/rechazar')
     async rechazar(@Param('id') id: string) {
         return await this.flotillaService.rechazarSolicitud(id);
+    }
+
+    @Get('exportar/excel')
+    async exportarExcel(@Request() req: any, @Res() res: Response) {
+        try {
+            const workbook = await this.flotillaService.exportarExcel(req.user);
+            res.setHeader(
+                'Content-Type',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            );
+            res.setHeader(
+                'Content-Disposition',
+                `attachment; filename=Flotilla_${new Date().toISOString().split('T')[0]}.xlsx`,
+            );
+            await workbook.xlsx.write(res);
+            res.end();
+        } catch (error: any) {
+            return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+        }
     }
 
     @Get(':id')
