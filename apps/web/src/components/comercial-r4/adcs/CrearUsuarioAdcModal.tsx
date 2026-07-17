@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
+import { Eye, EyeOff } from 'lucide-react';
+
 interface CrearUsuarioAdcModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -26,6 +28,7 @@ export function CrearUsuarioAdcModal({ isOpen, onClose, adcName, onSuccess }: Cr
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -78,15 +81,25 @@ export function CrearUsuarioAdcModal({ isOpen, onClose, adcName, onSuccess }: Cr
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="password">Contraseña</Label>
-                        <Input
-                            id="password"
-                            type="password"
-                            placeholder="********"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            disabled={loading}
-                            required
-                        />
+                        <div className="relative">
+                            <Input
+                                id="password"
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="********"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                disabled={loading}
+                                className="pr-10"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={onClose} disabled={loading}>

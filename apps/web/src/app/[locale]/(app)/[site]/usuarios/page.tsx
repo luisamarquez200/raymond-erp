@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Edit, Shield, X, AlertCircle, Plus, Search, UserCheck, ShieldCheck, Mail, Lock, Unlock, CheckCircle2, User, ChevronRight, Save } from 'lucide-react'
+import { Edit, Shield, X, AlertCircle, Plus, Search, UserCheck, ShieldCheck, Mail, Lock, Unlock, CheckCircle2, User, ChevronRight, Save, Eye, EyeOff } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +38,7 @@ export default function TallerR1UsuariosPage() {
     const [selectedUsuario, setSelectedUsuario] = useState<TallerUsuario | null>(null)
     const [searchQuery, setSearchQuery] = useState('')
 
+    const [showPassword, setShowPassword] = useState(false)
     const [showConfirmCancel, setShowConfirmCancel] = useState(false)
     const [passwordError, setPasswordError] = useState('')
     const [passwordInput, setPasswordInput] = useState('')
@@ -466,14 +467,25 @@ export default function TallerR1UsuariosPage() {
                                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-4">
                                                 {isCreateMode ? 'Contraseña *' : 'Nueva Contraseña (Opcional)'}
                                             </label>
-                                            <input
-                                                type="password"
-                                                placeholder={isCreateMode ? "Ingresa una contraseña" : "Dejar en blanco para no cambiar"}
-                                                name="password"
-                                                value={passwordInput}
-                                                onChange={handlePasswordChange}
-                                                className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-red-50 focus:border-[#D8262F] outline-none transition-all"
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    type={showPassword ? "text" : "password"}
+                                                    placeholder={isCreateMode ? "Ingresa una contraseña" : "Dejar en blanco para no cambiar"}
+                                                    name="password"
+                                                    value={passwordInput}
+                                                    onChange={handlePasswordChange}
+                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 pr-12 text-sm font-bold focus:ring-4 focus:ring-red-50 focus:border-[#D8262F] outline-none transition-all"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPassword(p => !p)}
+                                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-50"
+                                                    tabIndex={-1}
+                                                    title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                                                >
+                                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                </button>
+                                            </div>
                                             {passwordInput && (
                                                 <div className="mt-3 ml-4 space-y-1">
                                                     <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-tighter ${passwordInput.length >= 8 ? 'text-green-500' : 'text-gray-400'}`}>

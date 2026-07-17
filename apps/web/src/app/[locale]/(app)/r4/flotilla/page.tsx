@@ -464,7 +464,13 @@ export default function Fleet() {
     if (typeof estatus === 'string' && estatus.toUpperCase().includes('INACTIVO')) {
       estatus = 'Inactivo';
     }
-    return { ...a, estatus };
+    return {
+      ...a,
+      estatus,
+      distribuidor: typeof a.distribuidor === 'string' ? a.distribuidor.toUpperCase() : a.distribuidor,
+      modelo: typeof a.modelo === 'string' ? a.modelo.toUpperCase() : a.modelo,
+      serie: typeof a.serie === 'string' ? a.serie.toUpperCase() : a.serie,
+    };
   });
 
   const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
@@ -483,15 +489,15 @@ export default function Fleet() {
     });
   };
 
-  const uniqueADCs = Array.from(new Set(getFilteredFor('adc').map(a => getValidString(a.adc)).filter((v): v is string => !!v))).sort();
-  const uniqueClientes = Array.from(new Set(getFilteredFor('cliente').map(a => getValidString(a.cliente)).filter((v): v is string => !!v))).sort();
-  const uniqueCuentas = Array.from(new Set(getFilteredFor('cuenta').map(a => getValidString(a.cuenta)).filter((v): v is string => !!v))).sort();
-  const uniqueSites = Array.from(new Set(getFilteredFor('site').map(a => getValidString(a.site)).filter((v): v is string => !!v))).sort();
-  const uniqueDistribuidores = Array.from(new Set(getFilteredFor('distribuidor').map(a => getValidString(a.distribuidor)).filter((v): v is string => !!v))).sort();
-  const uniqueEstatus = Array.from(new Set(getFilteredFor('estatus').map(a => getValidString(a.estatus)).filter((v): v is string => !!v))).sort();
-  const uniqueTipos = Array.from(new Set(getFilteredFor('tipo').map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort();
-  const uniqueModelos = Array.from(new Set(getFilteredFor('modelo').map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort();
-  const uniqueClases = Array.from(new Set(getFilteredFor('clase').map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort();
+  const uniqueADCs = Array.from(new Set(getFilteredFor('adc').map(a => getValidString(a.adc)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueClientes = Array.from(new Set(getFilteredFor('cliente').map(a => getValidString(a.cliente)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueCuentas = Array.from(new Set(getFilteredFor('cuenta').map(a => getValidString(a.cuenta)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueSites = Array.from(new Set(getFilteredFor('site').map(a => getValidString(a.site)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueDistribuidores = Array.from(new Set(getFilteredFor('distribuidor').map(a => getValidString(a.distribuidor)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueEstatus = Array.from(new Set(getFilteredFor('estatus').map(a => getValidString(a.estatus)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueTipos = Array.from(new Set(getFilteredFor('tipo').map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueModelos = Array.from(new Set(getFilteredFor('modelo').map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniqueClases = Array.from(new Set(getFilteredFor('clase').map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
 
   const filteredAssets = normalizedAssets.filter((asset: any) => {
     if (selectedADC !== 'Todos' && asset.adc !== selectedADC) return false;
@@ -1166,14 +1172,14 @@ export default function Fleet() {
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Cliente *</label>
                     <select value={newAssetCliente} onChange={(e) => { setNewAssetCliente(e.target.value); setNewAssetSitio(''); }} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
                       <option value="">Seleccionar Cliente</option>
-                      {clientesDisponibles.map((c: any) => <option key={c.id} value={c.id}>{c.razonSocial || c.razon_social}</option>)}
+                      {[...clientesDisponibles].sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || '')).map((c: any) => <option key={c.id} value={c.id}>{c.razonSocial || c.razon_social}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Sitio *</label>
                     <select value={newAssetSitio} onChange={(e) => setNewAssetSitio(e.target.value)} disabled={!newAssetCliente} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50">
                       <option value="">Seleccionar Sitio</option>
-                      {clientesDisponibles.find((c: any) => c.id === newAssetCliente)?.sitios?.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                      {[...(clientesDisponibles.find((c: any) => c.id === newAssetCliente)?.sitios || [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1274,12 +1280,12 @@ export default function Fleet() {
                     <select value={editingData.estatus || ''} onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
                       <option value="Activo">Activo</option>
                       <option value="Back Up">Back Up</option>
-                      <option value="Inactivo con Cliente">Inactivo con Cliente</option>
-                      <option value="Inactivo">Inactivo</option>
                       <option value="Disponible">Disponible</option>
                       <option value="En Renta">En Renta</option>
-                      <option value="Mantenimiento">Mantenimiento</option>
                       <option value="En Taller">En Taller</option>
+                      <option value="Inactivo">Inactivo</option>
+                      <option value="Inactivo con Cliente">Inactivo con Cliente</option>
+                      <option value="Mantenimiento">Mantenimiento</option>
                     </select>
                   </div>
                   {!isAdc && (

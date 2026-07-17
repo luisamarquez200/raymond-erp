@@ -231,7 +231,6 @@ export default function R4DashboardPage() {
               <table className="w-full text-left text-xs whitespace-nowrap">
                 <thead className="bg-slate-50 text-[9px] text-slate-500 uppercase tracking-widest border-b border-slate-100 sticky top-0">
                   <tr>
-                    <th className="px-4 py-3 font-black">ADC</th>
                     <th className="px-4 py-3 font-black">Cliente</th>
                     <th className="px-4 py-3 font-black text-center">Cantidad de Equipos</th>
                     <th className="px-4 py-3 font-black text-right">Presupuesto MXN</th>
@@ -255,7 +254,7 @@ export default function R4DashboardPage() {
                         <Fragment key={idx}>
                           {/* Header de ADC */}
                           <tr className="bg-slate-50/80 font-black text-slate-800 border-y border-slate-100">
-                            <td colSpan={5} className="px-4 py-3 text-xs text-[#E5222D]">
+                            <td colSpan={4} className="px-4 py-3 text-xs text-[#E5222D]">
                               ADC: {adc}
                               <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded border ml-2">
                                 {items.length} cliente(s)
@@ -265,7 +264,6 @@ export default function R4DashboardPage() {
                           {/* Filas de clientes */}
                           {items.map((item: any, subIdx: number) => (
                             <tr key={`${idx}-${subIdx}`} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-4 py-2.5"></td>
                               <td className="px-4 py-2.5 max-w-[150px] truncate">{item.cliente}</td>
                               <td className="px-4 py-2.5 text-center">
                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md text-[10px]">

@@ -31,11 +31,12 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
                 router.push(`/${locale}/login`);
             } else {
                 // Determine if user has R4 access
+                const roleLower = user.role?.toLowerCase() || '';
                 const hasR4Access = user.isSuperadmin || 
-                    (user.role?.toLowerCase() === 'administrador' && (user as any).sitio?.includes('R4')) ||
-                    (user as any).sitio?.includes('R4') ||
-                    user.role?.includes('R4') ||
-                    user.role?.toUpperCase() === 'ADC';
+                    roleLower === 'administrador' || 
+                    roleLower === 'adc' ||
+                    roleLower.includes('r4') ||
+                    (user as any).sitio?.includes('R4');
                 
                 if (!hasR4Access) {
                     const locale = params.locale || 'es';

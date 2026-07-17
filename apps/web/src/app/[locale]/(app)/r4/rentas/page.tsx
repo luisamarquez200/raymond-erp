@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Search, Receipt, Calendar, CalendarDays, Plus, Filter, Download, X, Pencil, Check, ChevronsUpDown, FileText, Building2, MapPin, Truck, FileSpreadsheet
+  Search, Receipt, Calendar, CalendarDays, Plus, Filter, Download, X, Pencil, Check, ChevronsUpDown, FileText, Building2, MapPin, Truck, FileSpreadsheet, Eye
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -12,6 +12,65 @@ import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth.store";
 import { useConfigStore } from "@/store/config.store";
 import { motion, AnimatePresence } from "motion/react";
+
+const formatFilterText = (str: string) => {
+  if (!str) return '-';
+  return str.toUpperCase();
+};
+
+const FilterCombobox = ({ 
+  label, value, onChange, options, open, setOpen, search, setSearch, currentColor 
+}: {
+  label: string; value: string; onChange: (val: string) => void; options: string[]; open: boolean; setOpen: (val: boolean) => void; search: string; setSearch: (val: string) => void; currentColor?: string;
+}) => (
+  <div className="relative group flex-1 min-w-[140px]">
+    <button
+      type="button"
+      onClick={() => setOpen(!open)}
+      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-slate-300 transition-all h-[42px]"
+    >
+      <span className="truncate">{value === 'Todos' ? `${label.toUpperCase()}: TODOS` : `${label.toUpperCase()}: ${formatFilterText(value)}`}</span>
+      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+    </button>
+    {open && (
+      <div className="absolute top-[100%] mt-2 left-0 w-[240px] z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+        <div className="relative mb-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder={`Buscar ${label.toLowerCase()}...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-red-500"
+          />
+        </div>
+        <div className="max-h-[200px] overflow-y-auto space-y-1">
+          <button
+            type="button"
+            onClick={() => { onChange('Todos'); setOpen(false); setSearch(''); }}
+            className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-bold"
+          >
+            <span>TODOS</span>
+            {value === 'Todos' && <Check className="w-4 h-4 shrink-0" style={{ color: currentColor || '#dc2626' }} />}
+          </button>
+          {options
+            .filter(opt => opt.toLowerCase().includes(search.toLowerCase()))
+            .map(opt => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => { onChange(opt); setOpen(false); setSearch(''); }}
+                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+              >
+                <span className="truncate pr-2">{formatFilterText(opt)}</span>
+                {value === opt && <Check className="w-4 h-4 shrink-0" style={{ color: currentColor || '#dc2626' }} />}
+              </button>
+            ))}
+        </div>
+      </div>
+    )}
+  </div>
+);
 
 export default function R4RentasPage() {
   const { user } = useAuthStore();
@@ -59,6 +118,116 @@ export default function R4RentasPage() {
     formData: { estado: '', renta_base: '', moneda: 'MXN', po: '', ordenes: [] }
   });
   const [isSubmittingRenta, setIsSubmittingRenta] = useState(false);
+
+  // Filter States
+  const [selectedFilterCuenta, setSelectedFilterCuenta] = useState('Todos');
+  const [selectedFilterSitio, setSelectedFilterSitio] = useState('Todos');
+  const [selectedFilterClase, setSelectedFilterClase] = useState('Todos');
+  const [selectedFilterModelo, setSelectedFilterModelo] = useState('Todos');
+  const [selectedFilterDistribuidor, setSelectedFilterDistribuidor] = useState('Todos');
+  const [selectedFilterEquipo, setSelectedFilterEquipo] = useState('Todos');
+  const [selectedFilterMoneda, setSelectedFilterMoneda] = useState('Todos');
+  const [selectedFilterPoliza, setSelectedFilterPoliza] = useState('Todos');
+
+  // Combobox open states
+  const [openFilterCuenta, setOpenFilterCuenta] = useState(false);
+  const [openFilterSitio, setOpenFilterSitio] = useState(false);
+  const [openFilterClase, setOpenFilterClase] = useState(false);
+  const [openFilterModelo, setOpenFilterModelo] = useState(false);
+  const [openFilterDistribuidor, setOpenFilterDistribuidor] = useState(false);
+  const [openFilterEquipo, setOpenFilterEquipo] = useState(false);
+  const [openFilterMoneda, setOpenFilterMoneda] = useState(false);
+  const [openFilterPoliza, setOpenFilterPoliza] = useState(false);
+
+  // Combobox search states
+  const [searchCuenta, setSearchCuenta] = useState("");
+  const [searchSitio, setSearchSitio] = useState("");
+  const [searchClase, setSearchClase] = useState("");
+  const [searchModelo, setSearchModelo] = useState("");
+  const [searchDistribuidor, setSearchDistribuidor] = useState("");
+  const [searchEquipo, setSearchEquipo] = useState("");
+  const [searchMoneda, setSearchMoneda] = useState("");
+  const [searchPoliza, setSearchPoliza] = useState("");
+
+  // VIEW MODAL STATE
+  const [viewRentaConfig, setViewRentaConfig] = useState({
+    isOpen: false,
+    renta: null as any,
+    documentos: [] as any[],
+    loadingDocs: false,
+  });
+
+  const openViewModal = async (renta: any) => {
+    setViewRentaConfig({
+      isOpen: true,
+      renta,
+      documentos: [],
+      loadingDocs: true,
+    });
+
+    try {
+      const res = await api.get(`/r4/rentas/${renta.id}/documentos`);
+      const docs = res.data?.data || res.data || [];
+      setViewRentaConfig(prev => ({
+        ...prev,
+        documentos: Array.isArray(docs) ? docs : [],
+        loadingDocs: false,
+      }));
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      setViewRentaConfig(prev => ({ ...prev, loadingDocs: false }));
+    }
+  };
+
+  const exportRentasToCSV = () => {
+    const headers = [
+      'Cuenta',
+      'Sitio',
+      'Equipo',
+      'Clase',
+      'Modelo',
+      'PO/OC',
+      'Serie',
+      'Tarifa Base',
+      'Moneda',
+      'Tipo Póliza',
+      'Distribuidor',
+      'Tarifa Póliza',
+      'Moneda Póliza'
+    ];
+    
+    const rows = filteredRentas.map(renta => {
+      const cond = renta.condiciones || {};
+      const detalles = renta.detalles || {};
+      return [
+        renta.cuenta || '',
+        renta.sitio?.nombre || '',
+        renta.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas',
+        renta.activo?.clase || '',
+        renta.activo?.modelo || '',
+        renta.orden_compra || detalles.oc_cliente || '',
+        renta.activo?.serie || '',
+        detalles.renta_base || renta.tarifa || 0,
+        detalles.moneda || 'MXN',
+        cond.tipo_poliza || renta.activo?.tipo_poliza || 'SMP',
+        renta.distribuidor || renta.activo?.distribuidor || '',
+        cond.costo_poliza_distribuidor || renta.activo?.costo_poliza_distribuidor || 0,
+        cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN'
+      ];
+    });
+    
+    let csvContent = "\uFEFF";
+    csvContent += [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Rentas_R4_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   const [openCliente, setOpenCliente] = useState(false);
   const [openSitio, setOpenSitio] = useState(false);
   const [openEquipo, setOpenEquipo] = useState(false);
@@ -80,7 +249,7 @@ export default function R4RentasPage() {
       })
     : clientesDisponibles;
 
-  const selectedClienteObj = filteredClientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id);
+  const selectedClienteObj = clientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id);
 
   const openEditModal = (renta: any) => {
     setEditRentaConfig({
@@ -109,13 +278,29 @@ export default function R4RentasPage() {
         api.get('/r4/flotilla')
       ]);
       const dataArray = resRentas.data?.data || resRentas.data || [];
-      setRentas(Array.isArray(dataArray) ? dataArray : []);
+      const mappedRentas = (Array.isArray(dataArray) ? dataArray : []).map((r: any) => ({
+        ...r,
+        distribuidor: r.distribuidor?.toUpperCase(),
+        activo: r.activo ? {
+          ...r.activo,
+          distribuidor: r.activo.distribuidor?.toUpperCase(),
+          modelo: r.activo.modelo?.toUpperCase(),
+          serie: r.activo.serie?.toUpperCase(),
+        } : null,
+      }));
+      setRentas(mappedRentas);
 
       const clientesArray = resClientes.data?.data || resClientes.data || [];
       setClientesDisponibles(Array.isArray(clientesArray) ? clientesArray : []);
 
       const equiposArray = resFlotilla.data?.data || resFlotilla.data || [];
-      setEquiposDisponibles(Array.isArray(equiposArray) ? equiposArray : []);
+      const mappedEquipos = (Array.isArray(equiposArray) ? equiposArray : []).map((e: any) => ({
+        ...e,
+        distribuidor: e.distribuidor?.toUpperCase(),
+        modelo: e.modelo?.toUpperCase(),
+        serie: e.serie?.toUpperCase(),
+      }));
+      setEquiposDisponibles(mappedEquipos);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -180,6 +365,31 @@ export default function R4RentasPage() {
 
     updated[index] = item;
     setFichaSeriesGrid(updated);
+  };
+
+  // Select-all toggle for OC equipment table
+  const allSeriesChecked = fichaSeriesGrid.length > 0 && fichaSeriesGrid.every(i => i.checked);
+  const someSeriesChecked = fichaSeriesGrid.some(i => i.checked) && !allSeriesChecked;
+  const handleSelectAllSeries = () => {
+    setFichaSeriesGrid(prev => prev.map(i => ({ ...i, checked: !allSeriesChecked })));
+  };
+
+  // Total a Facturar — suma de renta_final de equipos seleccionados
+  const totalAFacturar = fichaSeriesGrid
+    .filter(i => i.checked)
+    .reduce((sum, i) => sum + i.renta_final, 0);
+
+  // Reset OC form helper — called on close, cancel, or backdrop click
+  const resetFichaOcForm = () => {
+    setSelectedFichaClienteId("");
+    setSelectedFichaSitioId("");
+    setFichaFolioOc("");
+    setFichaPedidoTotvs("");
+    setFichaFechaTotvs("");
+    setFichaMesCobro("");
+    setFichaPdfFile(null);
+    setIsFichaDragging(false);
+    setIsFichaOcModalOpen(false);
   };
 
   const handleCreateRenta = async (e: React.FormEvent) => {
@@ -366,16 +576,38 @@ export default function R4RentasPage() {
     return fechaFin > hoy && fechaFin <= en30Dias && r.estado?.toUpperCase() !== 'CANCELADA';
   }).length;
 
+  const filterUniqueCuentas = Array.from(new Set(baseRentas.map(r => r.cuenta).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueSitios = Array.from(new Set(baseRentas.map(r => r.sitio?.nombre).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueClases = Array.from(new Set(baseRentas.map(r => r.activo?.clase).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueModelos = Array.from(new Set(baseRentas.map(r => r.activo?.modelo).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueDistribuidores = Array.from(new Set(baseRentas.map(r => r.distribuidor || r.activo?.distribuidor).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+
   const filteredRentas = baseRentas.filter((renta: any) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      renta.id?.toLowerCase().includes(term) ||
-      renta.cliente?.razonSocial?.toLowerCase().includes(term) ||
-      renta.activo?.serie?.toLowerCase().includes(term) ||
-      renta.orden_compra?.toLowerCase().includes(term) ||
-      renta.detalles?.oc_cliente?.toLowerCase().includes(term)
+    const cond = renta.condiciones || {};
+    const detalles = renta.detalles || {};
+    const matchesSearch = !searchTerm ? true : (
+      renta.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      renta.cliente?.razonSocial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      renta.cliente?.razon_social?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      renta.activo?.serie?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      renta.orden_compra?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      renta.detalles?.oc_cliente?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const matchesCuenta = selectedFilterCuenta === 'Todos' || renta.cuenta === selectedFilterCuenta;
+    const matchesSitio = selectedFilterSitio === 'Todos' || renta.sitio?.nombre === selectedFilterSitio;
+    const matchesClase = selectedFilterClase === 'Todos' || renta.activo?.clase === selectedFilterClase;
+    const matchesModelo = selectedFilterModelo === 'Todos' || renta.activo?.modelo === selectedFilterModelo;
+    const matchesDistribuidor = selectedFilterDistribuidor === 'Todos' || (renta.distribuidor || renta.activo?.distribuidor) === selectedFilterDistribuidor;
+    const matchesEquipo = selectedFilterEquipo === 'Todos' || (
+      selectedFilterEquipo === 'Patín' 
+        ? renta.activo?.clase?.includes('III')
+        : !renta.activo?.clase?.includes('III')
+    );
+    const matchesMoneda = selectedFilterMoneda === 'Todos' || (detalles.moneda || 'MXN') === selectedFilterMoneda;
+    const matchesPoliza = selectedFilterPoliza === 'Todos' || (cond.tipo_poliza || renta.activo?.tipo_poliza || 'SMP') === selectedFilterPoliza;
+
+    return matchesSearch && matchesCuenta && matchesSitio && matchesClase && matchesModelo && matchesDistribuidor && matchesEquipo && matchesMoneda && matchesPoliza;
   });
 
   // Apply pagination
@@ -407,6 +639,13 @@ export default function R4RentasPage() {
           <p className="text-slate-500 font-medium mt-1">Administración de contratos de renta, vigencias y asignación de activos</p>
         </div>
         <div className="flex gap-3">
+          <button
+            onClick={exportRentasToCSV}
+            className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-all shadow-md hover:bg-slate-50 flex items-center gap-2 uppercase tracking-widest shrink-0"
+          >
+            <Download className="w-4 h-4" />
+            Exportar
+          </button>
           <button
             onClick={() => setIsFichaOcModalOpen(true)}
             className="px-6 py-3 text-white rounded-2xl font-bold text-sm transition-all shadow-md hover:opacity-90 flex items-center gap-2 uppercase tracking-widest"
@@ -449,18 +688,111 @@ export default function R4RentasPage() {
       </div>
 
       {/* Search & Filter */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center">
-        <div className="relative group flex-1 w-full max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
-          <input
-            type="text"
-            placeholder="Buscar por cliente, serie, folio OC"
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium focus:border-red-500 focus:outline-none transition-all shadow-sm"
+      <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div className="relative group flex-1 w-full max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#E5222D] transition-colors" />
+            <input
+              type="text"
+              placeholder="Buscar por cliente, serie, folio OC..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 focus:border-[#E5222D] rounded-xl text-sm font-bold text-slate-700 focus:outline-none transition-all"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 pt-2 border-t border-slate-100">
+          <FilterCombobox
+            label="Cuenta"
+            value={selectedFilterCuenta}
+            onChange={(val) => { setSelectedFilterCuenta(val); setCurrentPage(1); }}
+            options={filterUniqueCuentas}
+            open={openFilterCuenta}
+            setOpen={setOpenFilterCuenta}
+            search={searchCuenta}
+            setSearch={setSearchCuenta}
+            currentColor={currentColor}
+          />
+          <FilterCombobox
+            label="Sitio"
+            value={selectedFilterSitio}
+            onChange={(val) => { setSelectedFilterSitio(val); setCurrentPage(1); }}
+            options={filterUniqueSitios}
+            open={openFilterSitio}
+            setOpen={setOpenFilterSitio}
+            search={searchSitio}
+            setSearch={setSearchSitio}
+            currentColor={currentColor}
+          />
+          <FilterCombobox
+            label="Clase"
+            value={selectedFilterClase}
+            onChange={(val) => { setSelectedFilterClase(val); setCurrentPage(1); }}
+            options={filterUniqueClases}
+            open={openFilterClase}
+            setOpen={setOpenFilterClase}
+            search={searchClase}
+            setSearch={setSearchClase}
+            currentColor={currentColor}
+          />
+          <FilterCombobox
+            label="Modelo"
+            value={selectedFilterModelo}
+            onChange={(val) => { setSelectedFilterModelo(val); setCurrentPage(1); }}
+            options={filterUniqueModelos}
+            open={openFilterModelo}
+            setOpen={setOpenFilterModelo}
+            search={searchModelo}
+            setSearch={setSearchModelo}
+            currentColor={currentColor}
+          />
+          <FilterCombobox
+            label="Distribuidor"
+            value={selectedFilterDistribuidor}
+            onChange={(val) => { setSelectedFilterDistribuidor(val); setCurrentPage(1); }}
+            options={filterUniqueDistribuidores}
+            open={openFilterDistribuidor}
+            setOpen={setOpenFilterDistribuidor}
+            search={searchDistribuidor}
+            setSearch={setSearchDistribuidor}
+            currentColor={currentColor}
+          />
+          <FilterCombobox
+            label="Equipo"
+            value={selectedFilterEquipo}
+            onChange={(val) => { setSelectedFilterEquipo(val); setCurrentPage(1); }}
+            options={['Montacargas', 'Patín']}
+            open={openFilterEquipo}
+            setOpen={setOpenFilterEquipo}
+            search={searchEquipo}
+            setSearch={setSearchEquipo}
+            currentColor={currentColor}
+          />
+          <FilterCombobox
+            label="Moneda"
+            value={selectedFilterMoneda}
+            onChange={(val) => { setSelectedFilterMoneda(val); setCurrentPage(1); }}
+            options={['MXN', 'USD']}
+            open={openFilterMoneda}
+            setOpen={setOpenFilterMoneda}
+            search={searchMoneda}
+            setSearch={setSearchMoneda}
+            currentColor={currentColor}
+          />
+          <FilterCombobox
+            label="Póliza"
+            value={selectedFilterPoliza}
+            onChange={(val) => { setSelectedFilterPoliza(val); setCurrentPage(1); }}
+            options={['CFPM', 'NA', 'SMP']}
+            open={openFilterPoliza}
+            setOpen={setOpenFilterPoliza}
+            search={searchPoliza}
+            setSearch={setSearchPoliza}
+            currentColor={currentColor}
           />
         </div>
       </div>
@@ -542,12 +874,22 @@ export default function R4RentasPage() {
                         </td>
                         <td className="px-4 py-3.5 text-slate-500">{cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN'}</td>
                         <td className="px-4 py-3.5 text-right">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openEditModal(renta); }}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openViewModal(renta); }}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                              title="Consultar"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openEditModal(renta); }}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                              title="Editar"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -592,7 +934,7 @@ export default function R4RentasPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsFichaOcModalOpen(false)}
+              onClick={resetFichaOcForm}
               className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50"
             />
             <motion.div
@@ -614,7 +956,7 @@ export default function R4RentasPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsFichaOcModalOpen(false)}
+                    onClick={resetFichaOcForm}
                     className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -655,13 +997,15 @@ export default function R4RentasPage() {
                             />
                           </div>
                           <div className="max-h-[250px] overflow-y-auto space-y-1">
-                            {filteredClientesDisponibles
+                            {[...filteredClientesDisponibles]
                               .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
+                              .sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || ''))
                               .length === 0 ? (
                                 <div className="p-4 text-center text-sm text-slate-500">No se encontraron clientes.</div>
                               ) : (
-                                filteredClientesDisponibles
+                                [...filteredClientesDisponibles]
                                   .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
+                                  .sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || ''))
                                   .map((c: any) => (
                                     <button
                                       key={c.id}
@@ -712,12 +1056,15 @@ export default function R4RentasPage() {
                             />
                           </div>
                           <div className="max-h-[250px] overflow-y-auto space-y-1">
-                            {clientesDisponibles.find((c: any) => c && c.id === selectedFichaClienteId)?.sitios
-                              ?.filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase())).length === 0 ? (
+                            {[...(clientesDisponibles.find((c: any) => c && c.id === selectedFichaClienteId)?.sitios || [])]
+                              .filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase()))
+                              .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+                              .length === 0 ? (
                                 <div className="p-4 text-center text-sm text-slate-500">No se encontraron sitios.</div>
                               ) : (
-                                clientesDisponibles.find((c: any) => c && c.id === selectedFichaClienteId)?.sitios
-                                  ?.filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase()))
+                                [...(clientesDisponibles.find((c: any) => c && c.id === selectedFichaClienteId)?.sitios || [])]
+                                  .filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase()))
+                                  .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
                                   .map((s: any) => (
                                     <button
                                       key={s.id}
@@ -788,61 +1135,105 @@ export default function R4RentasPage() {
                     {/* PDF Upload */}
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cargar PDF de la OC del Cliente</label>
-                      <div
-                        onClick={() => document.getElementById('fichaPdfUpload')?.click()}
-                        className={cn(
-                          "cursor-pointer flex flex-col items-center justify-center gap-1.5 border-2 border-dashed rounded-2xl p-4 text-center transition-all w-full",
-                          isFichaDragging ? "border-red-500 bg-red-50/50" : "border-slate-200 bg-slate-50/50 hover:border-red-400"
-                        )}
-                        onDragEnter={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setIsFichaDragging(true);
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          e.dataTransfer.dropEffect = 'copy';
-                          setIsFichaDragging(true);
-                        }}
-                        onDragLeave={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setIsFichaDragging(false);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setIsFichaDragging(false);
-                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                            const droppedFile = e.dataTransfer.files[0];
-                            if (droppedFile.type === "application/pdf") {
-                              setFichaPdfFile(droppedFile);
-                            } else {
-                              toast.error("Solo se permiten archivos PDF");
-                            }
-                          }
-                        }}
-                      >
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          id="fichaPdfUpload"
-                          className="hidden"
-                          onChange={e => {
-                            if (e.target.files && e.target.files[0]) {
-                              setFichaPdfFile(e.target.files[0]);
+                      {fichaPdfFile ? (
+                        <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-2xl px-4 py-3 w-full">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2 bg-red-100 rounded-xl shrink-0">
+                              <FileText className="w-4 h-4 text-red-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-red-700 truncate max-w-[280px]">{fichaPdfFile.name}</p>
+                              <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">
+                                {(fichaPdfFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-3">
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById('fichaPdfUpload')?.click()}
+                              className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                            >
+                              Reemplazar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFichaPdfFile(null)}
+                              className="p-1.5 hover:bg-red-100 rounded-lg transition-colors text-red-400 hover:text-red-600"
+                              title="Eliminar archivo"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <input
+                            type="file"
+                            accept="application/pdf"
+                            id="fichaPdfUpload"
+                            className="hidden"
+                            onChange={e => {
+                              if (e.target.files && e.target.files[0]) {
+                                setFichaPdfFile(e.target.files[0]);
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => document.getElementById('fichaPdfUpload')?.click()}
+                          className={cn(
+                            "cursor-pointer flex flex-col items-center justify-center gap-1.5 border-2 border-dashed rounded-2xl p-4 text-center transition-all w-full",
+                            isFichaDragging ? "border-red-500 bg-red-50/50" : "border-slate-200 bg-slate-50/50 hover:border-red-400"
+                          )}
+                          onDragEnter={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsFichaDragging(true);
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.dataTransfer.dropEffect = 'copy';
+                            setIsFichaDragging(true);
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsFichaDragging(false);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsFichaDragging(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                              const droppedFile = e.dataTransfer.files[0];
+                              if (droppedFile.type === "application/pdf") {
+                                setFichaPdfFile(droppedFile);
+                              } else {
+                                toast.error("Solo se permiten archivos PDF");
+                              }
                             }
                           }}
-                        />
-                        <div className="pointer-events-none flex flex-col items-center gap-1.5">
-                          <FileText className={cn("w-8 h-8 transition-colors", isFichaDragging ? "text-red-500" : "text-slate-400")} />
-                          <span className={cn("text-sm font-bold", isFichaDragging ? "text-red-600" : "text-slate-700")}>
-                            {fichaPdfFile ? fichaPdfFile.name : (isFichaDragging ? "¡Suelta el archivo aquí!" : "Seleccionar Archivo PDF o Arrastrar y Soltar")}
-                          </span>
-                          <span className="text-xs text-slate-400">PDF máximo 10MB</span>
+                        >
+                          <input
+                            type="file"
+                            accept="application/pdf"
+                            id="fichaPdfUpload"
+                            className="hidden"
+                            onChange={e => {
+                              if (e.target.files && e.target.files[0]) {
+                                setFichaPdfFile(e.target.files[0]);
+                              }
+                            }}
+                          />
+                          <div className="pointer-events-none flex flex-col items-center gap-1.5">
+                            <FileText className={cn("w-8 h-8 transition-colors", isFichaDragging ? "text-red-500" : "text-slate-400")} />
+                            <span className={cn("text-sm font-bold", isFichaDragging ? "text-red-600" : "text-slate-700")}>
+                              {isFichaDragging ? "¡Suelta el archivo aquí!" : "Seleccionar Archivo PDF o Arrastrar y Soltar"}
+                            </span>
+                            <span className="text-xs text-slate-400">PDF máximo 10MB</span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                   </div>
@@ -857,7 +1248,22 @@ export default function R4RentasPage() {
                         <table className="w-full text-left text-xs whitespace-nowrap">
                           <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-wider border-b border-slate-100">
                             <tr>
-                              <th className="p-3 w-10">Select</th>
+                              <th className="p-3 w-10">
+                                <button
+                                  type="button"
+                                  onClick={handleSelectAllSeries}
+                                  className={cn(
+                                    "text-[9px] font-black uppercase tracking-wider transition-colors whitespace-nowrap px-1.5 py-0.5 rounded",
+                                    allSeriesChecked
+                                      ? "text-red-600 bg-red-50 hover:bg-red-100"
+                                      : someSeriesChecked
+                                      ? "text-amber-600 bg-amber-50 hover:bg-amber-100"
+                                      : "text-slate-500 hover:text-red-600 hover:bg-red-50"
+                                  )}
+                                >
+                                  {allSeriesChecked ? 'Quitar Todo' : 'Sel. Todo'}
+                                </button>
+                              </th>
                               <th className="p-3">Serie</th>
                               <th className="p-3">Clase / Modelo</th>
                               <th className="p-3 w-28">Tarifa Renta</th>
@@ -917,6 +1323,20 @@ export default function R4RentasPage() {
                               </tr>
                             ))}
                           </tbody>
+                          <tfoot className="border-t-2 border-slate-200 bg-slate-50/80">
+                            <tr>
+                              <td colSpan={5} className="p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                Total a Facturar
+                                <span className="text-slate-400 font-medium ml-1">
+                                  ({fichaSeriesGrid.filter(i => i.checked).length} equipo{fichaSeriesGrid.filter(i => i.checked).length !== 1 ? 's' : ''})
+                                </span>
+                              </td>
+                              <td className="p-3" />
+                              <td className="p-3 font-black text-base" style={{ color: totalAFacturar > 0 ? '#E5222D' : undefined }}>
+                                ${totalAFacturar.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     </div>
@@ -926,7 +1346,7 @@ export default function R4RentasPage() {
                 <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 rounded-b-[2rem]">
                   <button
                     type="button"
-                    onClick={() => setIsFichaOcModalOpen(false)}
+                    onClick={resetFichaOcForm}
                     className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
                   >
                     Cancelar
@@ -1018,8 +1438,9 @@ export default function R4RentasPage() {
                                 />
                               </div>
                               <div className="max-h-[200px] overflow-y-auto space-y-1">
-                                {filteredClientesDisponibles
+                                {[...filteredClientesDisponibles]
                                   .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((clienteSearchTerm || '').toLowerCase()))
+                                  .sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || ''))
                                   .map((c: any) => (
                                     <button
                                       key={c.id}
@@ -1067,8 +1488,9 @@ export default function R4RentasPage() {
                                 />
                               </div>
                               <div className="max-h-[200px] overflow-y-auto space-y-1">
-                                {clientesDisponibles.find((c: any) => c && c.id === newRentaFormData.cliente_id)?.sitios
+                                {[...(clientesDisponibles.find((c: any) => c && c.id === newRentaFormData.cliente_id)?.sitios || [])]
                                   ?.filter((s: any) => s && (s.nombre || '').toLowerCase().includes((sitioSearchTerm || '').toLowerCase()))
+                                  .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
                                   .map((s: any) => (
                                     <button
                                       key={s.id}
@@ -1233,14 +1655,23 @@ export default function R4RentasPage() {
                         <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Asignar Equipo (Serie)</label>
                         <button
                           type="button"
+                          disabled={!newRentaFormData.cliente_id || !newRentaFormData.sitio_id}
                           onClick={() => setOpenEquipo(!openEquipo)}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200"
                         >
                           {newRentaFormData.activo_id
                             ? equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.serie
                             : "Seleccionar Equipo..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </button>
+                        {(!newRentaFormData.cliente_id || !newRentaFormData.sitio_id) && (
+                          <p className="text-[10px] text-slate-400 font-bold mt-1 ml-1 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
+                            {!newRentaFormData.cliente_id
+                              ? 'Selecciona primero una cuenta'
+                              : 'Selecciona primero un sitio'}
+                          </p>
+                        )}
 
                         {openEquipo && (
                           <div className="absolute top-[100%] mt-2 left-0 w-full sm:w-[400px] z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
@@ -1331,8 +1762,8 @@ export default function R4RentasPage() {
                               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-colors"
                             >
                               <option value="CFPM">CFPM</option>
-                              <option value="SMP">SMP</option>
                               <option value="NA">NA</option>
+                              <option value="SMP">SMP</option>
                             </select>
                           </div>
                           <div className="space-y-2">
@@ -1506,6 +1937,167 @@ export default function R4RentasPage() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* VIEW RENTA MODAL */}
+      <AnimatePresence>
+        {viewRentaConfig.isOpen && viewRentaConfig.renta && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewRentaConfig({ ...viewRentaConfig, isOpen: false })}
+              className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-[2rem] shadow-xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 text-slate-800 rounded-xl">
+                    <Eye className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Consulta de Renta / OC</h2>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewRentaConfig({ ...viewRentaConfig, isOpen: false })}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-800">1</span>
+                    Información General
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Cliente</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.cliente?.razonSocial || viewRentaConfig.renta.cliente?.razon_social || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Sitio</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.sitio?.nombre || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Serie / Equipo</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5 font-mono">{viewRentaConfig.renta.activo?.serie || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Modelo / Clase</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.activo?.modelo || '-'} ({viewRentaConfig.renta.activo?.clase || '-'})</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Cuenta</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.cuenta || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">ADC / Distribuidor</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.adc || '-'} / {viewRentaConfig.renta.distribuidor || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-800">2</span>
+                    Detalles de Orden de Compra y Cobro
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Orden de Compra / PO</span>
+                      <p className="font-bold text-[#E5222D] text-sm mt-0.5">{viewRentaConfig.renta.orden_compra || viewRentaConfig.renta.detalles?.oc_cliente || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Estado de Renta</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.estado || 'VIGENTE'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">No. Registro TOTVS</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.no_registro_totvs || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Fecha Pedido TOTVS / Mes Cobro</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">
+                        {viewRentaConfig.renta.fecha_pedido_totvs ? new Date(viewRentaConfig.renta.fecha_pedido_totvs).toLocaleDateString('es-ES') : '-'}
+                        {viewRentaConfig.renta.detalles?.mes_cobro ? ` (${viewRentaConfig.renta.detalles.mes_cobro})` : ''}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Tarifa Base Renta / Moneda</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">
+                        ${(viewRentaConfig.renta.detalles?.renta_base || viewRentaConfig.renta.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {viewRentaConfig.renta.detalles?.moneda || 'MXN'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Tipo Póliza / Costo</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">
+                        {viewRentaConfig.renta.condiciones?.tipo_poliza || viewRentaConfig.renta.activo?.tipo_poliza || 'SMP'}
+                        {` - $${(viewRentaConfig.renta.condiciones?.costo_poliza_distribuidor || viewRentaConfig.renta.activo?.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ${viewRentaConfig.renta.condiciones?.moneda_pago_distribuidor || 'MXN'}`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-800">3</span>
+                    Documento PDF de Orden de Compra
+                  </h3>
+                  {viewRentaConfig.loadingDocs ? (
+                    <div className="py-4 text-center text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Cargando documento...</div>
+                  ) : viewRentaConfig.documentos.length === 0 ? (
+                    <p className="text-sm font-medium text-slate-500 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center">No hay documentos cargados para esta Orden de Compra.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {viewRentaConfig.documentos.map(doc => (
+                        <div key={doc.id} className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2 bg-red-50 text-[#E5222D] rounded-lg shrink-0">
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div className="truncate">
+                              <p className="text-sm font-bold text-slate-800 truncate">{doc.nombre_archivo}</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase">{doc.formato?.toUpperCase()} • {doc.tamano_kb} KB</p>
+                            </div>
+                          </div>
+                          <a
+                            href={doc.url_firmada}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-4 py-2 bg-[#E5222D] hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm"
+                          >
+                            Descargar
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 rounded-b-[2rem]">
+                <button
+                  type="button"
+                  onClick={() => setViewRentaConfig({ ...viewRentaConfig, isOpen: false })}
+                  className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all"
+                >
+                  Cerrar
+                </button>
+              </div>
             </motion.div>
           </>
         )}
