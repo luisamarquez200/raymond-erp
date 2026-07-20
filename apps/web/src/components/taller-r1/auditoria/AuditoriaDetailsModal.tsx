@@ -28,6 +28,7 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
     const [filterClase, setFilterClase] = useState('all');
     const [filterEstado, setFilterEstado] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [filterTipo, setFilterTipo] = useState('all');
 
     useEffect(() => {
         if (isOpen && id_auditoria && selectedSite) {
@@ -59,22 +60,22 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
             // Preparar datos para Excel
             const scannedData = report.scanned.map((item: any) => ({
                 'Serial': item.serial,
+                'Tipo': item.tipo_item,
                 'Modelo': item.modelo,
                 'Clase': item.clase,
                 'Ubicación en Sistema': item.ubicacion_actual,
                 'Estado en Sistema': item.estado_actual,
                 'Status Auditoría': item.status_auditoria,
-                'Tipo': 'Escaneado'
             }));
 
             const missingData = report.missing.map((item: any) => ({
                 'Serial': item.serial,
+                'Tipo': item.tipo_item,
                 'Modelo': item.modelo,
                 'Clase': item.clase,
                 'Ubicación en Sistema': item.ubicacion_actual,
                 'Estado en Sistema': item.estado_actual,
                 'Status Auditoría': item.status_auditoria,
-                'Tipo': 'Faltante'
             }));
 
             const wb = XLSX.utils.book_new();
@@ -103,6 +104,7 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
         setFilterClase('all');
         setFilterEstado('all');
         setFilterStatus('all');
+        setFilterTipo('all');
     }, [activeTab, isOpen]);
 
     if (!isOpen) return null;
@@ -124,7 +126,8 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
         modelos: Array.from(new Set(currentList.map((i:any) => i.modelo).filter(Boolean))).sort() as string[],
         clases: Array.from(new Set(currentList.map((i:any) => i.clase).filter(Boolean))).sort() as string[],
         estados: Array.from(new Set(currentList.map((i:any) => i.estado_actual).filter(Boolean))).sort() as string[],
-        statuses: Array.from(new Set(currentList.map((i:any) => i.status_auditoria).filter(Boolean))).sort() as string[]
+        statuses: Array.from(new Set(currentList.map((i:any) => i.status_auditoria).filter(Boolean))).sort() as string[],
+        tipos: Array.from(new Set(currentList.map((i:any) => i.tipo_item).filter(Boolean))).sort() as string[]
     };
 
     const filteredList = currentList.filter((item: any) => {
@@ -133,7 +136,8 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
         const matchClase = filterClase === 'all' || item.clase === filterClase;
         const matchEstado = filterEstado === 'all' || item.estado_actual === filterEstado;
         const matchStatus = filterStatus === 'all' || item.status_auditoria === filterStatus;
-        return matchSerial && matchModelo && matchClase && matchEstado && matchStatus;
+        const matchTipo = filterTipo === 'all' || item.tipo_item === filterTipo;
+        return matchSerial && matchModelo && matchClase && matchEstado && matchStatus && matchTipo;
     });
 
     return (
@@ -202,7 +206,7 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
                                 activeTab === 'scanned' ? "bg-slate-900 text-white" : "bg-white text-slate-400 hover:bg-slate-50"
                             )}
                         >
-                            <Search className="w-4 h-4" /> Equipos Documentados
+                             <Search className="w-4 h-4" /> Items Documentados
                         </button>
                         <button
                             onClick={() => setActiveTab('missing')}
@@ -211,7 +215,7 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
                                 activeTab === 'missing' ? "bg-red-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"
                             )}
                         >
-                            <AlertTriangle className="w-4 h-4" /> Equipos Faltantes ({report.missing?.length || 0})
+                            <AlertTriangle className="w-4 h-4" /> Items Faltantes ({report.missing?.length || 0})
                         </button>
                     </div>
                     {/* Filtros */}
@@ -254,6 +258,13 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
                                 {uniqueOptions.statuses.map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
+                        <div className="w-full sm:w-auto">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Tipo</label>
+                            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 outline-none">
+                                <option value="all">Todos</option>
+                                {uniqueOptions.tipos.map((t) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
                     </div>
 
                     {/* Tabla */}
@@ -262,6 +273,7 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
                             <thead className="bg-slate-50 border-b border-slate-100">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Serial</th>
+                                    <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>
                                     <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Modelo / Clase</th>
                                     <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Ubicación Sistema</th>
                                     <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado Sistema</th>
@@ -272,6 +284,16 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
                                 {filteredList.map((item: any, idx: number) => (
                                     <tr key={idx} className="group hover:bg-slate-50/50 transition-all">
                                         <td className="px-6 py-4 font-black font-mono text-slate-900">{item.serial}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={cn(
+                                                "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border",
+                                                item.tipo_item === 'Accesorio'
+                                                    ? "bg-purple-50 text-purple-600 border-purple-100"
+                                                    : "bg-blue-50 text-blue-600 border-blue-100"
+                                            )}>
+                                                {item.tipo_item === 'Accesorio' ? 'Accesorio' : 'Equipo'}
+                                            </span>
+                                        </td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-slate-700">{item.modelo}</span>
@@ -305,7 +327,7 @@ export default function AuditoriaDetailsModal({ isOpen, id_auditoria, onClose }:
                                 ))}
                                 {filteredList.length === 0 && (
                                      <tr>
-                                         <td colSpan={5} className="px-6 py-24 text-center text-slate-400">
+                                         <td colSpan={6} className="px-6 py-24 text-center text-slate-400">
                                             <Box className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                             <p className="font-black text-xs uppercase tracking-widest">No hay registros para mostrar con estos filtros</p>
                                          </td>

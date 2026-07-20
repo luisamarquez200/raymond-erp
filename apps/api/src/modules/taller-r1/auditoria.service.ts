@@ -19,9 +19,7 @@ export class AuditoriaService {
 
     async findAll() {
         try {
-            console.log(`[AuditoriaService] DB Client used:`, this.prisma.currentSite);
             if (!this.db.auditoria) {
-                console.error(`[AuditoriaService] ERROR: this.db.auditoria is undefined! Prisma client might be outdated.`);
                 throw new InternalServerErrorException('Prisma client outdated. Por favor reinicia el backend.');
             }
             return await this.db.auditoria.findMany({
@@ -43,9 +41,7 @@ export class AuditoriaService {
 
     async create(data: CreateAuditoriaDto) {
         try {
-            console.log(`[AuditoriaService] create called with data:`, data);
             if (!this.db.auditoria) {
-                console.error(`[AuditoriaService] ERROR: this.db.auditoria is undefined! Prisma client might be outdated.`);
                 throw new InternalServerErrorException('Prisma client outdated. Por favor reinicia el backend.');
             }
             return await this.db.auditoria.create({
@@ -66,7 +62,6 @@ export class AuditoriaService {
     async scanEquipo(id_auditoria: string, serial: string) {
         await this.findById(id_auditoria);
 
-        // Limpiar serial
         const serialClean = serial.trim();
 
         // Verificar si ya fue escaneado en esta auditoría
@@ -75,7 +70,7 @@ export class AuditoriaService {
         });
 
         if (alreadyScanned) {
-            throw new BadRequestException('Este equipo ya fue escaneado en esta auditoría');
+            throw new BadRequestException('Este serial ya fue escaneado en esta auditoría');
         }
 
         // Registrar en el detalle
@@ -87,49 +82,98 @@ export class AuditoriaService {
             }
         });
 
-        // Buscar información del equipo en la base de datos (equipo_ubicacion)
+        // 1) Buscar en equipo_ubicacion
         const equipoInfo = await this.db.equipo_ubicacion.findFirst({
             where: { serial_equipo: serialClean },
             include: {
                 ubicacion: { select: { nombre_ubicacion: true } },
-                equipos: { select: { modelo: true, clase: true } } // Added if relation matches 'equipos'
+                equipos: { select: { modelo: true, clase: true } }
             }
         });
 
-        if (!equipoInfo) {
+        if (equipoInfo) {
+            const validStates = ['ingresado', 'reservado'];
+            const isStateValid = equipoInfo.estado && validStates.includes(equipoInfo.estado.toLowerCase());
+
+            if (!isStateValid) {
+                return {
+                    status: 'INVALID_STATE',
+                    tipo_item: 'equipo',
+                    message: `Equipo encontrado pero en estado inválido (${equipoInfo.estado})`,
+                    itemInfo: {
+                        modelo: equipoInfo.equipos?.modelo || 'N/A',
+                        ubicacion: equipoInfo.ubicacion?.nombre_ubicacion || 'Sin ubicación',
+                        estado: equipoInfo.estado,
+                        clase: equipoInfo.equipos?.clase || 'N/A',
+                    },
+                    serial: serialClean,
+                    auditoria_detalle: auditoriaDetalle
+                };
+            }
+
             return {
-                status: 'NOT_FOUND',
-                message: 'Equipo no existe en la base de datos',
-                serial: serialClean,
-                auditoria_detalle: auditoriaDetalle
-            };
-        }
-
-        const validStates = ['Ingresado', 'Reservado', 'ingresado', 'reservado']; // Case insensitive check
-        const isStateValid = equipoInfo.estado && validStates.includes(equipoInfo.estado.toLowerCase());
-
-        if (!isStateValid) {
-             return {
-                status: 'INVALID_STATE',
-                message: `Equipo encontrado pero en estado inválido (${equipoInfo.estado})`,
-                equipoInfo: {
-                    estado: equipoInfo.estado,
+                status: 'FOUND',
+                tipo_item: 'equipo',
+                message: 'Equipo validado correctamente',
+                itemInfo: {
+                    modelo: equipoInfo.equipos?.modelo || 'N/A',
                     ubicacion: equipoInfo.ubicacion?.nombre_ubicacion || 'Sin ubicación',
-                    modelo: equipoInfo.equipos?.modelo || 'N/A'
+                    estado: equipoInfo.estado,
+                    clase: equipoInfo.equipos?.clase || 'N/A',
                 },
                 serial: serialClean,
                 auditoria_detalle: auditoriaDetalle
             };
         }
 
+        // 2) Buscar en entrada_accesorios
+        const accesorioInfo = await this.db.entrada_accesorios.findFirst({
+            where: { serial: serialClean },
+            include: {
+                rel_ubicacion: { select: { nombre_ubicacion: true } },
+            }
+        });
+
+        if (accesorioInfo) {
+            const validStates = ['ingresado'];
+            const isStateValid = accesorioInfo.estado && validStates.includes(accesorioInfo.estado.toLowerCase());
+
+            if (!isStateValid) {
+                return {
+                    status: 'INVALID_STATE',
+                    tipo_item: 'accesorio',
+                    message: `Accesorio encontrado pero en estado inválido (${accesorioInfo.estado})`,
+                    itemInfo: {
+                        modelo: accesorioInfo.modelo || 'N/A',
+                        ubicacion: accesorioInfo.rel_ubicacion?.nombre_ubicacion || 'Sin ubicación',
+                        estado: accesorioInfo.estado,
+                        clase: accesorioInfo.tipo || 'Accesorio',
+                    },
+                    serial: serialClean,
+                    auditoria_detalle: auditoriaDetalle
+                };
+            }
+
+            return {
+                status: 'FOUND',
+                tipo_item: 'accesorio',
+                message: 'Accesorio validado correctamente',
+                itemInfo: {
+                    modelo: accesorioInfo.modelo || 'N/A',
+                    ubicacion: accesorioInfo.rel_ubicacion?.nombre_ubicacion || 'Sin ubicación',
+                    estado: accesorioInfo.estado,
+                    clase: accesorioInfo.tipo || 'Accesorio',
+                },
+                serial: serialClean,
+                auditoria_detalle: auditoriaDetalle
+            };
+        }
+
+        // 3) No encontrado en ninguna tabla
         return {
-            status: 'FOUND',
-            message: 'Equipo validado correctamente',
-            equipoInfo: {
-                estado: equipoInfo.estado,
-                ubicacion: equipoInfo.ubicacion?.nombre_ubicacion || 'Sin ubicación',
-                modelo: equipoInfo.equipos?.modelo || 'N/A'
-            },
+            status: 'NOT_FOUND',
+            tipo_item: null,
+            message: 'Serial no existe en la base de datos',
             serial: serialClean,
             auditoria_detalle: auditoriaDetalle
         };
@@ -146,10 +190,9 @@ export class AuditoriaService {
             .filter((d: any) => d.serial_equipo)
             .map((d: any) => d.serial_equipo.toLowerCase());
 
-        // Obtener la información completa de los equipos escaneados en una sola consulta
         const scannedDetails = [] as any[];
-        
-        // Batch query para optimizar N+1
+
+        // Batch query equipos escaneados
         const equiposInfo = await this.db.equipo_ubicacion.findMany({
             where: { serial_equipo: { in: scannedSerials } },
             include: {
@@ -158,7 +201,6 @@ export class AuditoriaService {
             }
         });
 
-        // Crear mapa para acceso rápido
         const equipoInfoMap = new Map();
         equiposInfo.forEach((eq: any) => {
             if (eq.serial_equipo) {
@@ -166,39 +208,68 @@ export class AuditoriaService {
             }
         });
 
-        for (const detalle of detalles) {
-             const serialLower = detalle.serial_equipo ? detalle.serial_equipo.toLowerCase() : '';
-             const equipoInfo = equipoInfoMap.get(serialLower);
-             
-             let statusText = 'No existe / Otra ubicación';
-             if (equipoInfo) {
-                 const isStateValid = equipoInfo.estado && ['ingresado', 'reservado'].includes(equipoInfo.estado.toLowerCase());
-                 if (isStateValid) {
-                     statusText = 'Encontrado Correctamente';
-                 } else {
-                     statusText = `Entrado incorrecto (${equipoInfo.estado})`;
-                 }
-             }
+        // Batch query accesorios escaneados
+        const accesoriosInfo = await this.db.entrada_accesorios.findMany({
+            where: { serial: { in: scannedSerials } },
+            include: {
+                rel_ubicacion: { select: { nombre_ubicacion: true } },
+            }
+        });
 
-             scannedDetails.push({
-                 serial: detalle.serial_equipo,
-                 estado_actual: equipoInfo?.estado || 'N/A',
-                 ubicacion_actual: equipoInfo?.ubicacion?.nombre_ubicacion || 'N/A',
-                 modelo: equipoInfo?.equipos?.modelo || 'N/A',
-                 clase: equipoInfo?.equipos?.clase || 'N/A',
-                 status_auditoria: statusText
-             });
+        const accesorioInfoMap = new Map();
+        accesoriosInfo.forEach((acc: any) => {
+            if (acc.serial) {
+                accesorioInfoMap.set(acc.serial.toLowerCase(), acc);
+            }
+        });
+
+        for (const detalle of detalles) {
+            const serialLower = detalle.serial_equipo ? detalle.serial_equipo.toLowerCase() : '';
+            const equipoInfo = equipoInfoMap.get(serialLower);
+            const accesorioInfo = accesorioInfoMap.get(serialLower);
+
+            let statusText = 'No existe / Otra ubicación';
+            let tipoItem = 'Desconocido';
+            let modelo = 'N/A';
+            let ubicacion = 'N/A';
+            let clase = 'N/A';
+            let estadoActual = 'N/A';
+
+            if (equipoInfo) {
+                tipoItem = 'Equipo';
+                modelo = equipoInfo.equipos?.modelo || 'N/A';
+                ubicacion = equipoInfo.ubicacion?.nombre_ubicacion || 'N/A';
+                clase = equipoInfo.equipos?.clase || 'N/A';
+                estadoActual = equipoInfo.estado || 'N/A';
+                const isStateValid = equipoInfo.estado && ['ingresado', 'reservado'].includes(equipoInfo.estado.toLowerCase());
+                statusText = isStateValid ? 'Encontrado Correctamente' : `Entrado incorrecto (${equipoInfo.estado})`;
+            } else if (accesorioInfo) {
+                tipoItem = 'Accesorio';
+                modelo = accesorioInfo.modelo || 'N/A';
+                ubicacion = accesorioInfo.rel_ubicacion?.nombre_ubicacion || 'N/A';
+                clase = accesorioInfo.tipo || 'Accesorio';
+                estadoActual = accesorioInfo.estado || 'N/A';
+                const isStateValid = accesorioInfo.estado && ['ingresado'].includes(accesorioInfo.estado.toLowerCase());
+                statusText = isStateValid ? 'Encontrado Correctamente' : `Entrado incorrecto (${accesorioInfo.estado})`;
+            }
+
+            scannedDetails.push({
+                serial: detalle.serial_equipo,
+                tipo_item: tipoItem,
+                estado_actual: estadoActual,
+                ubicacion_actual: ubicacion,
+                modelo,
+                clase,
+                status_auditoria: statusText
+            });
         }
 
-        // Obtener faltantes (específico si hay ubicación, general a toda la locación si no)
-        let missingEquipos = [] as any[];
-        
-        // Determinar el filtro de la consulta
+        // ── FALTANTES: Equipos ──
         const whereCondition: any = {
-             estado: { in: ['Ingresado', 'Reservado', 'ingresado', 'reservado'] }
+            estado: { in: ['Ingresado', 'Reservado', 'ingresado', 'reservado'] }
         };
         if (auditoria.id_ubicacion) {
-             whereCondition.id_ubicacion = auditoria.id_ubicacion;
+            whereCondition.id_ubicacion = auditoria.id_ubicacion;
         }
 
         const expectedEquipos = await this.db.equipo_ubicacion.findMany({
@@ -209,11 +280,11 @@ export class AuditoriaService {
             }
         });
 
-        // Filtrar los que no están en la lista de escaneados
-        missingEquipos = expectedEquipos
+        const missingEquipos = expectedEquipos
             .filter((eq: any) => eq.serial_equipo && !scannedSerials.includes(eq.serial_equipo.toLowerCase()))
             .map((eq: any) => ({
                 serial: eq.serial_equipo,
+                tipo_item: 'Equipo',
                 estado_actual: eq.estado,
                 ubicacion_actual: eq.ubicacion?.nombre_ubicacion || 'N/A',
                 modelo: eq.equipos?.modelo || 'N/A',
@@ -221,10 +292,37 @@ export class AuditoriaService {
                 status_auditoria: 'Faltante (No escaneado)'
             }));
 
+        // ── FALTANTES: Accesorios ──
+        const whereAccesorios: any = {
+            estado: { in: ['Ingresado', 'ingresado'] }
+        };
+        if (auditoria.id_ubicacion) {
+            whereAccesorios.ubicacion = auditoria.id_ubicacion;
+        }
+
+        const expectedAccesorios = await this.db.entrada_accesorios.findMany({
+            where: whereAccesorios,
+            include: {
+                rel_ubicacion: { select: { nombre_ubicacion: true } },
+            }
+        });
+
+        const missingAccesorios = expectedAccesorios
+            .filter((acc: any) => acc.serial && !scannedSerials.includes(acc.serial.toLowerCase()))
+            .map((acc: any) => ({
+                serial: acc.serial,
+                tipo_item: 'Accesorio',
+                estado_actual: acc.estado,
+                ubicacion_actual: acc.rel_ubicacion?.nombre_ubicacion || 'N/A',
+                modelo: acc.modelo || 'N/A',
+                clase: acc.tipo || 'Accesorio',
+                status_auditoria: 'Faltante (No escaneado)'
+            }));
+
         return {
             auditoria,
             scanned: scannedDetails,
-            missing: missingEquipos
+            missing: [...missingEquipos, ...missingAccesorios]
         };
     }
 }

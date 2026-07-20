@@ -967,10 +967,19 @@ export class EntradasService {
         delete updateData.id_accesorio;
         delete updateData.id_entrada;
 
-        return this.db.entrada_accesorios.update({
+        const result = await this.db.entrada_accesorios.update({
             where: { id_accesorio },
             data: updateData,
         });
+
+        if (data.sub_ubicacion) {
+            await this.db.sub_ubicaciones.update({
+                where: { id_sub_ubicacion: data.sub_ubicacion },
+                data: { ubicacion_ocupada: true },
+            }).catch(() => {});
+        }
+
+        return result;
     }
 
     async ubicarEquipos(id_entrada: string, usuario: string) {
@@ -1095,8 +1104,11 @@ export class EntradasService {
                     continue;
                 }
 
-                // Accessory locations are not marked as occupied (allows multiple items)
-                // Removed: tx.sub_ubicaciones.update({ ... ubicacion_ocupada: true })
+                // Mark accessory sub-location as occupied
+                await tx.sub_ubicaciones.update({
+                    where: { id_sub_ubicacion: acc.sub_ubicacion },
+                    data: { ubicacion_ocupada: true }
+                }).catch(() => {});
 
                 // Update accessory status using updateMany due to composite key
                 await tx.entrada_accesorios.updateMany({

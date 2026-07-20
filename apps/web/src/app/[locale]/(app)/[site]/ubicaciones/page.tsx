@@ -9,11 +9,12 @@ import {
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import { ubicacionesApi, Ubicacion } from '@/services/taller-r1/ubicaciones.service';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Tag, Box, Loader2, AlertCircle, X, ExternalLink, Move } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Tag, Box, Loader2, AlertCircle, X, ExternalLink, Move, Package, Wrench } from 'lucide-react';
 import { QrScannerButton } from '@/components/ui/qr-scanner-button';
 import { useAuthStore } from '@/store/auth.store';
 import QRCode from 'qrcode';
 import { equipoUbicacionApi, EquipoUbicacion } from '@/services/taller-r1/equipo-ubicacion.service';
+import { accesoriosApi, Accesorio } from '@/services/taller-r1/accesorios.service';
 import { EquipoUbicacionDetailsModal } from '@/components/taller-r1/equipo-ubicacion/EquipoUbicacionDetailsModal';
 import { MovilizacionModal } from '../equipo-ubicacion/MovilizacionModal';
 import { generateQRLabel } from '@/lib/generateQRLabel';
@@ -58,9 +59,16 @@ export default function UbicacionesPage() {
   const [equipos, setEquipos] = useState<EquipoUbicacion[]>([]);
   const [selectedEquipo, setSelectedEquipo] = useState<EquipoUbicacion | null>(null);
   
+  // Accesorios
+  const [accesorios, setAccesorios] = useState<Accesorio[]>([]);
+
   // Movilización
   const [movilizarModalOpen, setMovilizarModalOpen] = useState(false);
   const [itemToMovilizar, setItemToMovilizar] = useState<EquipoUbicacion | null>(null);
+
+  // Modal de contenido de sub-ubicación
+  const [showSubContentModal, setShowSubContentModal] = useState(false);
+  const [subContentData, setSubContentData] = useState<{ sub: SubUbicacion; equipos: EquipoUbicacion[]; accesorios: Accesorio[] } | null>(null);
 
   // QR Caching
   const [qrCodes, setQrCodes] = useState<Record<string, string>>({});
@@ -70,12 +78,14 @@ export default function UbicacionesPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [res, equiposRes] = await Promise.all([
+      const [res, equiposRes, accesoriosRes] = await Promise.all([
         ubicacionesApi.getAll(),
-        equipoUbicacionApi.getAll()
+        equipoUbicacionApi.getAll(),
+        accesoriosApi.getAll()
       ]);
       setData(res);
       setEquipos(equiposRes);
+      setAccesorios(accesoriosRes);
       generateQRCodes(res);
     } catch (e) {
       toast.error('Error al cargar datos');
@@ -174,6 +184,18 @@ export default function UbicacionesPage() {
 
   const freeSubs = subLocations.filter(s => !s.ubicacion_ocupada);
   const occupiedSubs = subLocations.filter(s => s.ubicacion_ocupada);
+
+  const getItemsInSub = (subId: string) => {
+    const eqs = equipos.filter(e => e.id_sub_ubicacion === subId && e.estado !== 'Retirado');
+    const accs = accesorios.filter(a => a.sub_ubicacion === subId && a.estado !== 'Retirado');
+    return { equipos: eqs, accesorios: accs };
+  };
+
+  const handleOpenSubContent = (sub: SubUbicacion) => {
+    const { equipos: eqs, accesorios: accs } = getItemsInSub(sub.id_sub_ubicacion);
+    setSubContentData({ sub, equipos: eqs, accesorios: accs });
+    setShowSubContentModal(true);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
@@ -430,7 +452,9 @@ export default function UbicacionesPage() {
                         ) : (
                           <div className="divide-y divide-gray-50">
                             {occupiedSubs.map(sub => {
-                              const equipoEnSub = equipos.find(e => e.id_sub_ubicacion === sub.id_sub_ubicacion);
+                              const { equipos: eqs, accesorios: accs } = getItemsInSub(sub.id_sub_ubicacion);
+                              const totalItems = eqs.length + accs.length;
+                              const equipoEnSub = eqs[0];
                               return (
                                 <div 
                                   key={sub.id_sub_ubicacion} 
@@ -444,6 +468,34 @@ export default function UbicacionesPage() {
                                     <ExternalLink className="w-3 h-3 text-gray-300 group-hover:text-red-500 transition-colors" />
                                   </span>
                                   <div className="flex items-center gap-2">
+                                    {totalItems > 0 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenSubContent(sub);
+                                        }}
+                                        className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg transition-colors text-xs font-bold"
+                                        title="Ver contenido"
+                                      >
+                                        <Package className="w-3 h-3" />
+                                        {eqs.length > 0 && <span>{eqs.length} {eqs.length === 1 ? 'equipo' : 'equipos'}</span>}
+                                        {eqs.length > 0 && accs.length > 0 && <span className="text-amber-400">·</span>}
+                                        {accs.length > 0 && <span>{accs.length} {accs.length === 1 ? 'accesorio' : 'accesorios'}</span>}
+                                      </button>
+                                    )}
+                                    {totalItems === 0 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenSubContent(sub);
+                                        }}
+                                        className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-400 rounded-lg transition-colors text-xs font-bold"
+                                        title="Ver contenido"
+                                      >
+                                        <Package className="w-3 h-3" />
+                                        Vacía
+                                      </button>
+                                    )}
                                     {equipoEnSub && (
                                       <button
                                         onClick={(e) => {
@@ -457,7 +509,6 @@ export default function UbicacionesPage() {
                                         <Move className="w-4 h-4" />
                                       </button>
                                     )}
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">En Uso</span>
                                   </div>
                                 </div>
                               );
@@ -641,6 +692,91 @@ export default function UbicacionesPage() {
         equipo={itemToMovilizar}
         onSuccess={loadData}
       />
+
+      {/* Sub-ubicación Content Modal */}
+      <Dialog open={showSubContentModal} onOpenChange={setShowSubContentModal}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden bg-gray-50 border-none shadow-2xl rounded-[2rem]">
+          <VisuallyHidden.Root>
+            <DialogTitle>Contenido de Sub-ubicación</DialogTitle>
+          </VisuallyHidden.Root>
+          {subContentData && (
+            <div className="flex flex-col max-h-[80vh] font-brand">
+              <div className="flex items-center justify-between p-6 bg-white border-b border-gray-100 shrink-0">
+                <div>
+                  <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contenido de</h2>
+                  <p className="text-2xl font-black text-gray-900 tracking-tighter">{subContentData.sub.nombre}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {subContentData.equipos.length} {subContentData.equipos.length === 1 ? 'equipo' : 'equipos'} · {subContentData.accesorios.length} {subContentData.accesorios.length === 1 ? 'accesorio' : 'accesorios'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {subContentData.equipos.length === 0 && subContentData.accesorios.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <Package className="w-12 h-12 mx-auto mb-3 text-gray-200" />
+                    <p className="font-bold">Esta sub-ubicación está vacía</p>
+                  </div>
+                )}
+
+                {subContentData.equipos.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Wrench className="w-4 h-4" />
+                      Equipos ({subContentData.equipos.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {subContentData.equipos.map(eq => (
+                        <div key={eq.id_equipo_ubicacion} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4">
+                          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                            <Wrench className="w-5 h-5 text-blue-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-gray-900 tracking-tight text-sm truncate">{eq.serial_equipo || 'Sin serial'}</p>
+                            <p className="text-xs text-gray-400 font-medium">{eq.modelo} · {eq.clase}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg shrink-0 ${
+                            eq.estado === 'Ubicado' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-500'
+                          }`}>
+                            {eq.estado}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {subContentData.accesorios.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      Accesorios ({subContentData.accesorios.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {subContentData.accesorios.map(acc => (
+                        <div key={acc.id_accesorio} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4">
+                          <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
+                            <Package className="w-5 h-5 text-amber-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-gray-900 tracking-tight text-sm truncate">{acc.serial || 'Sin serial'}</p>
+                            <p className="text-xs text-gray-400 font-medium">{acc.modelo} · {acc.tipo}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg shrink-0 ${
+                            acc.estado === 'Ingresado' || acc.estado === 'Ubicado' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-500'
+                          }`}>
+                            {acc.estado}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

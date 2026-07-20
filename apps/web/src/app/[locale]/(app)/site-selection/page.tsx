@@ -1,18 +1,31 @@
 'use client';
 
 import { useAuthTallerStore } from '@/store/auth-taller.store';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useRouter } from '@/i18n/routing';
 import { cn } from '@/lib/utils';
-import { Building2, Factory, Warehouse, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { Building2, Factory, Warehouse, ChevronRight, FileSpreadsheet, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface SiteOption {
+    id: string;
+    code: string;
+    name: string;
+    description: string;
+    icon: LucideIcon;
+    color: string;
+    borderColor: string;
+    bgLight: string;
+    path?: string;
+    requiresAdmin?: boolean;
+    isUpcoming?: boolean;
+}
 
 export default function SiteSelectionPage() {
     const { user, setSelectedSite } = useAuthTallerStore();
     const router = useRouter();
 
     // Mapping code to display names and descriptions
-    const siteOptions = [
+    const siteOptions: SiteOption[] = [
         {
             id: 'r1',
             code: 'R1',
@@ -52,7 +65,7 @@ export default function SiteSelectionPage() {
             color: 'from-amber-500 to-amber-700',
             borderColor: 'border-amber-100',
             bgLight: 'bg-amber-50',
-            path: '/es/administracion-comercial/cargue-masivo',
+            path: '/administracion-comercial/cargue-masivo',
             requiresAdmin: true,
             isUpcoming: true
         },
@@ -60,7 +73,7 @@ export default function SiteSelectionPage() {
 
     // Filter sites based on user permissions
     const userSites = user?.sitio ? user.sitio.split(',').map(s => s.trim().toUpperCase()) : ['R1'];
-    const userRole = typeof user?.role === 'string' ? user.role : (user?.role as any)?.name;
+    const userRole = user?.role ?? '';
     const isAdmin = ['Admin', 'Administrador', 'Superadmin'].includes(userRole);
 
     const availableOptions = siteOptions.filter(opt => {
@@ -70,14 +83,7 @@ export default function SiteSelectionPage() {
         return userSites.includes(opt.code);
     });
 
-    // Debugging site access issues
-    useEffect(() => {
-        console.log('[SiteSelection] User from store:', user);
-        console.log('[SiteSelection] Parsed userSites:', userSites);
-        console.log('[SiteSelection] Available options based on siteOptions:', availableOptions);
-    }, [user, userSites, availableOptions]);
-
-    const handleSelect = (site: any) => {
+    const handleSelect = (site: SiteOption) => {
         if (site.isUpcoming) {
             toast.info(`${site.name} estará disponible próximamente.`);
             return;
@@ -88,7 +94,7 @@ export default function SiteSelectionPage() {
         }
         setSelectedSite(site.id);
         // Redirect to analytical dashboard as the main view
-        router.push(`/es/${site.id}/dashboard`);
+        router.push(`/${site.id}/dashboard`);
     };
 
     // Auto-selection disabled per user request to allow review/debugging
@@ -188,7 +194,7 @@ export default function SiteSelectionPage() {
             {/* Footer */}
             <div className="mt-12 z-20 text-center space-y-2">
                 <p className="text-gray-500 text-xs font-medium uppercase tracking-[0.1em]">
-                    © 2026 Raymond Corporation | V.2.1.1
+                    © 2026 Raymond Corporation | V.3.0.3
                 </p>
                 <div className="flex flex-col items-center opacity-60">
                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Desarrollado por</span>

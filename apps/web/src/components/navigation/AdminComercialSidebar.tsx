@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { Link } from '@/i18n/routing';
+import { usePathname } from '@/i18n/routing';
 import {
     FileSpreadsheet,
     LayoutDashboard,
@@ -30,7 +30,7 @@ const menuItems = [
     {
         label: 'Cargue Masivo',
         icon: FileSpreadsheet,
-        href: '/es/administracion-comercial/cargue-masivo',
+        href: '/administracion-comercial/cargue-masivo',
     },
 ];
 
@@ -42,7 +42,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
 
     const handleConfirmLogout = async () => {
         await signOut();
-        window.location.href = '/login';
+        window.location.href = `/${pathname.split('/')[1]}/login`;
     };
 
     const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
@@ -67,7 +67,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                 <div className="flex items-center gap-1">
                     {!isCollapsed && (
                         <Link
-                            href="/es/site-selection"
+                            href="/site-selection"
                             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-amber-600"
                             title="Volver a selección"
                         >

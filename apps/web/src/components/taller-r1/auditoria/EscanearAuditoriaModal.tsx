@@ -19,6 +19,7 @@ interface ScanLog {
     status: 'success' | 'warning' | 'error';
     message: string;
     details?: string;
+    tipo?: string | null;
     timestamp: Date;
 }
 
@@ -51,15 +52,19 @@ export default function EscanearAuditoriaModal({ isOpen, idAuditoria, onClose }:
                 serial: res.serial,
                 status: status,
                 message: res.message,
-                details: res.equipoInfo ? `${res.equipoInfo.modelo} - ${res.equipoInfo.ubicacion}` : undefined,
+                details: res.itemInfo ? `${res.itemInfo.modelo} - ${res.itemInfo.ubicacion}` : undefined,
+                tipo: res.tipo_item,
                 timestamp: new Date()
             };
 
             setScanLogs(prev => [newLog, ...prev]);
 
-            if (status === 'success') toast.success(`Equipo ${res.serial} agregado a la auditoría`);
+            if (status === 'success') {
+                const tipoLabel = res.tipo_item === 'accesorio' ? 'Accesorio' : 'Equipo';
+                toast.success(`${tipoLabel} ${res.serial} agregado a la auditoría`);
+            }
             else if (status === 'warning') toast.warning(`Estado inusual para ${res.serial}`);
-            else toast.error(`Equipo ${res.serial} no encontrado`);
+            else toast.error(`Serial ${res.serial} no encontrado`);
 
         } catch (error: any) {
             console.error('Error scanning:', error);
@@ -108,7 +113,7 @@ export default function EscanearAuditoriaModal({ isOpen, idAuditoria, onClose }:
                             <QrCode className="w-8 h-8 text-red-400" />
                         </div>
                         <h2 className="text-3xl font-black uppercase tracking-tight">Escáner Activo</h2>
-                        <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.3em] mt-2">Pase el QR frente a la cámara</p>
+                        <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.3em] mt-2">Equipos y Accesorios</p>
                     </div>
 
                     <div className="flex-1 flex flex-col justify-center items-center max-w-sm mx-auto w-full z-10">
@@ -162,7 +167,7 @@ export default function EscanearAuditoriaModal({ isOpen, idAuditoria, onClose }:
                             Bitácora de Escaneo
                         </h3>
                         <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                            {scanLogs.length} equipos registrados en esta sesión
+                            {scanLogs.length} items registrados en esta sesión
                         </p>
                     </div>
 
@@ -196,8 +201,18 @@ export default function EscanearAuditoriaModal({ isOpen, idAuditoria, onClose }:
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex justify-between items-start">
-                                                <h4 className="font-black text-slate-900 uppercase tracking-widest text-sm truncate">{log.serial}</h4>
-                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{log.timestamp.toLocaleTimeString()}</span>
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <h4 className="font-black text-slate-900 uppercase tracking-widest text-sm truncate">{log.serial}</h4>
+                                                    {log.tipo && (
+                                                        <span className={cn(
+                                                            "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shrink-0",
+                                                            log.tipo === 'accesorio' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+                                                        )}>
+                                                            {log.tipo === 'accesorio' ? 'ACC' : 'EQUI'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider shrink-0 ml-2">{log.timestamp.toLocaleTimeString()}</span>
                                             </div>
                                             <p className={cn(
                                                 "text-xs font-bold leading-snug mt-1",

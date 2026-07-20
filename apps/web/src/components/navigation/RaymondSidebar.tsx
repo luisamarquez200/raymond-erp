@@ -68,7 +68,7 @@ export default function RaymondSidebar({ isCollapsed = false, onToggle }: Raymon
             return true;
         }
 
-        const userRole = typeof user.role === 'object' ? (user.role as any).name : user.role;
+        const userRole = user.role;
 
         // SUPERADMIN role has access to all enabled modules
         if (userRole === 'Superadmin' || userRole === 'Super Admin' || userRole?.toUpperCase() === 'SUPERADMIN') {
@@ -268,7 +268,7 @@ export default function RaymondSidebar({ isCollapsed = false, onToggle }: Raymon
                                         : '#ef4444'
                                 }}
                             >
-                                {typeof user.role === 'string' ? user.role : ((user.role as any)?.name || 'Usuario')}
+                                {user.role || 'Usuario'}
                             </p>
                         </div>
                     )}
@@ -286,7 +286,7 @@ export default function RaymondSidebar({ isCollapsed = false, onToggle }: Raymon
                 </div>
             )}
             <div className="px-4 py-2 text-[10px] text-gray-500 font-medium text-center border-t border-gray-800/30 flex-shrink-0">
-                {!isCollapsed ? `Raymond ERP V.2.1.1` : `V2.1.1`}
+                {!isCollapsed ? `Raymond ERP V.3.0.3` : `V3.0.3`}
             </div>
         </aside>
     )
