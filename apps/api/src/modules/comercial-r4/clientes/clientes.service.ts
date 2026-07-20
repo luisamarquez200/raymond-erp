@@ -67,6 +67,7 @@ export class ClientesService {
                             ciudad: s.ciudad,
                             direccion: s.direccion,
                             no_totvs: s.no_totvs,
+                            cuenta: s.cuenta,
                             region: contacto.region || '-',
                             responsable: contacto.responsable || '-',
                             distribuidor: s.distribuidor || '-',
@@ -462,6 +463,9 @@ export class ClientesService {
             { header: 'Contacto Distribuidor', key: 'contacto_nombre', width: 25 },
             { header: 'Tel. Distribuidor', key: 'contacto_telefono', width: 20 },
             { header: 'Correo Distribuidor', key: 'contacto_correo', width: 25 },
+            { header: 'Total Sitios (Cliente)', key: 'total_sitios', width: 20 },
+            { header: 'Total Activos (Cliente)', key: 'total_activos', width: 20 },
+            { header: 'Moneda (Cliente)', key: 'moneda', width: 15 },
         ];
 
         clientes.forEach(c => {
@@ -477,6 +481,9 @@ export class ClientesService {
                     contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
                     contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
                     contacto_correo: contacto.distribuidor_contacto_correo || '-',
+                    total_sitios: c.sitios?.length || 0,
+                    total_activos: c.activos?.length || 0,
+                    moneda: ((c.datos_comerciales as any) || {}).moneda || 'MXN'
                 });
             });
         });

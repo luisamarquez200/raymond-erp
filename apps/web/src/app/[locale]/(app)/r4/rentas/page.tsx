@@ -110,7 +110,7 @@ export default function R4RentasPage() {
   const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
   const [equiposDisponibles, setEquiposDisponibles] = useState<any[]>([]);
   const [newRentaFormData, setNewRentaFormData] = useState({
-    cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, tipo_poliza: 'SMP', costo_poliza: '', moneda_poliza: 'MXN', comentarios: '', plazo_meses: '', mes_cobertura: ''
+    cliente_id: '', sitio_id: '', cuenta: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, tipo_poliza: 'SMP', costo_poliza: '', moneda_poliza: 'MXN', comentarios: '', plazo_meses: '', mes_cobertura: ''
   });
   const [editRentaConfig, setEditRentaConfig] = useState<{ isOpen: boolean; id: string; formData: any }>({
     isOpen: false,
@@ -229,12 +229,14 @@ export default function R4RentasPage() {
     document.body.removeChild(link);
   };
   const [openCliente, setOpenCliente] = useState(false);
+  const [openCuenta, setOpenCuenta] = useState(false);
   const [openSitio, setOpenSitio] = useState(false);
   const [openEquipo, setOpenEquipo] = useState(false);
   const [openTipoRenta, setOpenTipoRenta] = useState(false);
   const [openMoneda, setOpenMoneda] = useState(false);
   const [equipoSearchTerm, setEquipoSearchTerm] = useState('');
   const [clienteSearchTerm, setClienteSearchTerm] = useState('');
+  const [cuentaSearchTerm, setCuentaSearchTerm] = useState('');
   const [sitioSearchTerm, setSitioSearchTerm] = useState('');
 
   const [fichaClienteSearchTerm, setFichaClienteSearchTerm] = useState('');
@@ -251,6 +253,12 @@ export default function R4RentasPage() {
 
   const selectedClienteObj = clientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id);
 
+  const cuentasDelCliente = Array.from(new Set<string>(
+    (selectedClienteObj?.sitios || [])
+      .map((s: any) => s.cuenta)
+      .filter((v: any): v is string => !!v)
+  )).sort((a: string, b: string) => a.localeCompare(b));
+
   const openEditModal = (renta: any) => {
     setEditRentaConfig({
       isOpen: true,
@@ -262,6 +270,21 @@ export default function R4RentasPage() {
         po: renta.orden_compra || 'No registrado',
         ordenes: renta.ordenes || []
       }
+    });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditRentaConfig({
+      isOpen: false,
+      id: '',
+      formData: { estado: '', renta_base: '', moneda: 'MXN', po: '', ordenes: [] }
+    });
+  };
+
+  const handleCloseNewRentaModal = () => {
+    setIsNewRentaModalOpen(false);
+    setNewRentaFormData({
+      cliente_id: '', sitio_id: '', cuenta: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, tipo_poliza: 'SMP', costo_poliza: '', moneda_poliza: 'MXN', comentarios: '', plazo_meses: '', mes_cobertura: ''
     });
   };
 
@@ -428,7 +451,7 @@ export default function R4RentasPage() {
       toast.success('Renta creada correctamente');
       setIsNewRentaModalOpen(false);
       setNewRentaFormData({
-        cliente_id: '', sitio_id: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, tipo_poliza: 'SMP', costo_poliza: '', moneda_poliza: 'MXN', comentarios: '', plazo_meses: '', mes_cobertura: ''
+        cliente_id: '', sitio_id: '', cuenta: '', contrato_id: '', tipo_renta: 'Mensual', moneda: 'MXN', fecha_inicio: '', fecha_fin: '', activo_id: '', renta_base: '', mantenimiento: false, tipo_poliza: 'SMP', costo_poliza: '', moneda_poliza: 'MXN', comentarios: '', plazo_meses: '', mes_cobertura: ''
       });
       fetchRentasYClientes();
     } catch (error: any) {
@@ -449,7 +472,7 @@ export default function R4RentasPage() {
         moneda: editRentaConfig.formData.moneda
       });
       toast.success('Renta actualizada correctamente');
-      setEditRentaConfig({ ...editRentaConfig, isOpen: false });
+      handleCloseEditModal();
       fetchRentasYClientes();
     } catch (error: any) {
       console.error(error);
@@ -613,6 +636,15 @@ export default function R4RentasPage() {
   // Apply pagination
   const totalItems = filteredRentas.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  
+  const importeMXN = filteredRentas.reduce((sum, r) => {
+    const isUSD = (r.detalles?.moneda || 'MXN') === 'USD';
+    return isUSD ? sum : sum + (r.detalles?.renta_base || r.tarifa || 0);
+  }, 0);
+  const importeUSD = filteredRentas.reduce((sum, r) => {
+    const isUSD = (r.detalles?.moneda || 'MXN') === 'USD';
+    return isUSD ? sum + (r.detalles?.renta_base || r.tarifa || 0) : sum;
+  }, 0);
   const paginatedRentas = filteredRentas.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -665,7 +697,7 @@ export default function R4RentasPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-12">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
         <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
           <div className="absolute -right-8 -top-8 text-slate-50/50 transform group-hover:scale-110 transition-transform duration-500">
             <Receipt className="w-48 h-48" style={{ color: `${currentColor}10` }} />
@@ -684,6 +716,13 @@ export default function R4RentasPage() {
         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-red-100 hover:shadow-md transition-all">
           <p className="text-red-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Próximas a Vencer</p>
           <h3 className="text-3xl font-black text-slate-900">{porVencer}</h3>
+        </div>
+
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-blue-100 hover:shadow-md transition-all flex flex-col justify-center">
+          <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Importe de Pedidos</p>
+          {importeMXN > 0 && <h3 className="text-xl font-black text-slate-900">${importeMXN.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} MXN</h3>}
+          {importeUSD > 0 && <h3 className="text-xl font-black text-slate-900">${importeUSD.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD</h3>}
+          {importeMXN === 0 && importeUSD === 0 && <h3 className="text-xl font-black text-slate-900">$0.00</h3>}
         </div>
       </div>
 
@@ -1374,14 +1413,14 @@ export default function R4RentasPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsNewRentaModalOpen(false)}
+              onClick={handleCloseNewRentaModal}
               className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-[2rem] shadow-xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl bg-white rounded-[2rem] shadow-xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
             >
               <form onSubmit={handleCreateRenta} className="flex flex-col h-full overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
@@ -1396,7 +1435,7 @@ export default function R4RentasPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsNewRentaModalOpen(false)}
+                    onClick={handleCloseNewRentaModal}
                     className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -1411,7 +1450,7 @@ export default function R4RentasPage() {
                         <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500">1</span>
                         Datos Generales
                       </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="space-y-2 relative">
                           <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente</label>
                           <button
@@ -1446,7 +1485,7 @@ export default function R4RentasPage() {
                                       key={c.id}
                                       type="button"
                                       onClick={() => {
-                                        setNewRentaFormData(prev => ({ ...prev, cliente_id: c.id, sitio_id: '' }));
+                                        setNewRentaFormData(prev => ({ ...prev, cliente_id: c.id, cuenta: '', sitio_id: '' }));
                                         setOpenCliente(false);
                                         setClienteSearchTerm('');
                                       }}
@@ -1454,6 +1493,63 @@ export default function R4RentasPage() {
                                     >
                                       <span>{c.razonSocial || c.razon_social}</span>
                                       {newRentaFormData.cliente_id === c.id && <Check className="w-4 h-4 text-red-600" />}
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 relative">
+                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cuenta</label>
+                          <button
+                            type="button"
+                            disabled={!newRentaFormData.cliente_id}
+                            onClick={() => setOpenCuenta(!openCuenta)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
+                          >
+                            {newRentaFormData.cuenta || "Seleccionar Cuenta..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                          
+                          {openCuenta && (
+                            <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                              <div className="relative mb-2">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                  type="text"
+                                  placeholder="Buscar cuenta..."
+                                  value={cuentaSearchTerm}
+                                  onChange={(e) => setCuentaSearchTerm(e.target.value)}
+                                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                                />
+                              </div>
+                              <div className="max-h-[200px] overflow-y-auto space-y-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNewRentaFormData(prev => ({ ...prev, cuenta: '', sitio_id: '' }));
+                                    setOpenCuenta(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between font-medium italic"
+                                >
+                                  <span>Todas las cuentas</span>
+                                </button>
+                                {cuentasDelCliente
+                                  .filter(cuenta => cuenta.toLowerCase().includes((cuentaSearchTerm || '').toLowerCase()))
+                                  .map((cuenta: string) => (
+                                    <button
+                                      key={cuenta}
+                                      type="button"
+                                      onClick={() => {
+                                        setNewRentaFormData(prev => ({ ...prev, cuenta, sitio_id: '' }));
+                                        setOpenCuenta(false);
+                                        setCuentaSearchTerm('');
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                    >
+                                      <span>{cuenta}</span>
+                                      {newRentaFormData.cuenta === cuenta && <Check className="w-4 h-4 text-red-600" />}
                                     </button>
                                   ))}
                               </div>
@@ -1489,14 +1585,18 @@ export default function R4RentasPage() {
                               </div>
                               <div className="max-h-[200px] overflow-y-auto space-y-1">
                                 {[...(clientesDisponibles.find((c: any) => c && c.id === newRentaFormData.cliente_id)?.sitios || [])]
-                                  ?.filter((s: any) => s && (s.nombre || '').toLowerCase().includes((sitioSearchTerm || '').toLowerCase()))
+                                  ?.filter((s: any) => {
+                                    const matchSearch = s && (s.nombre || '').toLowerCase().includes((sitioSearchTerm || '').toLowerCase());
+                                    const matchCuenta = !newRentaFormData.cuenta || s.cuenta === newRentaFormData.cuenta;
+                                    return matchSearch && matchCuenta;
+                                  })
                                   .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
                                   .map((s: any) => (
                                     <button
                                       key={s.id}
                                       type="button"
                                       onClick={() => {
-                                        setNewRentaFormData(prev => ({ ...prev, sitio_id: s.id }));
+                                        setNewRentaFormData(prev => ({ ...prev, sitio_id: s.id, cuenta: s.cuenta || prev.cuenta }));
                                         setOpenSitio(false);
                                         setSitioSearchTerm('');
                                       }}
@@ -1806,7 +1906,7 @@ export default function R4RentasPage() {
                 <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
                   <button
                     type="button"
-                    onClick={() => setIsNewRentaModalOpen(false)}
+                    onClick={handleCloseNewRentaModal}
                     className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
                   >
                     Cancelar
@@ -1833,7 +1933,7 @@ export default function R4RentasPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setEditRentaConfig({ ...editRentaConfig, isOpen: false })}
+              onClick={handleCloseEditModal}
               className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50"
             />
             <motion.div
@@ -1854,7 +1954,7 @@ export default function R4RentasPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setEditRentaConfig({ ...editRentaConfig, isOpen: false })}
+                    onClick={handleCloseEditModal}
                     className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -1923,7 +2023,7 @@ export default function R4RentasPage() {
                 <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 rounded-b-[2rem]">
                   <button
                     type="button"
-                    onClick={() => setEditRentaConfig({ ...editRentaConfig, isOpen: false })}
+                    onClick={handleCloseEditModal}
                     className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
                   >
                     Cancelar

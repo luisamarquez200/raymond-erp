@@ -21,12 +21,9 @@ export class FlotillaService {
         const e = estatus.trim().toUpperCase();
         if (e === 'ACTIVO' || e === 'VIGENTE' || e === 'OPERATIVO') return 'Activo';
         if (e === 'INACTIVO') return 'Inactivo';
-        if (e === 'DISPONIBLE') return 'Disponible';
+        if (e === 'COMODATO') return 'Comodato';
         if (e === 'BACK UP' || e === 'BACKUP' || e === 'BACK-UP') return 'Back Up';
-        if (e === 'EN RENTA' || e === 'RENTADO') return 'En Renta';
-        if (e === 'MANTENIMIENTO') return 'Mantenimiento';
-        if (e === 'EN TALLER' || e === 'TALLER') return 'En Taller';
-        if (e === 'INACTIVO CON CLIENTE' || e === 'INACTIVO_CLIENTE') return 'Inactivo con Cliente';
+        if (e === 'INACTIVO CON CLIENTE' || e === 'INACTIVO - CON CLIENTE' || e === 'INACTIVO_CLIENTE') return 'Inactivo con Cliente';
         return estatus;
     }
 
@@ -72,6 +69,7 @@ export class FlotillaService {
                     cuenta: activo.cuenta || '-',
                     adc: activo.adc || '-',
                     distribuidor: activo.distribuidor || '-',
+                    propietario: activo.propietario || '-',
                     fechaIngreso: renta?.fecha_inicio ? new Date(renta.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
                     fechaVencimiento: renta?.fecha_fin ? new Date(renta.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
                     plazo: renta?.condiciones?.plazo_meses || renta?.condiciones?.plazo || '-',
@@ -109,6 +107,7 @@ export class FlotillaService {
             { header: 'Clase', key: 'clase', width: 15 },
             { header: 'Modelo', key: 'modelo', width: 20 },
             { header: 'Estatus', key: 'estatus', width: 20 },
+            { header: 'Propietario', key: 'propietario', width: 20 },
             { header: 'Renta Mensual', key: 'renta_precio', width: 15 },
             { header: 'Moneda', key: 'renta_moneda', width: 10 },
             { header: 'Tipo Póliza', key: 'tipo_poliza', width: 15 },
@@ -202,7 +201,8 @@ export class FlotillaService {
                                adc: 'ADC',
                                cuenta: 'Cuenta',
                                modelo: 'Modelo',
-                               clase: 'Clase'
+                               clase: 'Clase',
+                               propietario: 'Propietario'
                              };
                              
                              let summaryParts = keys.map(k => {
@@ -248,6 +248,7 @@ export class FlotillaService {
             cuenta: activo.cuenta || '-',
             adc: activo.adc || '-',
             distribuidor: activo.distribuidor || '-',
+            propietario: activo.propietario || '-',
             rentaActiva: activo.rentas.find(r => r.estado === 'VIGENTE' || r.estado === 'IMPORTADA') || null,
             historialCambios: logs
         };
@@ -296,7 +297,8 @@ export class FlotillaService {
                 cliente_id: dto.cliente_id,
                 sitio_id: dto.sitio_id,
                 adc: dto.adc,
-                distribuidor: dto.distribuidor
+                distribuidor: dto.distribuidor,
+                propietario: dto.propietario
             }
         });
 
@@ -407,6 +409,7 @@ export class FlotillaService {
                     ...(d.cuenta && { cuenta: d.cuenta }),
                     ...(d.adc && { adc: d.adc }),
                     ...(d.distribuidor && { distribuidor: d.distribuidor }),
+                    ...(d.propietario && { propietario: d.propietario }),
                     ...(d.sitio_id && { sitio_id: d.sitio_id }),
                     ...(statusLimpio && { estatus_operativo: statusLimpio }),
                 }

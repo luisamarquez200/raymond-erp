@@ -108,6 +108,7 @@ model Activo {
   
   estado_renta      String   @default("DISPONIBLE") @db.VarChar(50)
   estatus_operativo String   @default("OPERATIVO") @db.VarChar(50)
+  propietario       String?  @db.VarChar(100)
 
   cliente_id        String?  @db.VarChar(50)
   sitio_id          String?  @db.VarChar(50)

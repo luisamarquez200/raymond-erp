@@ -214,6 +214,15 @@ export default function AssetCarnetPage() {
                     <p className="text-sm font-black text-slate-900 mt-0.5">{asset.adc}</p>
                   </div>
                 </div>
+                <div className="flex gap-3 items-start mt-3">
+                  <div className="p-2.5 bg-slate-100 rounded-xl text-slate-500 shrink-0">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Propietario</p>
+                    <p className="text-sm font-black text-slate-900 mt-0.5">{asset.propietario || '-'}</p>
+                  </div>
+                </div>
               </div>
 
               {/* Renta activa */}

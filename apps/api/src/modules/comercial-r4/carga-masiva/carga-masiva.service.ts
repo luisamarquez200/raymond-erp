@@ -241,6 +241,7 @@ export class CargaMasivaService {
                             cuenta: getVal(row, 'CUENTA'),
                             adc: getVal(row, 'ADC'),
                             distribuidor: getVal(row, 'DISTRIBUIDOR'),
+                            propietario: getVal(row, 'PROPIETARIO'),
                         };
                         activo = await db.activo.upsert({
                             where: { id: serie },

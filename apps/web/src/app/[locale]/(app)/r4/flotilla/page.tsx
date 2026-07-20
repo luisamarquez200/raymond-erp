@@ -16,13 +16,10 @@ import { useConfigStore } from '@/store/config.store';
 
 const statusColors = {
   'Activo': 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  'En Renta': 'bg-blue-50 text-blue-700 border-blue-100',
   'Inactivo': 'bg-gray-50 text-gray-600 border-gray-200',
-  'Disponible': 'bg-blue-50 text-blue-700 border-blue-100',
-  'Back Up': 'bg-blue-50 text-blue-700 border-blue-100',
+  'Comodato': 'bg-blue-50 text-blue-700 border-blue-100',
+  'Back Up': 'bg-purple-50 text-purple-700 border-purple-100',
   'Inactivo con Cliente': 'bg-red-50 text-red-700 border-red-100',
-  'En Taller': 'bg-red-50 text-red-700 border-red-100',
-  'Mantenimiento': 'bg-red-50 text-red-700 border-red-100',
 };
 
 const formatFilterText = (str: string) => {
@@ -112,6 +109,7 @@ export default function Fleet() {
   const [selectedModelo, setSelectedModelo] = useState<string>('Todos');
   const [selectedClase, setSelectedClase] = useState<string>('Todos');
   const [selectedDistribuidor, setSelectedDistribuidor] = useState<string>('Todos');
+  const [selectedPropietario, setSelectedPropietario] = useState<string>('Todos');
 
   const [openFilterADC, setOpenFilterADC] = useState(false);
   const [openFilterCliente, setOpenFilterCliente] = useState(false);
@@ -120,6 +118,7 @@ export default function Fleet() {
   const [openFilterModelo, setOpenFilterModelo] = useState(false);
   const [openFilterClase, setOpenFilterClase] = useState(false);
   const [openFilterDistribuidor, setOpenFilterDistribuidor] = useState(false);
+  const [openFilterPropietario, setOpenFilterPropietario] = useState(false);
 
   const [searchADC, setSearchADC] = useState('');
   const [searchCliente, setSearchCliente] = useState('');
@@ -128,6 +127,7 @@ export default function Fleet() {
   const [searchModelo, setSearchModelo] = useState('');
   const [searchClase, setSearchClase] = useState('');
   const [searchDistribuidor, setSearchDistribuidor] = useState('');
+  const [searchPropietario, setSearchPropietario] = useState('');
 
   const hasActiveFilters = 
     selectedADC !== 'Todos' ||
@@ -138,6 +138,7 @@ export default function Fleet() {
     selectedModelo !== 'Todos' ||
     selectedClase !== 'Todos' ||
     selectedDistribuidor !== 'Todos' ||
+    selectedPropietario !== 'Todos' ||
     searchTerm !== '';
 
   const clearFilters = () => {
@@ -149,6 +150,7 @@ export default function Fleet() {
     setSelectedModelo('Todos');
     setSelectedClase('Todos');
     setSelectedDistribuidor('Todos');
+    setSelectedPropietario('Todos');
     setSearchTerm('');
     setCurrentPage(1);
   };
@@ -167,6 +169,7 @@ export default function Fleet() {
   const [newAssetSitio, setNewAssetSitio] = useState('');
   const [newAssetDistribuidor, setNewAssetDistribuidor] = useState('');
   const [newAssetAdc, setNewAssetAdc] = useState('');
+  const [newAssetPropietario, setNewAssetPropietario] = useState('');
 
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<any>({});
@@ -397,6 +400,12 @@ export default function Fleet() {
     }
   };
 
+  const handleCloseTransferModal = () => {
+    setIsTransferModalOpen(false);
+    setSelectedAssetForTransfer(null);
+    setTransferDestinationSite('');
+  };
+
   const handleCreateAsset = async () => {
     if (!newAssetSerie || !newAssetModelo || !newAssetCliente || !newAssetSitio) {
       toast.error('Faltan campos obligatorios (Serie, Modelo, Cliente, Sitio).');
@@ -427,7 +436,8 @@ export default function Fleet() {
         cliente_id: newAssetCliente,
         sitio_id: newAssetSitio,
         adc: newAssetAdc || loggedInAdcName,
-        distribuidor: newAssetDistribuidor
+        distribuidor: newAssetDistribuidor,
+        propietario: newAssetPropietario
       };
 
       // Direct creation (only allowed for admins/coordinators)
@@ -439,6 +449,18 @@ export default function Fleet() {
       console.error('Error creating asset:', error);
       toast.error('Error al dar de alta el equipo');
     }
+  };
+
+  const handleCloseNewAssetModal = () => {
+    setIsNewAssetModalOpen(false);
+    setNewAssetSerie('');
+    setNewAssetModelo('');
+    setNewAssetClase('Clase I');
+    setNewAssetCliente('');
+    setNewAssetSitio('');
+    setNewAssetAdc('');
+    setNewAssetDistribuidor('');
+    setNewAssetPropietario('');
   };
 
   // ADC Visual Filtering Logic
@@ -485,6 +507,7 @@ export default function Fleet() {
       if (skipFilterName !== 'modelo' && selectedModelo !== 'Todos' && asset.modelo !== selectedModelo) return false;
       if (skipFilterName !== 'clase' && selectedClase !== 'Todos' && asset.clase !== selectedClase) return false;
       if (skipFilterName !== 'distribuidor' && selectedDistribuidor !== 'Todos' && asset.distribuidor !== selectedDistribuidor) return false;
+      if (skipFilterName !== 'propietario' && selectedPropietario !== 'Todos' && asset.propietario !== selectedPropietario) return false;
       return true;
     });
   };
@@ -498,6 +521,7 @@ export default function Fleet() {
   const uniqueTipos = Array.from(new Set(getFilteredFor('tipo').map(a => getValidString(a.tipo)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
   const uniqueModelos = Array.from(new Set(getFilteredFor('modelo').map(a => getValidString(a.modelo)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
   const uniqueClases = Array.from(new Set(getFilteredFor('clase').map(a => getValidString(a.clase)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const uniquePropietarios = Array.from(new Set(getFilteredFor('propietario').map(a => getValidString(a.propietario)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
 
   const filteredAssets = normalizedAssets.filter((asset: any) => {
     if (selectedADC !== 'Todos' && asset.adc !== selectedADC) return false;
@@ -508,6 +532,7 @@ export default function Fleet() {
     if (selectedModelo !== 'Todos' && asset.modelo !== selectedModelo) return false;
     if (selectedClase !== 'Todos' && asset.clase !== selectedClase) return false;
     if (selectedDistribuidor !== 'Todos' && asset.distribuidor !== selectedDistribuidor) return false;
+    if (selectedPropietario !== 'Todos' && asset.propietario !== selectedPropietario) return false;
     
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
@@ -821,6 +846,18 @@ export default function Fleet() {
             currentColor={currentColor}
           />
 
+          <FilterCombobox
+            label="Propietario"
+            value={selectedPropietario}
+            onChange={(val) => { setSelectedPropietario(val); setCurrentPage(1); }}
+            options={uniquePropietarios}
+            open={openFilterPropietario}
+            setOpen={setOpenFilterPropietario}
+            search={searchPropietario}
+            setSearch={setSearchPropietario}
+            currentColor={currentColor}
+          />
+
           <div className="flex gap-2">
             {hasActiveFilters && (
               <button onClick={clearFilters} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-200 flex items-center justify-center gap-2 transition-colors font-bold text-xs uppercase tracking-widest" title="Limpiar filtros">
@@ -855,6 +892,7 @@ export default function Fleet() {
                   <th className="px-4 py-4 font-black text-right">Costo Póliza</th>
                   <th className="px-4 py-4 font-black">Moneda Pago</th>
                   <th className="px-4 py-4 font-black">Estatus</th>
+                  <th className="px-4 py-4 font-black">Propietario</th>
                   {!isAdc && <th className="px-4 py-4 font-black">ADC</th>}
                   <th className="px-4 py-4 font-black text-right">Acciones</th>
                 </tr>
@@ -898,6 +936,7 @@ export default function Fleet() {
                         {asset.estatus}
                       </span>
                     </td>
+                    <td className="px-4 py-3.5 font-bold">{asset.propietario}</td>
                     {!isAdc && <td className="px-4 py-3.5 font-bold text-slate-500">{asset.adc}</td>}
                     <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
@@ -1132,7 +1171,7 @@ export default function Fleet() {
                   <Plus className="w-5 h-5 text-red-600" />
                   Alta de Nuevo Activo
                 </h3>
-                <button onClick={() => setIsNewAssetModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                <button onClick={handleCloseNewAssetModal} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -1186,9 +1225,10 @@ export default function Fleet() {
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Estatus Inicial *</label>
                     <select value={newAssetEstatus} onChange={(e) => setNewAssetEstatus(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
                       <option value="Activo">Activo</option>
-                      <option value="Back Up">Back Up</option>
-                      <option value="Disponible">Disponible</option>
                       <option value="Inactivo">Inactivo</option>
+                      <option value="Comodato">Comodato</option>
+                      <option value="Back Up">Back Up</option>
+                      <option value="Inactivo con Cliente">Inactivo con Cliente</option>
                     </select>
                   </div>
                   <div>
@@ -1206,6 +1246,10 @@ export default function Fleet() {
                     </select>
                   </div>
                   <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Propietario</label>
+                    <input type="text" value={newAssetPropietario} onChange={(e) => setNewAssetPropietario(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: LOGIS / RYDER" />
+                  </div>
+                  <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">OACH</label>
                     <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
                   </div>
@@ -1221,7 +1265,7 @@ export default function Fleet() {
               </div>
 
               <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
-                <button onClick={() => setIsNewAssetModalOpen(false)} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
+                <button onClick={handleCloseNewAssetModal} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
                 <button onClick={handleCreateAsset} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
@@ -1276,16 +1320,17 @@ export default function Fleet() {
                     </select>
                   </div>
                   <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">Propietario</label>
+                    <input type="text" value={editingData.propietario || ''} onChange={(e) => setEditingData({...editingData, propietario: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                  </div>
+                  <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Estatus Operativo</label>
                     <select value={editingData.estatus || ''} onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
                       <option value="Activo">Activo</option>
-                      <option value="Back Up">Back Up</option>
-                      <option value="Disponible">Disponible</option>
-                      <option value="En Renta">En Renta</option>
-                      <option value="En Taller">En Taller</option>
                       <option value="Inactivo">Inactivo</option>
+                      <option value="Comodato">Comodato</option>
+                      <option value="Back Up">Back Up</option>
                       <option value="Inactivo con Cliente">Inactivo con Cliente</option>
-                      <option value="Mantenimiento">Mantenimiento</option>
                     </select>
                   </div>
                   {!isAdc && (
@@ -1364,7 +1409,7 @@ export default function Fleet() {
                   <MapPin className="w-5 h-5 text-red-600" />
                   Transferir Serie: {selectedAssetForTransfer?.serie}
                 </h3>
-                <button onClick={() => setIsTransferModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                <button onClick={handleCloseTransferModal} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -1397,7 +1442,7 @@ export default function Fleet() {
               </div>
 
               <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
-                <button onClick={() => setIsTransferModalOpen(false)} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
+                <button onClick={handleCloseTransferModal} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
                 <button onClick={handleTransfer} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
