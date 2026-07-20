@@ -175,13 +175,32 @@ export default function AdcsPage() {
                                                         Asignar Usuario
                                                     </button>
                                                 ) : (
-                                                    <button
-                                                        disabled
-                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs cursor-not-allowed"
-                                                    >
-                                                        <ShieldCheck className="w-3.5 h-3.5" />
-                                                        Cuenta Activa
-                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            disabled
+                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs cursor-not-allowed"
+                                                        >
+                                                            <ShieldCheck className="w-3.5 h-3.5" />
+                                                            Cuenta Activa
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (confirm(`¿Estás seguro de eliminar el usuario ADC ${adc.name}?`)) {
+                                                                    try {
+                                                                        await api.post(`/r4/adcs/${encodeURIComponent(adc.name)}/eliminar`);
+                                                                        toast.success('Usuario eliminado correctamente');
+                                                                        fetchAdcs();
+                                                                    } catch (e: any) {
+                                                                        toast.error(e.response?.data?.message || 'Error al eliminar usuario');
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                                                            title="Eliminar Usuario"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                         </td>

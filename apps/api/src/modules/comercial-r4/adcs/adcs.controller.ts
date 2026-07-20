@@ -65,4 +65,21 @@ export class AdcsController {
             return res.status(status).json({ success: false, message: error.message });
         }
     }
+
+    @Post(':name/eliminar')
+    @UseGuards(JwtAuthGuard)
+    async eliminarUsuarioAdc(@Param('name') name: string, @Req() req: any, @Res() res: Response) {
+        try {
+            const role = req.user?.roles;
+            const userRole = typeof role === 'string' ? role.toUpperCase() : '';
+            if (userRole !== 'ADMINISTRADOR' && userRole !== 'SUPERADMIN') {
+                throw new ForbiddenException('Solo los administradores pueden eliminar usuarios ADC');
+            }
+            const data = await this.adcsService.eliminarUsuarioAdc(name);
+            return res.status(HttpStatus.OK).json({ success: true, data });
+        } catch (error: any) {
+            const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            return res.status(status).json({ success: false, message: error.message });
+        }
+    }
 }

@@ -168,12 +168,37 @@ export class AdcsService {
 
             return {
                 id: newUser.id,
-                email: newUser.email,
                 name: newUser.first_name,
-                status: 'Usuario Creado'
+                email: newUser.email,
+                role: 'ADC'
             };
+
         } catch (error: any) {
             this.logger.error(`Error en crearUsuarioAdc: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async eliminarUsuarioAdc(name: string) {
+        try {
+            const user = await this.prismaService.users.findFirst({
+                where: { 
+                    first_name: name,
+                    roles: { name: 'ADC' }
+                }
+            });
+
+            if (!user) {
+                throw new NotFoundException(`No se encontró un usuario ADC con el nombre ${name}`);
+            }
+
+            await this.prismaService.users.delete({
+                where: { id: user.id }
+            });
+
+            return { success: true, message: 'Usuario eliminado correctamente' };
+        } catch (error: any) {
+            this.logger.error(`Error en eliminarUsuarioAdc: ${error.message}`);
             throw error;
         }
     }
