@@ -18,7 +18,7 @@ export const prismaTenantExtension = (prisma: PrismaClient) => {
                     // Permission is global and not tenant-specific
                     // RolePermission is a junction table without organization_id (filtering is done through Role relation)
                     // Note: Prisma passes model name in lowercase (e.g., 'projects', 'users')
-                    const globalModels = ['organizations', 'audit_logs', 'sessions', 'password_reset_tokens', 'permissions', 'role_permissions'];
+                    const globalModels = ['organizations', 'audit_logs', 'sessions', 'password_reset_tokens', 'permissions', 'role_permissions', 'documento', 'documentos'];
 
                     // Global models bypass tenant filtering
                     if (globalModels.includes(model)) {

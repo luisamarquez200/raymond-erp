@@ -126,7 +126,7 @@ export class RentasController {
             return res.status(HttpStatus.CREATED).json({ success: true, data });
         } catch (error: any) {
             const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
-            return res.status(status).json({ success: false, message: error.message });
+            return res.status(status).json({ success: false, message: error.message, stack: error.stack, fullError: String(error) });
         }
     }
 
