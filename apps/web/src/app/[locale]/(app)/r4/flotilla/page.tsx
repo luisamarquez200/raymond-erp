@@ -554,9 +554,9 @@ export default function Fleet() {
 
   const statusCounts = {
     totalActivos: filteredAssets.length,
-    enRenta: getEstatusCount(['ACTIVO', 'EN RENTA']),
-    disponibles: getEstatusCount(['DISPONIBLE', 'BACK UP']),
-    inactivos: getEstatusCount(['INACTIVO'])
+    enRenta: getEstatusCount(['ACTIVO', 'COMODATO']),
+    disponibles: getEstatusCount(['BACK UP']),
+    inactivos: getEstatusCount(['INACTIVO', 'INACTIVO CON CLIENTE'])
   };
 
   const handleDownloadExcel = async () => {

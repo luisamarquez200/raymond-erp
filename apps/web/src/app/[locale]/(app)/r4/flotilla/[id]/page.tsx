@@ -138,13 +138,10 @@ export default function AssetCarnetPage() {
                   className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500 appearance-none cursor-pointer"
                 >
                   <option value="Activo">Activo</option>
+                  <option value="Inactivo">Inactivo</option>
+                  <option value="Comodato">Comodato</option>
                   <option value="Back Up">Back Up</option>
                   <option value="Inactivo con Cliente">Inactivo con Cliente</option>
-                  <option value="Inactivo">Inactivo</option>
-                  <option value="Disponible">Disponible</option>
-                  <option value="En Renta">En Renta</option>
-                  <option value="Mantenimiento">Mantenimiento</option>
-                  <option value="En Taller">En Taller</option>
                 </select>
                 <button
                   onClick={() => handleStatusChange(selectedStatus)}

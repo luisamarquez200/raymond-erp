@@ -603,7 +603,7 @@ export default function ClientesSitios() {
                         <div className="p-5 flex-1 space-y-3" style={{ borderLeft: `4px solid ${currentColor}` }}>
                           <div className="flex justify-between items-start mb-2">
                             <div>
-                              <h4 className="font-black text-slate-900 text-lg">{selectedCliente.razonSocial} / {sitio.nombre}</h4>
+                              <h4 className="font-black text-slate-900 text-lg">{sitio.cuenta || selectedCliente.razonSocial} / {sitio.tienda || sitio.nombre}</h4>
                               <p className="text-[10px] font-bold text-slate-500 mt-0.5">TOTVS: {sitio.no_totvs || '-'}</p>
                             </div>
                             <div className="flex items-center gap-2">
