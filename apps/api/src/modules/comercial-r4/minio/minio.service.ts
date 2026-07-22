@@ -14,13 +14,18 @@ export class MinioService implements OnModuleInit {
         const cfg = this.configService.get('minio');
         this.bucket = cfg.bucket;
 
-        this.client = new Minio.Client({
+        const clientOpts: any = {
             endPoint: cfg.endpoint,
-            port: cfg.port,
             useSSL: cfg.useSSL,
             accessKey: cfg.accessKey,
             secretKey: cfg.secretKey,
-        });
+        };
+        if (cfg.region) clientOpts.region = cfg.region;
+        if (cfg.port && cfg.port !== 80 && cfg.port !== 443) {
+            clientOpts.port = cfg.port;
+        }
+
+        this.client = new Minio.Client(clientOpts);
 
         await this.ensureBucketExists();
     }
