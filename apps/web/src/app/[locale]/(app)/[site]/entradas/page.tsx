@@ -135,6 +135,17 @@ export default function EntradasPage() {
     }
   };
 
+  const searchFilteredEntradas = entradas.filter(e => {
+    if (!searchTerm) return true;
+    const lower = searchTerm.toLowerCase();
+    const clientName = (e.cliente && clientMap[e.cliente]) || e.rel_cliente?.nombre_cliente || '';
+    return (
+      e.folio.toLowerCase().includes(lower) ||
+      (e.usuario_asignado && e.usuario_asignado.toLowerCase().includes(lower)) ||
+      clientName.toLowerCase().includes(lower)
+    );
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden space-y-6">
 
@@ -166,35 +177,37 @@ export default function EntradasPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className={cn("grid gap-4", selectedSite === 'r1' ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2")}>
-        {selectedSite === 'r1' && (
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-4">
-              <LayoutDashboard className="w-6 h-6" />
+      <div className="sticky top-16 lg:top-0 z-20 bg-gray-50/95 backdrop-blur-md py-3 -my-3">
+        <div className={cn("grid gap-4", selectedSite === 'r1' ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2")}>
+          {selectedSite === 'r1' && (
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-4">
+                <LayoutDashboard className="w-6 h-6" />
+              </div>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap overflow-hidden text-ellipsis">Recibido – En espera evaluación</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-1">
+                {searchFilteredEntradas.filter(e => e.estado === 'Recibido – En espera evaluación').length}
+              </h3>
             </div>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap overflow-hidden text-ellipsis">Recibido – En espera evaluación</p>
+          )}
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
+              <Clock className="w-6 h-6" />
+            </div>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Por Ubicar</p>
             <h3 className="text-2xl font-black text-slate-900 mt-1">
-              {entradas.filter(e => e.estado === 'Recibido – En espera evaluación').length}
+              {searchFilteredEntradas.filter(e => e.estado === 'Por Ubicar').length}
             </h3>
           </div>
-        )}
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
-            <Clock className="w-6 h-6" />
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Cerrado</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-1">
+              {searchFilteredEntradas.filter(e => e.estado === 'Cerrado' || e.estado === 'Finalizadas').length}
+            </h3>
           </div>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Por Ubicar</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">
-            {entradas.filter(e => e.estado === 'Por Ubicar').length}
-          </h3>
-        </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Cerrado</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">
-            {entradas.filter(e => e.estado === 'Cerrado' || e.estado === 'Finalizadas').length}
-          </h3>
         </div>
       </div>
 

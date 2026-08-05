@@ -7,9 +7,11 @@ export interface User {
     lastName: string;
     role: string;
     organizationId: string | null; // CRITICAL: Nullable for global SuperAdmin
-    isSuperadmin?: boolean; // CRITICAL: Flag for SuperAdmin global users
+    isSuperadmin: boolean;
     avatarUrl?: string;
     sitio?: string;
+    adc_asociado_id?: string;
+    adc_asociado_name?: string;
 }
 
 export interface AuthResponse {
@@ -20,16 +22,19 @@ export interface AuthResponse {
 }
 
 // Helper to transform backend user data (snake_case) to frontend format (camelCase)
-const transformUserData = (backendUser: any): User => {
+const transformUserData = (rawUser: any): User => {
     return {
-        id: backendUser.id,
-        email: backendUser.email,
-        firstName: backendUser.first_name || backendUser.firstName,
-        lastName: backendUser.last_name || backendUser.lastName,
-        role: backendUser.roles || backendUser.role, // Backend uses 'roles', frontend expects 'role'
-        organizationId: backendUser.organization_id || backendUser.organizationId,
-        isSuperadmin: backendUser.isSuperadmin,
-        avatarUrl: backendUser.avatarUrl,
+        id: rawUser.id,
+        email: rawUser.email,
+        firstName: rawUser.first_name || rawUser.firstName,
+        lastName: rawUser.last_name || rawUser.lastName,
+        role: rawUser.roles || rawUser.role, // Backend uses 'roles', frontend expects 'role'
+        organizationId: rawUser.organization_id || rawUser.organizationId,
+        isSuperadmin: rawUser.isSuperadmin,
+        avatarUrl: rawUser.avatarUrl || rawUser.avatar_url,
+        sitio: rawUser.sitio,
+        adc_asociado_id: rawUser.adc_asociado_id,
+        adc_asociado_name: rawUser.adc_asociado_name,
     };
 };
 

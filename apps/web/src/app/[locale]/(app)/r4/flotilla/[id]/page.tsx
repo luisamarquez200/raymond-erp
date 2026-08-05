@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Truck, HardDrive, ShieldCheck, MapPin, 
-  User, Briefcase, Calendar, Clock, Edit, FileSpreadsheet, CheckCircle2, Wrench
+  User, Briefcase, Calendar, Clock, Edit, FileSpreadsheet, CheckCircle2, Wrench, Search, X, BatteryCharging, Link as LinkIcon, Unlink
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import api from '@/lib/api';
@@ -21,6 +21,12 @@ export default function AssetCarnetPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
+
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [accessorySearch, setAccessorySearch] = useState('');
+  const [accessoryResults, setAccessoryResults] = useState<any[]>([]);
+  const [searchingAccessories, setSearchingAccessories] = useState(false);
+  const [linkingAccessory, setLinkingAccessory] = useState(false);
 
   const fetchAssetDetails = async () => {
     try {
@@ -53,6 +59,56 @@ export default function AssetCarnetPage() {
       toast.error('Error al actualizar el estatus');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleSearchAccessory = async () => {
+    if (!accessorySearch.trim()) return;
+    try {
+      setSearchingAccessories(true);
+      // Busca en la flotilla equipos que sean Batería o Cargador, y que coincidan con la búsqueda
+      const res = await api.get('/r4/flotilla');
+      const allAssets = res.data?.data || [];
+      const filtered = allAssets.filter((a: any) => 
+        (a.tipo === 'Batería' || a.tipo === 'Cargador' || a.tipo?.toLowerCase().includes('bateria') || a.tipo?.toLowerCase().includes('cargador')) &&
+        (a.serie.toLowerCase().includes(accessorySearch.toLowerCase()) || 
+         a.oach?.toLowerCase().includes(accessorySearch.toLowerCase()))
+      );
+      setAccessoryResults(filtered);
+    } catch (error) {
+      toast.error('Error al buscar accesorios');
+    } finally {
+      setSearchingAccessories(false);
+    }
+  };
+
+  const handleLinkAccessory = async (accesorioId: string, tipo: string) => {
+    try {
+      setLinkingAccessory(true);
+      await api.post(`/r4/flotilla/${id}/accesorios`, {
+        accesorio_id: accesorioId,
+        tipo_relacion: tipo || 'ACCESORIO'
+      });
+      toast.success('Accesorio vinculado exitosamente');
+      setLinkModalOpen(false);
+      setAccessorySearch('');
+      setAccessoryResults([]);
+      fetchAssetDetails();
+    } catch (error) {
+      toast.error('Error al vincular el accesorio');
+    } finally {
+      setLinkingAccessory(false);
+    }
+  };
+
+  const handleUnlinkAccessory = async (accesorioId: string) => {
+    if (!confirm('¿Estás seguro de desvincular este accesorio?')) return;
+    try {
+      await api.delete(`/r4/flotilla/${id}/accesorios/${accesorioId}`);
+      toast.success('Accesorio desvinculado');
+      fetchAssetDetails();
+    } catch (error) {
+      toast.error('Error al desvincular el accesorio');
     }
   };
 
@@ -180,6 +236,50 @@ export default function AssetCarnetPage() {
               </div>
             </div>
           </div>
+
+          {/* Accesorios Vinculados */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <BatteryCharging className="w-4 h-4 text-amber-500" />
+                Accesorios
+              </h3>
+              {isCoordinacionOrGerencia && (
+                <button
+                  onClick={() => setLinkModalOpen(true)}
+                  className="text-[10px] font-black uppercase tracking-widest bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                >
+                  <LinkIcon className="w-3 h-3" /> Vincular
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {(!asset.accesorios || asset.accesorios.length === 0) ? (
+                <div className="text-center py-6 bg-slate-50 border border-slate-100 rounded-2xl border-dashed">
+                  <p className="text-xs font-bold text-slate-400">Sin accesorios vinculados</p>
+                </div>
+              ) : (
+                asset.accesorios.map((acc: any) => (
+                  <div key={acc.accesorio_id} className="flex items-center justify-between bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
+                    <div>
+                      <p className="text-xs font-black text-slate-800">{acc.accesorio?.tipo || 'Accesorio'}</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">Serie: {acc.accesorio?.serie || '-'}</p>
+                    </div>
+                    {isCoordinacionOrGerencia && (
+                      <button 
+                        onClick={() => handleUnlinkAccessory(acc.accesorio_id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Desvincular"
+                      >
+                        <Unlink className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Right Columns: Current Rent & Timeline */}
@@ -296,6 +396,75 @@ export default function AssetCarnetPage() {
 
         </div>
       </div>
+
+      {/* Modal para Vincular Accesorio */}
+      {linkModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <LinkIcon className="w-4 h-4 text-amber-500" />
+                Vincular Accesorio
+              </h3>
+              <button onClick={() => { setLinkModalOpen(false); setAccessorySearch(''); setAccessoryResults([]); }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Buscar Batería o Cargador</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={accessorySearch}
+                      onChange={(e) => setAccessorySearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearchAccessory()}
+                      placeholder="Buscar por Serie o OACH..."
+                      className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSearchAccessory}
+                    disabled={searchingAccessories || !accessorySearch.trim()}
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                  >
+                    {searchingAccessories ? 'Buscando...' : 'Buscar'}
+                  </button>
+                </div>
+              </div>
+
+              {accessoryResults.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Resultados ({accessoryResults.length})</h4>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                    {accessoryResults.map((acc: any) => (
+                      <div key={acc.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors">
+                        <div>
+                          <p className="text-sm font-black text-slate-800">{acc.serie}</p>
+                          <p className="text-xs font-bold text-slate-500">{acc.tipo} {acc.oach ? `- OACH: ${acc.oach}` : ''}</p>
+                        </div>
+                        <button
+                          onClick={() => handleLinkAccessory(acc.id, acc.tipo?.toUpperCase() === 'CARGADOR' ? 'CARGADOR' : 'BATERIA')}
+                          disabled={linkingAccessory || asset.accesorios?.some((a: any) => a.accesorio_id === acc.id)}
+                          className="text-[10px] px-3 py-1.5 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg font-black uppercase tracking-widest transition-colors disabled:opacity-50"
+                        >
+                          {asset.accesorios?.some((a: any) => a.accesorio_id === acc.id) ? 'Vinculado' : 'Vincular'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

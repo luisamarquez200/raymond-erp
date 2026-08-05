@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Request, Res, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Request, Res, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import { FlotillaService } from './flotilla.service';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
@@ -33,13 +33,15 @@ export class FlotillaController {
     }
 
     @Post('solicitudes/:id/aprobar')
-    async aprobar(@Param('id') id: string) {
-        return await this.flotillaService.aprobarSolicitud(id);
+    async aprobar(@Param('id') id: string, @Request() req: any) {
+        const usuarioId = req.user?.id || req.user?.sub;
+        return await this.flotillaService.aprobarSolicitud(id, usuarioId);
     }
 
     @Post('solicitudes/:id/rechazar')
-    async rechazar(@Param('id') id: string) {
-        return await this.flotillaService.rechazarSolicitud(id);
+    async rechazar(@Param('id') id: string, @Request() req: any) {
+        const usuarioId = req.user?.id || req.user?.sub;
+        return await this.flotillaService.rechazarSolicitud(id, usuarioId);
     }
 
     @Get('exportar/excel')
@@ -164,6 +166,45 @@ export class FlotillaController {
     ) {
         const userId = req.user?.id || 'sistema';
         return await this.flotillaService.solicitarCambio(id, dto, userId);
+    }
+
+    @Post('solicitar-alta')
+    async solicitarAlta(
+        @Body() dto: any,
+        @Request() req: any
+    ) {
+        const userId = req.user?.id || 'sistema';
+        return await this.flotillaService.solicitarAlta(dto, userId);
+    }
+
+    @Post(':id/accesorios')
+    async vincularAccesorio(
+        @Param('id') id: string,
+        @Body() dto: { accesorio_id: string, tipo_relacion: string, cantidad?: number, notas?: string },
+        @Request() req: any
+    ) {
+        const userId = req.user?.id || 'sistema';
+        return {
+            success: true,
+            data: await this.flotillaService.vincularAccesorio(
+                id,
+                dto.accesorio_id,
+                dto.tipo_relacion,
+                dto.cantidad,
+                dto.notas,
+                userId
+            )
+        };
+    }
+
+    @Delete(':id/accesorios/:accesorioId')
+    async desvincularAccesorio(
+        @Param('id') id: string,
+        @Param('accesorioId') accesorioId: string,
+        @Request() req: any
+    ) {
+        const userId = req.user?.id || 'sistema';
+        return await this.flotillaService.desvincularAccesorio(id, accesorioId, userId);
     }
 }
 

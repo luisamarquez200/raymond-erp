@@ -22,14 +22,22 @@ export class DashboardService {
                     no_registro_totvs: { not: null, notIn: [''] }
                 },
                 include: {
-                    detalles: true
+                    detalles: true,
+                    activo: true
                 }
             });
-            const pedidosGeneradosCount = rentasConTotvs.length;
+            
+            const validRentasTotvs = rentasConTotvs.filter(r => {
+                const estRenta = r.estado?.toUpperCase() || '';
+                const estActivo = r.activo?.estatus?.toUpperCase() || '';
+                return !estRenta.includes('INACTIV') && !estActivo.includes('INACTIV');
+            });
+            
+            const pedidosGeneradosCount = validRentasTotvs.length;
 
             let importePedidosTotvsMXN = 0;
             let importePedidosTotvsUSD = 0;
-            for (const renta of rentasConTotvs) {
+            for (const renta of validRentasTotvs) {
                 const moneda = renta.detalles?.moneda || 'MXN';
                 const monto = renta.detalles?.renta_base ?? renta.tarifa ?? 0;
                 if (moneda.toUpperCase() === 'USD') {
@@ -55,7 +63,7 @@ export class DashboardService {
             // 4. Resumen de presupuesto por ADC por cliente, en MXN y USD (Equipos activos)
             const activosActivos = await db.activo.findMany({
                 where: {
-                    estatus_operativo: { in: ['ACTIVO', 'Activo', 'EN RENTA', 'En Renta'] }
+                    estatus: { notIn: ['Inactivo', 'Inactivo con Cliente'] }
                 },
                 include: {
                     cliente: true,
@@ -120,8 +128,15 @@ export class DashboardService {
                 },
                 include: {
                     detalles: true,
-                    cliente: true
+                    cliente: true,
+                    activo: true
                 }
+            });
+            
+            const validRentasParaCobro = rentasParaCobro.filter(r => {
+                const estRenta = r.estado?.toUpperCase() || '';
+                const estActivo = r.activo?.estatus?.toUpperCase() || '';
+                return !estRenta.includes('INACTIV') && !estActivo.includes('INACTIV');
             });
 
             const cumplimientoMap: Record<string, {
@@ -133,7 +148,7 @@ export class DashboardService {
                 recuperadoUSD: number;
             }> = {};
 
-            for (const renta of rentasParaCobro) {
+            for (const renta of validRentasParaCobro) {
                 const period = renta.fecha_inicio ? renta.fecha_inicio.toISOString().substring(0, 7) : 'Sin Periodo';
                 if (period === 'Sin Periodo') continue;
 
@@ -180,7 +195,7 @@ export class DashboardService {
                 recuperadoUSD: number;
             }> = {};
 
-            for (const renta of rentasParaCobro) {
+            for (const renta of validRentasParaCobro) {
                 const period = renta.fecha_inicio ? renta.fecha_inicio.toISOString().substring(0, 7) : 'Sin Periodo';
                 if (period === 'Sin Periodo' || period >= currentPeriod) continue;
 

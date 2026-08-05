@@ -870,6 +870,8 @@ model users {
   firebase_uid          String?                 @unique
   legacy_user_id        Int?                    @unique
   ubicacion             String?
+  adc_asociado_id       String?
+  adc_asociado_name     String?
   api_keys              api_keys[]
   audit_logs            audit_logs[]
   comments              comments[]

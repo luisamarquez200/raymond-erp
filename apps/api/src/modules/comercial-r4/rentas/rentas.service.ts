@@ -49,6 +49,21 @@ export class RentasService {
                 serie: renta.activo.serie,
                 clase: renta.activo.clase,
                 modelo: renta.activo.modelo,
+                tipo: renta.activo.tipo,
+                estatus: renta.activo.estatus,
+                oach: renta.activo.oach,
+                altura: renta.activo.altura,
+                bc: renta.activo.bc,
+                propietario: renta.activo.propietario,
+                accesorios: renta.activo.accesorios ? renta.activo.accesorios.map((a: any) => ({
+                    id: a.accesorio_id,
+                    tipo_relacion: a.tipo_relacion,
+                    cantidad: a.cantidad,
+                    notas: a.notas,
+                    serie: a.accesorio?.serie,
+                    modelo: a.accesorio?.modelo,
+                    tipo: a.accesorio?.tipo
+                })) : []
             } : null,
             cuenta: renta.cuenta,
             adc: renta.adc,
@@ -59,6 +74,7 @@ export class RentasService {
             fecha_inicio: renta.fecha_inicio,
             fecha_fin: renta.fecha_fin,
             tarifa: renta.tarifa,
+            propietario: renta.propietario || renta.activo?.propietario || '-',
             detalles: renta.detalles ?? null,
             ordenes: renta.ordenes ?? [],
         };
@@ -71,7 +87,11 @@ export class RentasService {
                 include: { 
                     cliente: true, 
                     sitio: true, 
-                    activo: true, 
+                    activo: {
+                        include: {
+                            accesorios: { include: { accesorio: true } }
+                        }
+                    }, 
                     detalles: true,
                     ordenes: {
                         orderBy: { periodo: 'desc' }
@@ -82,8 +102,8 @@ export class RentasService {
             
             let mapped = rentas.map(r => this.mapRenta(r));
 
-            if (user?.roles === 'ADC' && user?.first_name) {
-                const target = user.first_name.toLowerCase();
+            if ((user?.roles === 'ADC' || user?.roles === 'AUXILIAR') && (user?.first_name || user?.adc_asociado_name)) {
+                const target = (user?.adc_asociado_name || user?.first_name).toLowerCase();
                 mapped = mapped.filter(r => {
                     const rAdc = (r.adc || '').toLowerCase();
                     const clientComercial = (r.cliente?.datos_comerciales as any) || {};
@@ -107,7 +127,11 @@ export class RentasService {
             include: { 
                 cliente: true, 
                 sitio: true, 
-                activo: true, 
+                activo: {
+                    include: {
+                        accesorios: { include: { accesorio: true } }
+                    }
+                }, 
                 detalles: true,
                 ordenes: {
                     orderBy: { periodo: 'desc' }

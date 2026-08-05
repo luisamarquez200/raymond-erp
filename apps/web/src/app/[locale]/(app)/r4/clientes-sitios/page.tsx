@@ -273,41 +273,52 @@ export default function ClientesSitios() {
   const activos = clientes.filter(c => c.estatus?.toLowerCase() === 'activo');
   const inactivos = clientes.filter(c => c.estatus?.toLowerCase() !== 'activo');
 
-  const filteredClientes = clientes.filter((cliente: any) => {
-    const matchStatus = 
-      statusFilter === "todos" ? true :
-      statusFilter === "activos" ? cliente.estatus?.toLowerCase() === 'activo' :
-      cliente.estatus?.toLowerCase() !== 'activo';
-    
-    const matchSearch = !searchTerm ? true :
-      (cliente.razonSocial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       cliente.rfc?.toLowerCase().includes(searchTerm.toLowerCase()));
-       
-    return matchStatus && matchSearch;
-  });
+  const filteredClientes = clientes
+    .filter((cliente: any) => {
+      const matchStatus = 
+        statusFilter === "todos" ? true :
+        statusFilter === "activos" ? cliente.estatus?.toLowerCase() === 'activo' :
+        cliente.estatus?.toLowerCase() !== 'activo';
+      
+      const matchSearch = !searchTerm ? true :
+        (cliente.razonSocial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         cliente.rfc?.toLowerCase().includes(searchTerm.toLowerCase()));
+         
+      return matchStatus && matchSearch;
+    })
+    .sort((a: any, b: any) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || '', 'es', { sensitivity: 'base' }));
 
   const totalPages = Math.ceil(filteredClientes.length / itemsPerPage);
   const paginatedClientes = filteredClientes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const selectedCliente = clientes.find(c => c.id === selectedClienteId) || null;
 
-  // Flatten all sites for Directory Tab
-  const allSites = clientes.flatMap((cliente: any) => 
-    (cliente.sitios || []).map((sitio: any) => ({
-      ...sitio,
-      clienteId: cliente.id,
-      clienteRazonSocial: cliente.razonSocial,
-      clienteRfc: cliente.rfc,
-      clienteEstatus: cliente.estatus
-    }))
-  );
+  // Flatten and sort all sites for Directory Tab
+  const allSites = clientes
+    .flatMap((cliente: any) => 
+      (cliente.sitios || []).map((sitio: any) => ({
+        ...sitio,
+        clienteId: cliente.id,
+        clienteRazonSocial: cliente.razonSocial,
+        clienteRfc: cliente.rfc,
+        clienteEstatus: cliente.estatus
+      }))
+    )
+    .sort((a: any, b: any) => {
+      const clientCompare = (a.clienteRazonSocial || '').localeCompare(b.clienteRazonSocial || '', 'es', { sensitivity: 'base' });
+      if (clientCompare !== 0) return clientCompare;
+      const nameA = a.nombre || a.tienda || '';
+      const nameB = b.nombre || b.tienda || '';
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
 
   // Calculate unique distributors dynamically from the database, starting with a base list
   const loadedDistribuidores = allSites
     .map((site: any) => site.distribuidor)
     .filter((d: any) => Boolean(d) && String(d) !== '[object Object]' && String(d) !== '-');
   const baseDistribuidores = ['Raymond GDL', 'Raymond Monterrey', 'Raymond Centro', 'Raymond Bajío', 'Raymond Norte', 'Raymond Occidente'];
-  const uniqueDistribuidores = Array.from(new Set([...baseDistribuidores, ...loadedDistribuidores])).sort();
+  const uniqueDistribuidores = Array.from(new Set([...baseDistribuidores, ...loadedDistribuidores]))
+    .sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { sensitivity: 'base' }));
 
   const totalPagesDirectorio = Math.ceil(allSites.length / itemsPerPageDirectorio);
   const paginatedAllSites = allSites.slice((currentPageDirectorio - 1) * itemsPerPageDirectorio, currentPageDirectorio * itemsPerPageDirectorio);
@@ -528,7 +539,7 @@ export default function ClientesSitios() {
                       <div>
                         <h2 className="text-2xl font-black text-slate-900">{selectedCliente.razonSocial}</h2>
                         <div className="flex items-center gap-3 mt-2">
-                          <span className="text-sm font-bold text-slate-500">ID: {selectedCliente.id?.slice(-6) || '1'}</span>
+                          <span className="text-sm font-bold text-slate-500">Código TOTVS: {selectedCliente.no_totvs || selectedCliente.codigo_totvs || selectedCliente.id?.slice(-6) || '1'}</span>
                           <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${
                             selectedCliente.estatus?.toLowerCase() === 'activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'
@@ -598,13 +609,13 @@ export default function ClientesSitios() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedCliente.sitios?.length > 0 ? selectedCliente.sitios.map((sitio: any, idx: number) => (
+                    {selectedCliente.sitios?.length > 0 ? [...selectedCliente.sitios].sort((a: any, b: any) => (a.tienda || a.nombre || a.cuenta || '').localeCompare(b.tienda || b.nombre || b.cuenta || '', 'es', { sensitivity: 'base' })).map((sitio: any, idx: number) => (
                       <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
                         <div className="p-5 flex-1 space-y-3" style={{ borderLeft: `4px solid ${currentColor}` }}>
                           <div className="flex justify-between items-start mb-2">
                             <div>
                               <h4 className="font-black text-slate-900 text-lg">{sitio.cuenta || selectedCliente.razonSocial} / {sitio.tienda || sitio.nombre}</h4>
-                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">TOTVS: {sitio.no_totvs || '-'}</p>
+                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Código TOTVS: {sitio.no_totvs || '-'}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               {!isReadOnly && (
@@ -645,13 +656,6 @@ export default function ClientesSitios() {
                           </div>
                         </div>
                         
-                        <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-between items-center px-5 text-xs font-bold text-slate-600">
-                          <p className="flex items-center gap-2">
-                            <User className="w-3.5 h-3.5 text-slate-400"/> 
-                            {sitio.responsable && sitio.responsable !== '-' ? sitio.responsable : 'Sin responsable'}
-                          </p>
-                          <span className="bg-slate-200/50 text-slate-700 px-2 py-0.5 rounded text-[10px]">{sitio.region || 'Sin región'}</span>
-                        </div>
                       </div>
                     )) : (
                       <div className="col-span-2 py-8 text-center text-slate-500 font-medium bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
@@ -688,7 +692,7 @@ export default function ClientesSitios() {
                 <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
                   <th className="p-4">Cliente</th>
                   <th className="p-4">Sitio / Sucursal</th>
-                  <th className="p-4">Región / Responsable</th>
+
                   <th className="p-4">Distribuidor Asignado</th>
                   <th className="p-4">Contacto Técnico</th>
                   <th className="p-4">Estatus</th>
@@ -715,12 +719,7 @@ export default function ClientesSitios() {
                         <span className="text-xs text-slate-500 truncate max-w-[200px]" title={site.direccion}>{site.direccion || '-'}</span>
                       </div>
                     </td>
-                    <td className="p-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-800">{site.region || '-'}</span>
-                        <span className="text-xs text-slate-400">Resp: {site.responsable || '-'}</span>
-                      </div>
-                    </td>
+
                     <td className="p-4">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 border rounded-xl text-xs font-bold" style={{ color: currentColor, borderColor: `${currentColor}30`, backgroundColor: `${currentColor}10` }}>
                         <Truck className="w-3.5 h-3.5"/>
@@ -997,8 +996,8 @@ export default function ClientesSitios() {
                 <input type="text" value={newSitioFormData.region} onChange={e => setNewSitioFormData({...newSitioFormData, region: e.target.value})} placeholder="Escribe la región" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-black text-slate-700">Número TOTVS</label>
-                <input type="text" value={newSitioFormData.no_totvs} onChange={e => setNewSitioFormData({...newSitioFormData, no_totvs: e.target.value})} placeholder="Escribe el número TOTVS" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
+                <label className="text-xs font-black text-slate-700">Código TOTVS</label>
+                <input type="text" value={newSitioFormData.no_totvs} onChange={e => setNewSitioFormData({...newSitioFormData, no_totvs: e.target.value})} placeholder="Escribe el Código TOTVS" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-red-500 focus:bg-white focus:outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-700">Responsable de Operación</label>

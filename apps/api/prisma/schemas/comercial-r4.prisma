@@ -99,15 +99,22 @@ model Activo {
   id                String   @id @default(cuid()) @db.VarChar(50)
   id_ubiqo          String?  @unique @db.VarChar(100)
   serie             String   @unique @db.VarChar(100)
+  tipo              String?  @db.VarChar(100)
   clase             String?  @db.VarChar(100)
   modelo            String?  @db.VarChar(100)
   oach              String?  @db.VarChar(100)
   altura            String?  @db.VarChar(50)
   bc                String?  @db.VarChar(50)
   info_tecnica      Json?
-  
+
+  // Estatus unificado (nomenclatura del archivo maestro)
+  // Valores: Activo | Inactivo | Back Up | Inactivo con Cliente | Por Entregar | Por Retirar
+  estatus           String   @default("Activo") @db.VarChar(100)
+
+  // Campos legacy mantenidos por compatibilidad (deprecados)
   estado_renta      String   @default("DISPONIBLE") @db.VarChar(50)
   estatus_operativo String   @default("OPERATIVO") @db.VarChar(50)
+
   propietario       String?  @db.VarChar(100)
 
   cliente_id        String?  @db.VarChar(50)
@@ -115,7 +122,7 @@ model Activo {
   cuenta            String?  @db.VarChar(100)
   adc               String?  @db.VarChar(100)
   distribuidor      String?  @db.VarChar(100)
-  
+
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
@@ -124,9 +131,12 @@ model Activo {
   rentas            Renta[]
   ordenes           OrdenMensual[]
   historial_sitios  CambioSitioLog[]
+  accesorios        ActivoAccesorio[] @relation("EquipoPrincipal")
+  equipo_principal  ActivoAccesorio[] @relation("AccesorioDeEquipo")
 
   @@index([cliente_id])
   @@index([sitio_id])
+  @@index([estatus])
   @@map("activos")
 }
 
@@ -321,6 +331,30 @@ model Documento {
   @@index([modulo_relacionado, registro_id])
   @@index([usuario_id])
   @@map("documentos")
+}
+
+// -----------------------------------------------------------------------------
+// ACCESORIOS DE EQUIPOS (Baterías / Cargadores)
+// -----------------------------------------------------------------------------
+
+model ActivoAccesorio {
+  id            String  @id @default(cuid()) @db.VarChar(50)
+  activo_id     String  @db.VarChar(50)  // El equipo principal (montacargas, reach, etc.)
+  accesorio_id  String  @db.VarChar(50)  // La batería o cargador (otro Activo)
+  tipo_relacion String  @db.VarChar(50)  // "BATERIA" | "CARGADOR"
+  cantidad      Int     @default(1)
+  notas         String? @db.Text
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  activo        Activo  @relation("EquipoPrincipal", fields: [activo_id], references: [id])
+  accesorio     Activo  @relation("AccesorioDeEquipo", fields: [accesorio_id], references: [id])
+
+  @@unique([activo_id, accesorio_id])
+  @@index([activo_id])
+  @@index([accesorio_id])
+  @@map("activo_accesorios")
 }
 
 model CargaMasivaLog {

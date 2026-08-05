@@ -131,11 +131,22 @@ export default function SalidasPage() {
     return 'bg-amber-50 text-amber-600';
   };
 
+  const searchFilteredSalidas = (Array.isArray(salidas) ? salidas : []).filter(s => {
+    if (!searchTerm) return true;
+    const lower = searchTerm.toLowerCase();
+    return (
+      s.folio.toLowerCase().includes(lower) ||
+      resolveClientName(s).toLowerCase().includes(lower) ||
+      (s.cliente && s.cliente.toLowerCase().includes(lower)) ||
+      (s.remision && s.remision.toLowerCase().includes(lower))
+    );
+  });
+
   const stats = {
-    total: salidas.length,
-    porEntregar: salidas.filter(s => s.estado === 'Por Entregar').length,
-    esperaRemision: salidas.filter(s => s.estado?.toLowerCase() === 'en espera de remisión').length,
-    entregados: salidas.filter(s => s.estado === 'Entregado').length,
+    total: searchFilteredSalidas.length,
+    porEntregar: searchFilteredSalidas.filter(s => s.estado === 'Por Entregar').length,
+    esperaRemision: searchFilteredSalidas.filter(s => s.estado?.toLowerCase() === 'en espera de remisión').length,
+    entregados: searchFilteredSalidas.filter(s => s.estado === 'Entregado').length,
   };
 
   return (
@@ -168,34 +179,36 @@ export default function SalidasPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-4">
-            <LayoutDashboard className="w-6 h-6" />
+      <div className="sticky top-16 lg:top-0 z-20 bg-gray-50/95 backdrop-blur-md py-3 -my-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-4">
+              <LayoutDashboard className="w-6 h-6" />
+            </div>
+            <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Total</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.total}</h3>
           </div>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Total</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.total}</h3>
-        </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
-            <Clock className="w-6 h-6" />
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
+              <Clock className="w-6 h-6" />
+            </div>
+            <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Por Entregar</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.porEntregar}</h3>
           </div>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Por Entregar</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.porEntregar}</h3>
-        </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600 mb-4">
-            <AlertCircle className="w-6 h-6" />
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600 mb-4">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Espera Remisión</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.esperaRemision}</h3>
           </div>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Espera Remisión</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.esperaRemision}</h3>
-        </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Entregados</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.entregados}</h3>
           </div>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Entregados</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">{stats.entregados}</h3>
         </div>
       </div>
 

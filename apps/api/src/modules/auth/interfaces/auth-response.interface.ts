@@ -16,6 +16,8 @@ export interface AuthResponse {
         permissions: { resource: string; action: string }[];
         avatar_url?: string;
         isSuperadmin?: boolean; // CRITICAL: Flag for SuperAdmin global users
+        adc_asociado_id?: string;
+        adc_asociado_name?: string;
     };
     accessToken: string;
     refreshToken: string;

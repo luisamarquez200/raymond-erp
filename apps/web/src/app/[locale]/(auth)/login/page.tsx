@@ -57,6 +57,7 @@ export default function LoginPage() {
                         role: userData.role,
                         organizationId: null, // Taller doesn't use organizationId yet
                         sitio: userData.sitio,
+                        isSuperadmin: false,
                     };
 
                     useAuthStore.getState().setTallerSession(

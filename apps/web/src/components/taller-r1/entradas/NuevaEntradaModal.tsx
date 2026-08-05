@@ -424,7 +424,7 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                     let foundAny = false;
 
                     // 1. Check Cross-Site Inventory (Highest Priority as requested)
-                    let crossInfo = null;
+                    let crossInfo: any = null;
                     try {
                         crossInfo = await entradasApi.validateCrossSiteSerial(serial, addingType as 'Equipo' | 'Accesorio');
                     } catch (e) {

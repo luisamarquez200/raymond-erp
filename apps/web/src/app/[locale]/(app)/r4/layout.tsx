@@ -52,7 +52,7 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
 
     return (
         <QueryClientProvider client={queryClient}>
-            <div className="flex min-h-screen force-light-mode w-full overflow-x-hidden" data-theme="light">
+            <div className="flex min-h-screen force-light-mode w-full" data-theme="light">
                 {/* Mobile Header */}
                 <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-100 flex items-center px-4 z-40">
                     <Sheet>

@@ -39,7 +39,7 @@ const menuItems = [
         href: '/es/r4/dashboard',
     },
     {
-        label: 'Flotilla',
+        label: 'Flotilla & Rentas',
         icon: Truck,
         href: '/es/r4/flotilla',
     },
@@ -47,11 +47,6 @@ const menuItems = [
         label: 'Clientes y Sitios',
         icon: FileSpreadsheet,
         href: '/es/r4/clientes-sitios',
-    },
-    {
-        label: 'Rentas',
-        icon: Receipt,
-        href: '/es/r4/rentas',
     },
 
     {

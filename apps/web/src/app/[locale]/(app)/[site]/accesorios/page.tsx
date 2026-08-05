@@ -213,11 +213,20 @@ export default function AccesoriosPage() {
     },
   ];
 
+  const searchFilteredData = data.filter(i =>
+    !searchTerm ? true : (
+      i.modelo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.serial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.tipo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.ubicacion?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
 
       {/* Header Bar */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
+      <div className="sticky top-16 lg:top-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 sm:px-8 py-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
@@ -230,13 +239,13 @@ export default function AccesoriosPage() {
                 <div className="flex items-center gap-1.5 border-r border-gray-200 pr-3">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
                   <span className="text-xs font-bold text-gray-600">
-                    IN: {data.filter(i => i.estado === 'Ingresado').length}
+                    IN: {searchFilteredData.filter(i => i.estado === 'Ingresado').length}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 pl-1">
                   <div className="w-2 h-2 rounded-full bg-red-500" />
                   <span className="text-xs font-bold text-gray-600">
-                    OUT: {data.filter(i => i.estado === 'Retirado').length}
+                    OUT: {searchFilteredData.filter(i => i.estado === 'Retirado').length}
                   </span>
                 </div>
               </div>

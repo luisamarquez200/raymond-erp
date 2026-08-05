@@ -9,7 +9,12 @@ export default <Config>{
         './pages/**/*.{js,ts,jsx,tsx}',
     ],
     theme: {
-        extend: {},
+        extend: {
+            fontFamily: {
+                sans: ['var(--font-inter)', 'sans-serif'],
+                outfit: ['var(--font-outfit)', 'sans-serif'],
+            },
+        },
     },
     plugins: [],
 };

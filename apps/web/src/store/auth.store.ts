@@ -38,6 +38,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 isSuperadmin: rawUser.isSuperadmin,
                 avatarUrl: rawUser.avatarUrl || rawUser.avatar_url,
                 sitio: rawUser.sitio,
+                adc_asociado_id: rawUser.adc_asociado_id,
+                adc_asociado_name: rawUser.adc_asociado_name,
             };
 
             localStorage.setItem('accessToken', data.accessToken);
@@ -76,6 +78,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 isSuperadmin: rawUser.isSuperadmin,
                 avatarUrl: rawUser.avatarUrl || rawUser.avatar_url,
                 sitio: rawUser.sitio,
+                adc_asociado_id: rawUser.adc_asociado_id,
+                adc_asociado_name: rawUser.adc_asociado_name,
             };
 
             localStorage.setItem('accessToken', data.accessToken);

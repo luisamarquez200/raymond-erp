@@ -32,8 +32,8 @@ export class ClientesService {
 
             let filteredClientes = clientes;
 
-            if (user?.roles === 'ADC' && user?.first_name) {
-                const target = user.first_name.toLowerCase();
+            if ((user?.roles === 'ADC' || user?.roles === 'AUXILIAR') && (user?.first_name || user?.adc_asociado_name)) {
+                const target = (user?.adc_asociado_name || user?.first_name).toLowerCase();
                 filteredClientes = clientes.filter(cliente => {
                     const comercial = (cliente.datos_comerciales as any) || {};
                     const clientAdc = (comercial.adc || '').toLowerCase();

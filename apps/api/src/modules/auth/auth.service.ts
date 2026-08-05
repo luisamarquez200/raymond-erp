@@ -130,6 +130,8 @@ export class AuthService {
                 roles: user.roles.name,
                 organization_id: user.organization_id || null, // NULL for global SuperAdmin
                 isSuperadmin, // CRITICAL: Add SuperAdmin flag for frontend
+                adc_asociado_id: (user as any).adc_asociado_id || null,
+                adc_asociado_name: (user as any).adc_asociado_name || null,
                 permissions: user.roles.role_permissions.map(p => ({
                     resource: p.permissions.resource,
                     action: p.permissions.action,

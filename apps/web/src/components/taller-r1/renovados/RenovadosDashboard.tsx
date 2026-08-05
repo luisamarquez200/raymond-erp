@@ -47,11 +47,14 @@ export const RenovadosDashboard = () => {
         }
     };
 
-    const filtered = solicitudes.filter(s => {
-        const matchesSearch = s.serial_equipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            s.cliente?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = filterStatus === 'todo' || s.estado === filterStatus;
-        return matchesSearch && matchesFilter;
+    const searchFiltered = solicitudes.filter(s => {
+        const matchesSearch = (s.serial_equipo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (s.cliente || '').toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesSearch;
+    });
+
+    const filtered = searchFiltered.filter(s => {
+        return filterStatus === 'todo' || s.estado === filterStatus;
     });
 
     const filteredPending = pendingEquipos.filter(e =>
@@ -97,7 +100,7 @@ export const RenovadosDashboard = () => {
                     <Wrench className="w-4 h-4" />
                     Órdenes Activas
                     <span className="ml-2 bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-[10px]">
-                        {solicitudes.length}
+                        {searchFiltered.length}
                     </span>
                 </button>
                 <button
@@ -112,37 +115,39 @@ export const RenovadosDashboard = () => {
                     <Clock className="w-4 h-4" />
                     Pendientes de Inicio
                     <span className="ml-2 bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px]">
-                        {pendingEquipos.length}
+                        {filteredPending.length}
                     </span>
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-5">
-                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
-                        <LayoutDashboard className="w-7 h-7" />
+            <div className="sticky top-16 lg:top-0 z-20 bg-gray-50/95 backdrop-blur-md py-3 -my-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-5">
+                        <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+                            <LayoutDashboard className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total Órdenes</p>
+                            <h3 className="text-3xl font-black text-slate-900">{searchFiltered.length}</h3>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total Órdenes</p>
-                        <h3 className="text-3xl font-black text-slate-900">{solicitudes.length}</h3>
+                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-5">
+                        <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600">
+                            <Clock className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">En Proceso</p>
+                            <h3 className="text-3xl font-black text-slate-900">{searchFiltered.filter(s => s.estado === 'En Proceso').length}</h3>
+                        </div>
                     </div>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-5">
-                    <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600">
-                        <Clock className="w-7 h-7" />
-                    </div>
-                    <div>
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">En Proceso</p>
-                        <h3 className="text-3xl font-black text-slate-900">{solicitudes.filter(s => s.estado === 'En Proceso').length}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-5">
-                    <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
-                        <CheckCircle2 className="w-7 h-7" />
-                    </div>
-                    <div>
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Finalizados</p>
-                        <h3 className="text-3xl font-black text-slate-900">{solicitudes.filter(s => s.estado === 'Finalizado').length}</h3>
+                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-5">
+                        <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+                            <CheckCircle2 className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Finalizados</p>
+                            <h3 className="text-3xl font-black text-slate-900">{searchFiltered.filter(s => s.estado === 'Finalizado').length}</h3>
+                        </div>
                     </div>
                 </div>
             </div>
