@@ -18,6 +18,19 @@ const MONTH_NAME_MAP: Record<string, string> = {
     'NOVIEMBRE': '11', 'NOV': '11',
     'DICIEMBRE': '12', 'DIC': '12', 'DEC': '12',
 };
+const normalizeADCName = (name: string | null | undefined): string | null => {
+    if (!name) return null;
+    const cleanName = name.trim();
+    const upperName = cleanName.toUpperCase();
+    
+    if (upperName === 'ALEJANDRA') return 'Alejandra Arellanes';
+    if (upperName === 'ANDREA') return 'Andrea Esquivel';
+    if (upperName === 'DANIEL') return 'Daniel Romero';
+    if (upperName === 'MONTSERRAT') return 'Montserrat Covarrubias';
+    if (upperName === 'SIMALÚ' || upperName === 'SIMALU') return 'Simalú León';
+    
+    return cleanName;
+};
 
 @Injectable()
 export class CargaMasivaService {
@@ -310,7 +323,7 @@ export class CargaMasivaService {
                             const cacheKey = `${clientName}::${siteName}`;
                             let sitio = sitioCache.get(cacheKey);
                             const region = getDirVal(row, 'REGION') || getDirVal(row, 'REGIÓN');
-                            const responsable = getDirVal(row, 'RESPONSABLE') || getDirVal(row, 'ADC');
+                            const responsable = normalizeADCName(getDirVal(row, 'RESPONSABLE') || getDirVal(row, 'ADC'));
                             const distribuidor = getDirVal(row, 'DISTRIBUIDOR') || getDirVal(row, 'DISTRIBUIDOR AUTORIZADO');
                             const contactoNombre = getDirVal(row, 'CONTACTO') || getDirVal(row, 'CONTACTO TECNICO') || getDirVal(row, 'CONTACTO TÉCNICO') || getDirVal(row, 'CONTACTO DISTRIBUIDOR');
                             const contactoTelefono = getDirVal(row, 'TELEFONO') || getDirVal(row, 'TELÉFONO') || getDirVal(row, 'TELEFONO DISTRIBUIDOR');
@@ -451,7 +464,7 @@ export class CargaMasivaService {
                     const sitioCacheKey = `${cliente.id}::${sitioName}`;
                     let sitio = sitioCache.get(sitioCacheKey);
                     
-                    const adc = getVal(row, 'RESPONSABLE') || getVal(row, 'ADC');
+                    const adc = normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC'));
                     const distribuidor = getVal(row, 'DISTRIBUIDOR') || getVal(row, 'DISTRIBUIDOR AUTORIZADO');
                     const sitioData = {
                         ciudad: getVal(row, 'MUNICIPIO') || getVal(row, 'CIUDAD'),
@@ -505,7 +518,7 @@ export class CargaMasivaService {
                             cliente_id: cliente.id,
                             sitio_id: sitio.id,
                             cuenta: getVal(row, 'CUENTA'),
-                            adc: getVal(row, 'RESPONSABLE') || getVal(row, 'ADC'),
+                            adc: normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC')),
                             distribuidor: getVal(row, 'DISTRIBUIDOR'),
                             propietario: getVal(row, 'PROPIETARIO'),
                         };
@@ -529,7 +542,7 @@ export class CargaMasivaService {
                             
                             const rentaData = {
                                 cuenta: getVal(row, 'CUENTA'),
-                                adc: getVal(row, 'RESPONSABLE') || getVal(row, 'ADC'),
+                                adc: normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC')),
                                 distribuidor: getVal(row, 'DISTRIBUIDOR'),
                                 tarifa: tarifaParsed
                             };

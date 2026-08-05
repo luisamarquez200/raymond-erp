@@ -143,7 +143,7 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
                             www.runsolutions-Services.com
                         </a>
                         <span className="hidden sm:inline opacity-50">•</span>
-                        <span>Software v1.1</span>
+                        <span>Software v1.2</span>
                     </div>
 
                 </div>
