@@ -44,6 +44,11 @@ const menuItems = [
         href: '/es/r4/flotilla',
     },
     {
+        label: 'Presupuestos',
+        icon: CircleDollarSign,
+        href: '/es/r4/presupuestos',
+    },
+    {
         label: 'Clientes y Sitios',
         icon: FileSpreadsheet,
         href: '/es/r4/clientes-sitios',

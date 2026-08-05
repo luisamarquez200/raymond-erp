@@ -3,6 +3,7 @@ import { ActivosModule } from './activos/activos.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { RentasModule } from './rentas/rentas.module';
 import { CargaMasivaModule } from './carga-masiva/carga-masiva.module';
+import { PresupuestosModule } from './presupuestos/presupuestos.module';
 import { FlotillaController } from './flotilla/flotilla.controller';
 import { FlotillaService } from './flotilla/flotilla.service';
 import { DashboardController } from './dashboard/dashboard.controller';
@@ -19,7 +20,8 @@ import { PrismaService } from '../../database/prisma.service';
         ActivosModule,
         ClientesModule,
         RentasModule,
-        CargaMasivaModule
+        CargaMasivaModule,
+        PresupuestosModule
     ],
     controllers: [
         FlotillaController,
