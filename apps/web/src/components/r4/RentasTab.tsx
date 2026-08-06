@@ -115,7 +115,11 @@ export default function RentasTab() {
   const userRole = String(rawRole || 'administrador').toLowerCase();
   
   const isAdc = userRole !== 'administrador' && !userRole.includes('geren') && !userRole.includes('coordinaci');
-  const loggedInAdcName = user ? `${user.firstName} ${user.lastName || ''}`.trim() : '';
+  const loggedInAdcName = user 
+    ? (userRole === 'auxiliar' || userRole.includes('auxiliar'))
+      ? (user.adc_asociado_name || '')
+      : `${user.firstName} ${user.lastName || ''}`.trim()
+    : '';
 
   const { roleColors } = useConfigStore();
   const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;

@@ -17,6 +17,7 @@ export interface User {
     isActive: boolean;
     createdAt?: string;
     updatedAt?: string;
+    adcAsociadoName?: string;
 }
 
 export interface CreateUserDto {
@@ -26,6 +27,7 @@ export interface CreateUserDto {
     password: string;
     roleId: string;
     ubicacion?: string;
+    adcAsociadoName?: string;
 }
 
 export interface UpdateUserDto {
@@ -37,6 +39,7 @@ export interface UpdateUserDto {
     isActive?: boolean;
     avatarUrl?: string;
     ubicacion?: string;
+    adcAsociadoName?: string;
 }
 
 export function useUsers() {
@@ -70,6 +73,7 @@ export function useUsers() {
                 isActive: user.is_active !== undefined ? user.is_active : user.isActive,
                 createdAt: user.created_at || user.createdAt,
                 updatedAt: user.updated_at || user.updatedAt,
+                adcAsociadoName: user.adc_asociado_name || user.adcAsociadoName,
             }));
         },
     });
@@ -96,6 +100,7 @@ export function useUser(id: string) {
                 isActive: rawUser.is_active !== undefined ? rawUser.is_active : rawUser.isActive,
                 createdAt: rawUser.created_at || rawUser.createdAt,
                 updatedAt: rawUser.updated_at || rawUser.updatedAt,
+                adcAsociadoName: rawUser.adc_asociado_name || rawUser.adcAsociadoName,
             };
         },
         enabled: !!id,
@@ -115,6 +120,7 @@ export function useCreateUser() {
                 last_name: data.lastName,
                 role_id: data.roleId,
                 ubicacion: data.ubicacion,
+                adc_asociado_name: data.adcAsociadoName,
             };
             const response = await api.post("/users", payload);
             return response.data?.data || response.data;
@@ -150,6 +156,7 @@ export function useUpdateUser() {
             if (data.isActive !== undefined) payload.is_active = data.isActive;
             if (data.avatarUrl !== undefined) payload.avatar_url = data.avatarUrl;
             if (data.ubicacion !== undefined) payload.ubicacion = data.ubicacion;
+            if (data.adcAsociadoName !== undefined) payload.adc_asociado_name = data.adcAsociadoName;
 
             const response = await api.patch(`/users/${id}`, payload);
             return response.data?.data || response.data;

@@ -67,6 +67,7 @@ export default function GestionUsuarios() {
     const [roleId, setRoleId] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
+    const [adcAsociadoName, setAdcAsociadoName] = useState('');
 
     // Fetch Roles
     const { data: allRoles = [] } = useQuery({
@@ -78,6 +79,15 @@ export default function GestionUsuarios() {
             if (body?.data && Array.isArray(body.data)) return body.data;
             return [];
         },
+    });
+
+    // Fetch ADCs
+    const { data: adcsList = [] } = useQuery({
+        queryKey: ['r4-adcs-list'],
+        queryFn: async () => {
+            const response = await api.get('/r4/adcs');
+            return response.data?.data || [];
+        }
     });
 
     const ALLOWED_ROLES = ['Administrador', 'ADC', 'Gerente'];
@@ -95,6 +105,7 @@ export default function GestionUsuarios() {
         setRoleId(roles[0]?.id || '');
         setIsActive(true);
         setShowPassword(false);
+        setAdcAsociadoName('ninguno');
         setIsCreateOpen(true);
     };
 
@@ -107,6 +118,7 @@ export default function GestionUsuarios() {
         setRoleId(user.role?.id || '');
         setIsActive(user.isActive);
         setShowPassword(false);
+        setAdcAsociadoName(user.adcAsociadoName || 'ninguno');
         setIsEditOpen(true);
     };
 
@@ -128,7 +140,8 @@ export default function GestionUsuarios() {
                 lastName,
                 email,
                 password,
-                roleId
+                roleId,
+                ...(adcAsociadoName !== 'ninguno' && { adcAsociadoName })
             });
             setIsCreateOpen(false);
             refetch();
@@ -152,7 +165,8 @@ export default function GestionUsuarios() {
                     email,
                     roleId,
                     isActive,
-                    ...(password && { password })
+                    ...(password && { password }),
+                    adcAsociadoName: adcAsociadoName === 'ninguno' ? '' : adcAsociadoName
                 }
             });
             setIsEditOpen(false);
@@ -246,7 +260,7 @@ export default function GestionUsuarios() {
                                                             borderColor: `${uColor}30`
                                                         }}
                                                     >
-                                                        {u.firstName[0]}{u.lastName[0]}
+                                                        {(u.firstName?.[0] || '').toUpperCase()}{(u.lastName?.[0] || '').toUpperCase()}
                                                     </div>
                                                     <div>
                                                         <span className="font-bold text-slate-900 block">{u.firstName} {u.lastName}</span>
@@ -260,16 +274,23 @@ export default function GestionUsuarios() {
                                                 </div>
                                             </td>
                                             <td className="p-4">
-                                                <span 
-                                                    className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border"
-                                                    style={{ 
-                                                        backgroundColor: `${uColor}15`, 
-                                                        color: uColor,
-                                                        borderColor: `${uColor}30`
-                                                    }}
-                                                >
-                                                    {uRoleName.toUpperCase()}
-                                                </span>
+                                                <div className="flex flex-col items-start gap-1">
+                                                    <span 
+                                                        className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border"
+                                                        style={{ 
+                                                            backgroundColor: `${uColor}15`, 
+                                                            color: uColor,
+                                                            borderColor: `${uColor}30`
+                                                        }}
+                                                    >
+                                                        {uRoleName.toUpperCase()}
+                                                    </span>
+                                                    {u.adcAsociadoName && (
+                                                        <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 mt-0.5 animate-in fade-in duration-200">
+                                                            Asociado: {u.adcAsociadoName}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-4">
                                                 {u.isActive ? (
@@ -371,6 +392,20 @@ export default function GestionUsuarios() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="c-adcAsociado">Asociar a un ADC (Opcional)</Label>
+                            <Select value={adcAsociadoName} onValueChange={setAdcAsociadoName}>
+                                <SelectTrigger className="rounded-xl">
+                                    <SelectValue placeholder="Ninguno" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                    <SelectItem value="ninguno">Ninguno</SelectItem>
+                                    {adcsList.map((adc: any, idx: number) => (
+                                        <SelectItem key={idx} value={adc.name}>{adc.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <DialogFooter className="pt-4 flex sm:justify-end gap-2">
                             <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="rounded-xl font-bold">Cancelar</Button>
                             <Button 
@@ -439,6 +474,20 @@ export default function GestionUsuarios() {
                                 <SelectContent className="rounded-xl">
                                     {roles.map((r: any) => (
                                         <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="e-adcAsociado">Asociar a un ADC (Opcional)</Label>
+                            <Select value={adcAsociadoName} onValueChange={setAdcAsociadoName}>
+                                <SelectTrigger className="rounded-xl">
+                                    <SelectValue placeholder="Ninguno" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                    <SelectItem value="ninguno">Ninguno</SelectItem>
+                                    {adcsList.map((adc: any, idx: number) => (
+                                        <SelectItem key={idx} value={adc.name}>{adc.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
