@@ -112,13 +112,15 @@ export default function AssetCarnetPage() {
     }
   };
 
+  const userRole = (typeof user?.role === 'string' ? user.role : (user?.role as any)?.name || '')?.toUpperCase();
   const isCoordinacionOrGerencia = 
-    user?.role?.toUpperCase() === 'COORDINACION' || 
-    user?.role?.toUpperCase() === 'COORDINADOR' || 
-    user?.role?.toUpperCase() === 'GERENCIA' || 
-    user?.role?.toUpperCase() === 'GERENTE' ||
-    user?.role?.toUpperCase() === 'SUPERADMIN' ||
-    user?.role?.toUpperCase() === 'ADMIN'; // Let's check for standard roles
+    userRole === 'COORDINACION' || 
+    userRole === 'COORDINADOR' || 
+    userRole === 'GERENCIA' || 
+    userRole === 'GERENTE' ||
+    userRole === 'SUPERADMIN' ||
+    userRole === 'ADMIN' ||
+    userRole === 'ADMINISTRADOR';
 
   if (loading) {
     return (
