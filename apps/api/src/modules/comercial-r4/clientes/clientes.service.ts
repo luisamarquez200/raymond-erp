@@ -23,11 +23,12 @@ export class ClientesService {
             const clientes = await db.cliente.findMany({
                 include: {
                     sitios: {
-                        include: { activos: true }
+                        include: { activos: true },
+                        orderBy: { nombre: 'asc' }
                     },
                     activos: true
                 },
-                orderBy: { created_at: 'desc' }
+                orderBy: { razon_social: 'asc' }
             });
 
             let filteredClientes = clientes;
@@ -95,7 +96,8 @@ export class ClientesService {
                 where: { id },
                 include: {
                     sitios: {
-                        include: { activos: true }
+                        include: { activos: true },
+                        orderBy: { nombre: 'asc' }
                     },
                     activos: true
                 }
@@ -413,7 +415,8 @@ export class ClientesService {
         const clientes = await db.cliente.findMany({
             include: {
                 sitios: {
-                    include: { activos: true }
+                    include: { activos: true },
+                    orderBy: { nombre: 'asc' }
                 },
                 activos: true
             },

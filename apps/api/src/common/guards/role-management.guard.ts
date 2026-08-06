@@ -47,17 +47,21 @@ export class RoleManagementGuard implements CanActivate {
 
         // Verificar si es CEO
         const isCEO = normalizedRole === 'CEO';
-
-        // Solo SUPERADMIN o CEO pueden acceder a endpoints de gestión de roles
-        if (!isSuperadmin && !isCEO) {
+        
+        // Verificar si es ADMINISTRADOR
+        const isAdministrador = normalizedRole === 'ADMINISTRADOR';
+ 
+        // Solo SUPERADMIN, CEO o ADMINISTRADOR pueden acceder a endpoints de gestión de roles
+        if (!isSuperadmin && !isCEO && !isAdministrador) {
             throw new ForbiddenException(
-                'Access denied. Only Superadmin and CEO can manage roles and permissions.'
+                'Access denied. Only Superadmin, CEO and Administrador can manage roles and permissions.'
             );
         }
-
+ 
         // Agregar flags al request para uso posterior
         request.user.isSuperadmin = isSuperadmin;
         request.user.isCEO = isCEO;
+        request.user.isAdministrador = isAdministrador;
         request.user.roleLevel = getRoleLevel(roleName);
 
         return true;

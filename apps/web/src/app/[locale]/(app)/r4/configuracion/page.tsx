@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, ShieldCheck, Palette, Users } from 'lucide-react';
+import { Settings, ShieldCheck, Palette, Users, UserSquare2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useConfigStore } from '@/store/config.store';
 import AdcsPage from '../adcs/page'; // Reuse the existing page for the tab
+import GestionUsuarios from '@/components/r4/GestionUsuarios';
 
 export default function ConfiguracionPage() {
     const { user } = useAuthStore();
     const isAdmin = user?.role?.toUpperCase() === 'ADMINISTRADOR' || user?.role?.toUpperCase() === 'SUPERADMIN';
-    const [activeTab, setActiveTab] = useState<'adcs' | 'roles'>('adcs');
+    const [activeTab, setActiveTab] = useState<'adcs' | 'usuarios' | 'roles'>('adcs');
 
     const { roleColors, setRoleColor, resetRoleColors } = useConfigStore();
 
@@ -70,6 +71,21 @@ export default function ConfiguracionPage() {
                             Gestión de ADC
                         </button>
                         <button
+                            onClick={() => setActiveTab('usuarios')}
+                            className={`py-4 px-1 border-b-2 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 ${
+                                activeTab === 'usuarios'
+                                    ? ''
+                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            }`}
+                            style={activeTab === 'usuarios' ? { 
+                                borderColor: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador,
+                                color: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador 
+                            } : {}}
+                        >
+                            <UserSquare2 className="w-4 h-4" />
+                            Gestión de Usuarios
+                        </button>
+                        <button
                             onClick={() => setActiveTab('roles')}
                             className={`py-4 px-1 border-b-2 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 ${
                                 activeTab === 'roles'
@@ -82,17 +98,25 @@ export default function ConfiguracionPage() {
                             } : {}}
                         >
                             <Palette className="w-4 h-4" />
-                            Usuarios y Roles
+                            Roles y Colores
                         </button>
                     </nav>
                 </div>
             </div>
 
-            {activeTab === 'adcs' ? (
+            {activeTab === 'adcs' && (
                 <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-6">
                     <AdcsPage />
                 </div>
-            ) : (
+            )}
+            
+            {activeTab === 'usuarios' && (
+                <div className="animate-in fade-in duration-300">
+                    <GestionUsuarios />
+                </div>
+            )}
+
+            {activeTab === 'roles' && (
                 <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm animate-in fade-in duration-300">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-lg font-bold text-slate-900">Catálogo de Roles y Colores</h2>

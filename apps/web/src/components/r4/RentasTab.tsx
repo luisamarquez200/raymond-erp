@@ -1047,6 +1047,9 @@ export default function RentasTab() {
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Sitio" title="SITE" value={selectedFilterSitio} onChange={(val) => { setSelectedFilterSitio(val); setCurrentPage(1); }} options={filterUniqueSitios} open={openFilterSitio} setOpen={setOpenFilterSitio} search={searchSitio} setSearch={setSearchSitio} currentColor={currentColor} />
                 </th>
+                {!isAdc && (
+                  <th className="px-4 py-4 font-black">Ejecutivo (ADC)</th>
+                )}
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Equipo" title="TIPO" value={selectedFilterEquipo} onChange={(val) => { setSelectedFilterEquipo(val); setCurrentPage(1); }} options={['Montacargas', 'Patín']} open={openFilterEquipo} setOpen={setOpenFilterEquipo} search={searchEquipo} setSearch={setSearchEquipo} currentColor={currentColor} />
                 </th>
@@ -1118,6 +1121,9 @@ export default function RentasTab() {
                       <tr key={renta.id} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-4 py-3.5 font-semibold text-slate-900">{renta.cuenta || '-'}</td>
                         <td className="px-4 py-3.5 text-slate-600">{renta.sitio?.nombre || '-'}</td>
+                        {!isAdc && (
+                          <td className="px-4 py-3.5 font-bold text-slate-500">{renta.adc || renta.cliente?.datos_comerciales?.adc || '-'}</td>
+                        )}
                         <td className="px-4 py-3.5 text-slate-500">{renta.activo?.tipo || '-'}</td>
                         <td className="px-4 py-3.5 text-slate-500">{renta.activo?.clase || '-'}</td>
                         <td className="px-4 py-3.5 text-slate-700">{renta.activo?.modelo || '-'}</td>

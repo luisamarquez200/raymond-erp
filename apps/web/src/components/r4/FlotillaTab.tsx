@@ -364,7 +364,7 @@ export default function FlotillaTab() {
       if (isAdc) {
         // Requires approval
         await api.post(`/r4/flotilla/${editingRowId}/solicitar-cambio`, changedFields);
-        toast.info('Solicitud de cambio enviada para aprobación de Coordinación.');
+        toast.info('Solicitud de cambio enviada para aprobación de Gerencia.');
       } else {
         // Direct save
         await api.put(`/r4/flotilla/${editingRowId}`, changedFields);
@@ -400,7 +400,7 @@ export default function FlotillaTab() {
     if (isAdc && destAdc.toLowerCase() !== loggedInAdcName.toLowerCase()) {
       if (selectedAssetForTransfer?.estatus?.toUpperCase() !== 'INACTIVO') {
         // Must set status to INACTIVO first and notify
-        toast.error(`Las transferencias entre diferentes ADCs deben ser autorizadas por Coordinación. Por favor cambie el estatus del equipo a "Inactivo" primero.`);
+        toast.error(`Las transferencias entre diferentes ADCs deben ser autorizadas por Gerencia. Por favor cambie el estatus del equipo a "Inactivo" primero.`);
         return;
       }
     }
@@ -414,7 +414,7 @@ export default function FlotillaTab() {
       if (isAdc) {
         // Requires approval
         await api.post(`/r4/flotilla/${selectedAssetForTransfer.serie}/solicitar-cambio`, payload);
-        toast.info('Solicitud de transferencia enviada a Coordinación para aprobación.');
+        toast.info('Solicitud de transferencia enviada a Gerencia para aprobación.');
       } else {
         // Direct transfer
         await api.put(`/r4/flotilla/${selectedAssetForTransfer.serie}`, payload);

@@ -1855,11 +1855,7 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                         />
 
                         <div className="relative bg-white w-full max-w-md rounded-[2rem] shadow-2xl p-6 sm:p-8 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] overflow-y-auto custom-scrollbar">
-                            <style>{`
-                                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                                .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-                            `}</style>
+
                             <h3 className="text-xl font-black text-slate-900 mb-2">
                                 {showQuickAddClient ? 'Nuevo Cliente' : showQuickAddAdc ? 'Nuevo ADC' : 'Nuevo Modelo'}
                             </h3>

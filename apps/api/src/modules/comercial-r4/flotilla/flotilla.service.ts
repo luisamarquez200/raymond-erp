@@ -2,15 +2,34 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../../database/prisma.service';
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class FlotillaService {
     private readonly logger = new Logger(FlotillaService.name);
+    private transporter: nodemailer.Transporter;
 
     constructor(
         private readonly prismaDynamicService: PrismaDynamicService,
-        private readonly prismaService: PrismaService
-    ) {}
+        private readonly prismaService: PrismaService,
+        private readonly configService: ConfigService
+    ) {
+        const host = this.configService.get<string>('SMTP_HOST');
+        const port = this.configService.get<number>('SMTP_PORT');
+        const user = this.configService.get<string>('SMTP_USER');
+        const pass = this.configService.get<string>('SMTP_PASS');
+
+        if (host && user && pass) {
+            this.transporter = nodemailer.createTransport({
+                host,
+                port,
+                secure: Number(port) === 465,
+                auth: { user, pass },
+                tls: { rejectUnauthorized: false }
+            });
+        }
+    }
 
     private getDb() {
         const db = PrismaDynamicService.clients.r4;
@@ -59,6 +78,19 @@ export class FlotillaService {
                         type: 'INFO'
                     }
                 });
+
+                if (this.transporter && admin.email) {
+                    try {
+                        await this.transporter.sendMail({
+                            from: '"Raymond ERP" <no-reply@raymond.com>',
+                            to: admin.email,
+                            subject: `[Raymond ERP] ${title}`,
+                            text: message
+                        });
+                    } catch (e: any) {
+                        this.logger.error(`Error enviando email a admin ${admin.email}: ${e.message}`);
+                    }
+                }
             }
         } catch (e: any) {
             this.logger.error(`Error enviando notificación a admins: ${e.message}`);
@@ -76,6 +108,18 @@ export class FlotillaService {
                     type: type as any
                 }
             });
+
+            if (this.transporter) {
+                const user = await this.prismaService.users.findUnique({ where: { id: usuarioId } });
+                if (user?.email) {
+                    await this.transporter.sendMail({
+                        from: '"Raymond ERP" <no-reply@raymond.com>',
+                        to: user.email,
+                        subject: `[Raymond ERP] ${title}`,
+                        text: message
+                    });
+                }
+            }
         } catch (e: any) {
             this.logger.error(`Error enviando notificación al usuario ${usuarioId}: ${e.message}`);
         }
@@ -304,6 +348,14 @@ export class FlotillaService {
 
                              const mapped = summaryParts.join(', ');
                              detail = log.aprobado ? `Actualización por ${autor}: ${mapped}` : `Solicitud de ${autor}: ${mapped}`;
+                             if (parsed.estado === 'RECHAZADA') {
+                                 detail = `Rechazada por ${parsed.rechazado_por || 'Sistema'}: ${mapped} (Solicitó: ${autor})`;
+                             }
+                        }
+                    } else if (parsed.tipo === 'ALTA') {
+                        detail = log.aprobado ? `Alta aprobada (Solicitó: ${autor})` : `Solicitud de Alta por ${autor}`;
+                        if (parsed.estado === 'RECHAZADA') {
+                            detail = `Alta rechazada por ${parsed.rechazado_por || 'Sistema'} (Solicitó: ${autor})`;
                         }
                     }
                 } else if (log.motivo?.includes('Cambio de estatus')) {
@@ -509,10 +561,15 @@ export class FlotillaService {
                 usuario_id: usuarioId
             }
         });
-        
+        const sitioAnterior = await db.sitio.findUnique({ where: { id: activo.sitio_id } });
+        const sitioNuevo = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : null;
+
         await this.notificarAdmins(
             'Nueva Solicitud de Cambio',
-            `${detalleAutor} ha solicitado un cambio/transferencia para el equipo con serie ${activo.serie}.`
+            `${detalleAutor} ha solicitado un cambio/transferencia para el equipo con serie ${activo.serie}.\n` +
+            `• Sitio Origen: ${sitioAnterior?.nombre || 'Sin sitio'}\n` +
+            `• Sitio Destino: ${sitioNuevo?.nombre || 'Sin sitio'}\n` +
+            `• Cliente: ${activo.cliente?.razon_social || 'Desconocido'}`
         );
 
         return { success: true, message: 'Solicitud de cambio enviada para aprobación', logId: log.id };
@@ -573,10 +630,14 @@ export class FlotillaService {
                 usuario_id: usuarioId
             }
         });
+        const sitioDestino = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : null;
         
         await this.notificarAdmins(
             'Nueva Solicitud de Alta',
-            `${detalleAutor} ha solicitado el alta del equipo con serie ${dto.serie} al sistema.`
+            `${detalleAutor} ha solicitado el alta del equipo con serie ${dto.serie} al sistema.\n` +
+            `• Sitio Asignado: ${sitioDestino?.nombre || 'Sin sitio'}\n` +
+            `• Modelo: ${dto.modelo || '-'}\n` +
+            `• Tipo: ${dto.tipo || '-'}`
         );
 
         return {
@@ -590,7 +651,10 @@ export class FlotillaService {
     async obtenerSolicitudesPendientes() {
         const db = this.getDb();
         const solicitudes = await db.cambioSitioLog.findMany({
-            where: { aprobado: false },
+            where: { 
+                aprobado: false,
+                motivo: { not: { contains: '"estado":"RECHAZADA"' } }
+            },
             include: {
                 activo: {
                     include: {
@@ -795,7 +859,7 @@ export class FlotillaService {
         if (log) {
             const detalleAutor = await this.obtenerDetalleUsuario(usuarioAprobador || 'sistema');
             
-            // Auditoría del rechazo antes de borrar
+            // Auditoría del rechazo
             await db.auditoria.create({
                 data: {
                     modulo: 'FLOTILLA',
@@ -815,10 +879,19 @@ export class FlotillaService {
                 `Tu solicitud para el equipo con serie ${equipo?.serie || log.activo_id} ha sido rechazada por ${detalleAutor}.`,
                 'ERROR'
             );
+
+            let parsedMotivo: any = { tipo: 'RECHAZO' };
+            try { parsedMotivo = JSON.parse(log.motivo || '{}'); } catch(e) {}
+            parsedMotivo.estado = 'RECHAZADA';
+            parsedMotivo.rechazado_por = detalleAutor;
+
+            await db.cambioSitioLog.update({
+                where: { id },
+                data: { motivo: JSON.stringify(parsedMotivo) }
+            });
         }
 
-        await db.cambioSitioLog.delete({ where: { id } });
-        return { success: true, message: 'Solicitud rechazada y eliminada' };
+        return { success: true, message: 'Solicitud rechazada y registrada en historial' };
     }
 
     async vincularAccesorio(activoId: string, accesorioId: string, tipoRelacion: string, cantidad: number = 1, notas: string = '', usuarioId?: string) {

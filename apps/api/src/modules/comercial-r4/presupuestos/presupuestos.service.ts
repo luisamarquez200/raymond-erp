@@ -92,22 +92,23 @@ export class PresupuestosService {
             // We assume if it's VIGENTE or IMPORTADA, it contributes to the monthly budget.
             if (r.estado === 'VIGENTE' || r.estado === 'IMPORTADA') {
                 const budgetAmount = r.detalles?.renta_real || r.tarifa || 0;
-                currencyStat.presupuesto_mes += budgetAmount;
-
-                // ADC Compliance tracking
-                const adcName = r.adc || r.sitio?.adc || 'Sin ADC';
-                const clientName = r.cliente.razon_social;
-                const adcKey = `${adcName}_${clientName}_${rMoneda}`;
-                if (!adcsMap.has(adcKey)) adcsMap.set(adcKey, { cliente: clientName, budget: 0, sentPOs: 0 });
-                adcsMap.get(adcKey)!.budget += budgetAmount;
-
-                // Client Total Tracking
-                if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
-                clientTotals.get(clientName)!.presupuesto += budgetAmount;
 
                 // Equipos Detenidos
                 if (r.activo.estatus === 'Inactivo' || r.activo.estatus === 'Inactivo con Cliente') {
                     currencyStat.equipos_detenidos += budgetAmount;
+                } else {
+                    currencyStat.presupuesto_mes += budgetAmount;
+
+                    // ADC Compliance tracking
+                    const adcName = r.adc || r.sitio?.adc || 'Sin ADC';
+                    const clientName = r.cliente.razon_social;
+                    const adcKey = `${adcName}_${clientName}_${rMoneda}`;
+                    if (!adcsMap.has(adcKey)) adcsMap.set(adcKey, { cliente: clientName, budget: 0, sentPOs: 0 });
+                    adcsMap.get(adcKey)!.budget += budgetAmount;
+
+                    // Client Total Tracking
+                    if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
+                    clientTotals.get(clientName)!.presupuesto += budgetAmount;
                 }
             }
         }

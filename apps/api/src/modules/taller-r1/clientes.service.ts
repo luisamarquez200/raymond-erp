@@ -25,7 +25,9 @@ export class ClientesService {
     }
 
     async findAll() {
-        return this.db.cliente.findMany();
+        return this.db.cliente.findMany({
+            orderBy: { nombre_cliente: 'asc' }
+        });
     }
 
     async findOne(id: string) {

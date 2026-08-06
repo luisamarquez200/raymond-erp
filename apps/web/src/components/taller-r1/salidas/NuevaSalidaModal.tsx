@@ -1644,11 +1644,6 @@ export default function NuevaSalidaModal({ isOpen, onClose, onSuccess, editingSa
                     />
                     
                     <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] overflow-y-auto custom-scrollbar tracking-tight">
-                        <style>{`
-                            .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                            .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                            .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-                        `}</style>
                         <h3 className="text-2xl font-black text-slate-900 mb-2">Nuevo Cliente</h3>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 border-b border-slate-100 pb-4">
                             Registro Rápido de Cliente

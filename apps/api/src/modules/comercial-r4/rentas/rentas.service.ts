@@ -74,6 +74,7 @@ export class RentasService {
             fecha_inicio: renta.fecha_inicio,
             fecha_fin: renta.fecha_fin,
             tarifa: renta.tarifa,
+            condiciones: renta.condiciones ?? null,
             propietario: renta.propietario || renta.activo?.propietario || '-',
             detalles: renta.detalles ?? null,
             ordenes: renta.ordenes ?? [],

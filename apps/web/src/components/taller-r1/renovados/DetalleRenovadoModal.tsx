@@ -1623,19 +1623,6 @@ export const DetalleRenovadoModal = ({ idSolicitud, open, onClose, onSuccess }: 
                     from { transform: rotate(0deg); }
                     to { transform: rotate(360deg); }
                 }
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: #e2e8f0;
-                    border-radius: 10px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: #cbd5e1;
-                }
             `}</style>
             
             {showEvaluacion && solicitud && (

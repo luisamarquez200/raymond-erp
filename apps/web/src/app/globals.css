@@ -201,8 +201,8 @@ h6,
 
 /* Global Scrollbar Styles */
 ::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 ::-webkit-scrollbar-track {
@@ -213,13 +213,13 @@ h6,
 ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.28);
   border-radius: 10px;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.45);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 
@@ -229,20 +229,20 @@ h6,
 
 .dark ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.28);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.45);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 
 /* Custom Scrollbar Styles (Specific scopes if needed) */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -253,14 +253,14 @@ h6,
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.28);
   border-radius: 10px;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
   transition: background 0.2s ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.45);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 
@@ -270,13 +270,13 @@ h6,
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.28);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.45);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 

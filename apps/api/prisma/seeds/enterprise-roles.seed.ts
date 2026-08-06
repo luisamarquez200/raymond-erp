@@ -78,6 +78,27 @@ export async function seedEnterpriseRoles(prisma: PrismaClient, organization_id:
             category: 'base',
             is_system: false,
         },
+        {
+            name: 'Administrador',
+            description: 'Administrator - Full system access',
+            level: 9,
+            category: 'executive',
+            is_system: false,
+        },
+        {
+            name: 'ADC',
+            description: 'Asesor Comercial',
+            level: 2,
+            category: 'operational',
+            is_system: false,
+        },
+        {
+            name: 'Gerente',
+            description: 'Gerente - Merged manager role',
+            level: 7,
+            category: 'operational',
+            is_system: false,
+        },
     ];
 
     const createdRoles = [];

@@ -692,7 +692,7 @@ export default function ClientesSitios() {
                 <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
                   <th className="p-4">Cliente</th>
                   <th className="p-4">Sitio / Sucursal</th>
-
+                  <th className="p-4">Ejecutivo (ADC)</th>
                   <th className="p-4">Distribuidor Asignado</th>
                   <th className="p-4">Contacto Técnico</th>
                   <th className="p-4">Estatus</th>
@@ -719,7 +719,17 @@ export default function ClientesSitios() {
                         <span className="text-xs text-slate-500 truncate max-w-[200px]" title={site.direccion}>{site.direccion || '-'}</span>
                       </div>
                     </td>
-
+                    <td className="p-4">
+                      {site.adc && site.adc !== '-' ? (
+                        <div className="flex flex-col text-xs">
+                          <span className="font-bold text-slate-800">{site.adc}</span>
+                          <span className="text-slate-500">{site.contacto_operativo?.adc_telefono || '-'}</span>
+                          <span style={{ color: currentColor }}>{site.contacto_operativo?.adc_correo || '-'}</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-xs italic">Sin ADC</span>
+                      )}
+                    </td>
                     <td className="p-4">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 border rounded-xl text-xs font-bold" style={{ color: currentColor, borderColor: `${currentColor}30`, backgroundColor: `${currentColor}10` }}>
                         <Truck className="w-3.5 h-3.5"/>

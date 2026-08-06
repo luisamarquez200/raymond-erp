@@ -47,24 +47,14 @@ export default function CreateUserPage() {
     // Regular users cannot see or assign the Superadmin role
     const ALLOWED_ROLES = isSuperadmin ? [
         'Superadmin', // ONLY visible to Superadmins
-        'CEO',
-        'CFO',
-        'Contador Senior',
-        'Gerente Operaciones',
-        'Supervisor',
-        'Project Manager',
-        'Developer',
-        'Operario',
+        'Administrador',
+        'ADC',
+        'Gerente'
     ] : [
-        // Regular users - highest role is CEO
-        'CEO',
-        'CFO',
-        'Contador Senior',
-        'Gerente Operaciones',
-        'Supervisor',
-        'Project Manager',
-        'Developer',
-        'Operario',
+        // Regular users (like Administrador) can create these
+        'Administrador',
+        'ADC',
+        'Gerente'
     ];
 
     // Fetch roles and filter to only allowed ones
