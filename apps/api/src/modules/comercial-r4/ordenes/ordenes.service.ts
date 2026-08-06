@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 
 @Injectable()
@@ -62,7 +62,7 @@ export class OrdenesService {
             });
 
             if (existing) {
-                throw new Error('Ya existe una orden de compra para este equipo, periodo y PO.');
+                throw new ConflictException('Ya existe una orden de compra para este equipo, periodo y PO.');
             }
 
             // Create new order inheriting properties from Renta

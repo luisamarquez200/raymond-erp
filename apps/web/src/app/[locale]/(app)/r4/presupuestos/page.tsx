@@ -38,7 +38,7 @@ export default function PresupuestosPage() {
     });
 
     return (
-        <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 space-y-6">
+        <div className="w-full min-h-screen bg-[#F8FAFC] p-4 md:p-8 space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-black text-slate-900 tracking-tight">Presupuestos</h1>

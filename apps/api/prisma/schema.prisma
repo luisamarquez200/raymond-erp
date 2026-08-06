@@ -1001,6 +1001,23 @@ enum QuoteStatus {
   EXPIRED
 }
 
+model ubiqo_coordinates {
+  id                String    @id @default(uuid())
+  latitud           Float
+  longitud          Float
+  bateria           String?
+  fecha_dispositivo DateTime?
+  altitud           Float?
+  velocidad         Float?
+  orientacion       Float?
+  nivel_gsm         String?
+  error_mts_gps     Float?
+  alias             String?
+  created_at        DateTime  @default(now())
+
+  @@index([fecha_dispositivo])
+}
+
 enum RequisitionStatus {
   DRAFT
   PENDING_APPROVAL
