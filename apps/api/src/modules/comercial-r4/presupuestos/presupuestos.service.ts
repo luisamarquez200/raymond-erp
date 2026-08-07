@@ -93,8 +93,11 @@ export class PresupuestosService {
             if (r.estado === 'VIGENTE' || r.estado === 'IMPORTADA') {
                 const budgetAmount = r.detalles?.renta_real || r.tarifa || 0;
 
-                // Equipos Detenidos
-                if (r.activo.estatus === 'Inactivo' || r.activo.estatus === 'Inactivo con Cliente') {
+                // Equipos Detenidos: exclude ALL inactive variants (Inactivo, Inactivo con Cliente, Inactivo - Con Cliente)
+                const estatusNorm = (r.activo?.estatus || '').trim().toUpperCase();
+                const isInactive = estatusNorm.startsWith('INACTIVO');
+
+                if (isInactive) {
                     currencyStat.equipos_detenidos += budgetAmount;
                 } else {
                     currencyStat.presupuesto_mes += budgetAmount;
@@ -128,6 +131,10 @@ export class PresupuestosService {
             if (moneda && moneda !== rMoneda) continue;
             const currencyStat = stats[rMoneda as keyof typeof stats];
             if (!currencyStat) continue;
+
+            // Skip inactive equipment (all variants) from accumulated calculation
+            const estatusNormAcc = (r.activo?.estatus || '').trim().toUpperCase();
+            if (estatusNormAcc.startsWith('INACTIVO')) continue;
 
             const startM = dayjs(r.fecha_inicio).startOf('month');
             const endM = dayjs(`${currentPeriodStr}-01`).startOf('month');

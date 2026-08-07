@@ -534,6 +534,26 @@ export class FlotillaService {
         return { ...nuevoActivo, renta: rentaCreada };
     }
 
+    private formatFechaLarga(dateInput?: Date | string | null): string {
+        if (!dateInput) return '-';
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return '-';
+        
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const day = pad(d.getDate());
+        const month = pad(d.getMonth() + 1);
+        const year = d.getFullYear();
+        
+        let hours = d.getHours();
+        const minutes = pad(d.getMinutes());
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const formattedHours = pad(hours);
+        
+        return `${day}/${month}/${year} ${formattedHours}:${minutes} ${ampm}`;
+    }
+
     async solicitarCambio(id: string, dto: any, usuarioId: string) {
         const db = this.getDb();
         const activo = await db.activo.findFirst({
@@ -542,37 +562,60 @@ export class FlotillaService {
                     { id: id },
                     { serie: id }
                 ]
-            }
+            },
+            include: { cliente: true, sitio: true }
         });
         if (!activo) throw new NotFoundException(`Equipo con serie o ID ${id} no encontrado`);
 
         const detalleAutor = await this.obtenerDetalleUsuario(usuarioId);
+        const sitioAnterior = await db.sitio.findUnique({ where: { id: activo.sitio_id } });
+        const sitioNuevo = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : sitioAnterior;
+        const clienteObj = activo.cliente || (dto.cliente_id ? await db.cliente.findUnique({ where: { id: dto.cliente_id } }) : null);
+
+        const isTransfer = Boolean(dto.sitio_id && dto.sitio_id !== activo.sitio_id);
+        const accionNombre = isTransfer ? 'Transferencia de Sitio' : 'Edición de Equipo';
+        const fechaEnvio = new Date();
+        const fechaEnvioFormatted = this.formatFechaLarga(fechaEnvio);
+
+        const motivoData = {
+            tipo: isTransfer ? 'TRANSFERENCIA' : 'EDICION',
+            accion_nombre: accionNombre,
+            solicitante: detalleAutor,
+            solicitante_id: usuarioId,
+            equipo_serie: activo.serie,
+            equipo_modelo: activo.modelo || '-',
+            cliente_nombre: clienteObj?.razon_social || '-',
+            sitio_anterior_nombre: sitioAnterior?.nombre || 'Sin sitio anterior',
+            sitio_nuevo_nombre: sitioNuevo?.nombre || 'Sin sitio nuevo',
+            fecha_envio: fechaEnvio.toISOString(),
+            fecha_envio_formatted: fechaEnvioFormatted,
+            datos: dto
+        };
 
         const log = await db.cambioSitioLog.create({
             data: {
                 activo_id: activo.id,
                 sitio_anterior_id: activo.sitio_id,
                 sitio_nuevo_id: dto.sitio_id || activo.sitio_id || 'sin_sitio',
-                motivo: JSON.stringify({
-                    tipo: 'EDICION',
-                    datos: dto
-                }),
+                motivo: JSON.stringify(motivoData),
                 aprobado: false,
                 usuario_id: usuarioId
             }
         });
-        const sitioAnterior = await db.sitio.findUnique({ where: { id: activo.sitio_id } });
-        const sitioNuevo = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : null;
 
         await this.notificarAdmins(
-            'Nueva Solicitud de Cambio',
-            `${detalleAutor} ha solicitado un cambio/transferencia para el equipo con serie ${activo.serie}.\n` +
-            `• Sitio Origen: ${sitioAnterior?.nombre || 'Sin sitio'}\n` +
-            `• Sitio Destino: ${sitioNuevo?.nombre || 'Sin sitio'}\n` +
-            `• Cliente: ${activo.cliente?.razon_social || 'Desconocido'}`
+            `📋 Nueva Solicitud: ${accionNombre} - Serie: ${activo.serie}`,
+            `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
+            `• Acción: ${accionNombre}\n` +
+            `• Solicitante / ADC: ${detalleAutor}\n` +
+            `• Equipo: Serie ${activo.serie} (Modelo: ${activo.modelo || '-'})\n` +
+            `• Cliente: ${clienteObj?.razon_social || '-'}\n` +
+            `• Sitio Anterior: ${sitioAnterior?.nombre || 'Sin sitio anterior'}\n` +
+            `• Sitio Propuesto (Nuevo): ${sitioNuevo?.nombre || 'Sin sitio nuevo'}\n` +
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
         );
 
-        return { success: true, message: 'Solicitud de cambio enviada para aprobación', logId: log.id };
+        return { success: true, message: `Solicitud de ${accionNombre.toLowerCase()} enviada para aprobación`, logId: log.id };
     }
 
     async solicitarAlta(dto: any, usuarioId: string) {
@@ -600,6 +643,29 @@ export class FlotillaService {
         });
 
         const detalleAutor = await this.obtenerDetalleUsuario(usuarioId);
+        const sitioDestino = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : null;
+        const clienteObj = dto.cliente_id ? await db.cliente.findUnique({ where: { id: dto.cliente_id } }) : null;
+        const fechaEnvio = new Date();
+        const fechaEnvioFormatted = this.formatFechaLarga(fechaEnvio);
+        const accionNombre = 'Alta de Equipo Nuevo';
+
+        const motivoData = {
+            tipo: 'ALTA',
+            accion_nombre: accionNombre,
+            solicitante: detalleAutor,
+            solicitante_id: usuarioId,
+            equipo_serie: dto.serie,
+            equipo_modelo: dto.modelo || '-',
+            cliente_nombre: clienteObj?.razon_social || '-',
+            sitio_anterior_nombre: 'N/A (Equipo Nuevo)',
+            sitio_nuevo_nombre: sitioDestino?.nombre || 'Sin sitio asignado',
+            fecha_envio: fechaEnvio.toISOString(),
+            fecha_envio_formatted: fechaEnvioFormatted,
+            datos: {
+                ...dto,
+                estatus_operativo: estatusLimpio
+            }
+        };
 
         // Auditoría de solicitud de alta
         await db.auditoria.create({
@@ -610,7 +676,7 @@ export class FlotillaService {
                 usuario_id: usuarioId,
                 valor_anterior: null,
                 valor_nuevo: { serie: dto.serie, tipo: dto.tipo, clase: dto.clase },
-                observaciones: `Solicitud de alta enviada por ${detalleAutor} para equipo ${dto.serie}`
+                observaciones: `Solicitud de alta enviada por ${detalleAutor} para equipo ${dto.serie} el ${fechaEnvioFormatted}`
             }
         });
 
@@ -619,25 +685,22 @@ export class FlotillaService {
                 activo_id: nuevoActivo.id,
                 sitio_anterior_id: null,
                 sitio_nuevo_id: dto.sitio_id || 'sin_sitio',
-                motivo: JSON.stringify({
-                    tipo: 'ALTA',
-                    datos: {
-                        ...dto,
-                        estatus_operativo: estatusLimpio
-                    }
-                }),
+                motivo: JSON.stringify(motivoData),
                 aprobado: false,
                 usuario_id: usuarioId
             }
         });
-        const sitioDestino = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : null;
-        
+
         await this.notificarAdmins(
-            'Nueva Solicitud de Alta',
-            `${detalleAutor} ha solicitado el alta del equipo con serie ${dto.serie} al sistema.\n` +
-            `• Sitio Asignado: ${sitioDestino?.nombre || 'Sin sitio'}\n` +
-            `• Modelo: ${dto.modelo || '-'}\n` +
-            `• Tipo: ${dto.tipo || '-'}`
+            `📋 Nueva Solicitud: ${accionNombre} - Serie: ${dto.serie}`,
+            `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
+            `• Acción: ${accionNombre}\n` +
+            `• Solicitante / ADC: ${detalleAutor}\n` +
+            `• Equipo: Serie ${dto.serie} (Modelo: ${dto.modelo || '-'})\n` +
+            `• Cliente: ${clienteObj?.razon_social || '-'}\n` +
+            `• Sitio Anterior: N/A (Equipo Nuevo)\n` +
+            `• Sitio Propuesto (Nuevo): ${sitioDestino?.nombre || 'Sin sitio asignado'}\n` +
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
         );
 
         return {
@@ -666,8 +729,9 @@ export class FlotillaService {
             orderBy: { fecha: 'desc' }
         });
 
-        return solicitudes.map(s => {
-            let datosPropuestos = null;
+        const result = [];
+        for (const s of solicitudes) {
+            let datosPropuestos: any = null;
             try {
                 if (s.motivo?.startsWith('{')) {
                     datosPropuestos = JSON.parse(s.motivo);
@@ -675,18 +739,30 @@ export class FlotillaService {
             } catch (e) {
                 datosPropuestos = { tipo: 'TRANSFERENCIA', raw: s.motivo };
             }
-            return {
+
+            const solicitanteDetalle = datosPropuestos?.solicitante || await this.obtenerDetalleUsuario(s.usuario_id);
+            const sitioAnterior = s.sitio_anterior_id ? await db.sitio.findUnique({ where: { id: s.sitio_anterior_id } }) : null;
+            const sitioNuevo = s.sitio_nuevo_id ? await db.sitio.findUnique({ where: { id: s.sitio_nuevo_id } }) : null;
+            const fechaEnvioFormatted = datosPropuestos?.fecha_envio_formatted || this.formatFechaLarga(s.fecha);
+
+            result.push({
                 id: s.id,
                 activoId: s.activo_id,
-                activoSerie: s.activo?.serie || 'Nuevo',
-                activoModelo: s.activo?.modelo || 'Nuevo',
+                activoSerie: s.activo?.serie || datosPropuestos?.equipo_serie || 'Nuevo',
+                activoModelo: s.activo?.modelo || datosPropuestos?.equipo_modelo || 'Nuevo',
+                solicitante: solicitanteDetalle,
+                accionNombre: datosPropuestos?.accion_nombre || (datosPropuestos?.tipo === 'ALTA' ? 'Alta de Equipo' : datosPropuestos?.tipo === 'EDICION' ? 'Edición de Equipo' : 'Transferencia de Sitio'),
                 sitioAnteriorId: s.sitio_anterior_id,
+                sitioAnteriorNombre: datosPropuestos?.sitio_anterior_nombre || sitioAnterior?.nombre || 'Sin sitio anterior',
                 sitioNuevoId: s.sitio_nuevo_id,
+                sitioNuevoNombre: datosPropuestos?.sitio_nuevo_nombre || sitioNuevo?.nombre || 'Sin sitio nuevo',
                 datosPropuestos,
                 fecha: s.fecha,
+                fechaEnvioFormatted,
                 usuarioId: s.usuario_id
-            };
-        });
+            });
+        }
+        return result;
     }
 
     async aprobarSolicitud(id: string, usuarioAprobador?: string) {
@@ -703,7 +779,9 @@ export class FlotillaService {
             datosPropuestos = { tipo: 'TRANSFERENCIA', datos: { sitio_id: log.sitio_nuevo_id } };
         }
 
-        const detalleAutor = await this.obtenerDetalleUsuario(usuarioAprobador || 'sistema');
+        const detalleAprobador = await this.obtenerDetalleUsuario(usuarioAprobador || 'sistema');
+        const fechaRespuesta = new Date();
+        const fechaRespuestaFormatted = this.formatFechaLarga(fechaRespuesta);
 
         if (datosPropuestos && (datosPropuestos.tipo === 'EDICION' || datosPropuestos.tipo === 'ALTA')) {
             const d = datosPropuestos.datos;
@@ -736,7 +814,7 @@ export class FlotillaService {
                     usuario_id: usuarioAprobador || log.usuario_id,
                     valor_anterior: { estado: 'PENDIENTE' },
                     valor_nuevo: { ...d, estatus: statusLimpio },
-                    observaciones: `Solicitud aprobada por ${detalleAutor}`
+                    observaciones: `Solicitud aprobada por ${detalleAprobador}. Solicitado originalmente por ${datosPropuestos.solicitante || log.usuario_id} el ${datosPropuestos.fecha_envio_formatted || this.formatFechaLarga(log.fecha)}.`
                 }
             });
 
@@ -779,7 +857,7 @@ export class FlotillaService {
                     }
                 });
             } else if (d.renta_precio !== undefined || d.tipo_poliza !== undefined || d.costo_poliza_distribuidor !== undefined) {
-                // Lógica existente de actualización de renta (EDICION)
+                // Lógica de actualización de renta (EDICION)
                 const rentas = await db.renta.findMany({
                     where: { activo_id: log.activo_id, estado: { in: ['VIGENTE', 'IMPORTADA'] } }
                 });
@@ -831,21 +909,56 @@ export class FlotillaService {
                     usuario_id: usuarioAprobador || log.usuario_id,
                     valor_anterior: { sitio_id: log.sitio_anterior_id },
                     valor_nuevo: { sitio_id: log.sitio_nuevo_id, estatus: 'Activo' },
-                    observaciones: `Transferencia aprobada por ${detalleAutor}`
+                    observaciones: `Transferencia aprobada por ${detalleAprobador}. Solicitado por ${datosPropuestos?.solicitante || log.usuario_id}`
                 }
             });
         }
 
+        const equipo = await db.activo.findUnique({ where: { id: log.activo_id } });
+        const sitioAnteriorObj = log.sitio_anterior_id ? await db.sitio.findUnique({ where: { id: log.sitio_anterior_id } }) : null;
+        const sitioNuevoObj = log.sitio_nuevo_id ? await db.sitio.findUnique({ where: { id: log.sitio_nuevo_id } }) : null;
+
+        const accionNombre = datosPropuestos?.accion_nombre || (datosPropuestos?.tipo === 'ALTA' ? 'Alta de Equipo' : datosPropuestos?.tipo === 'EDICION' ? 'Edición de Equipo' : 'Transferencia de Sitio');
+        const solicitanteNombre = datosPropuestos?.solicitante || await this.obtenerDetalleUsuario(log.usuario_id);
+        const fechaEnvioFormatted = datosPropuestos?.fecha_envio_formatted || this.formatFechaLarga(log.fecha);
+        const sitioAnteriorNombre = datosPropuestos?.sitio_anterior_nombre || sitioAnteriorObj?.nombre || 'Sin sitio anterior';
+        const sitioNuevoNombre = datosPropuestos?.sitio_nuevo_nombre || sitioNuevoObj?.nombre || 'Sin sitio nuevo';
+
+        // Actualizar log en la BD con todos los metadatos de respuesta
+        const motivoActualizado = {
+            ...datosPropuestos,
+            estado: 'APROBADA',
+            aprobado_por: detalleAprobador,
+            aprobado_id: usuarioAprobador,
+            fecha_respuesta: fechaRespuesta.toISOString(),
+            fecha_respuesta_formatted: fechaRespuestaFormatted,
+            sitio_anterior_nombre: sitioAnteriorNombre,
+            sitio_nuevo_nombre: sitioNuevoNombre,
+            solicitante: solicitanteNombre
+        };
+
         await db.cambioSitioLog.update({
             where: { id },
-            data: { aprobado: true }
+            data: { 
+                aprobado: true,
+                motivo: JSON.stringify(motivoActualizado)
+            }
         });
-        
-        const equipo = await db.activo.findUnique({ where: { id: log.activo_id } });
+
+        // Notificar al Solicitante (ADC) con todos los detalles completos
         await this.notificarUsuario(
             log.usuario_id,
-            'Solicitud Aprobada',
-            `Tu solicitud para el equipo con serie ${equipo?.serie || log.activo_id} ha sido aprobada por ${detalleAutor}.`,
+            `✅ Solicitud Aprobada: ${accionNombre} - Serie: ${equipo?.serie || log.activo_id}`,
+            `✅ TU SOLICITUD HA SIDO APROBADA\n` +
+            `• Acción: ${accionNombre}\n` +
+            `• Equipo: Serie ${equipo?.serie || log.activo_id} (Modelo: ${equipo?.modelo || datosPropuestos?.equipo_modelo || '-'})\n` +
+            `• Solicitante / ADC: ${solicitanteNombre}\n` +
+            `• Sitio Anterior: ${sitioAnteriorNombre}\n` +
+            `• Sitio Propuesto (Nuevo): ${sitioNuevoNombre}\n` +
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}\n` +
+            `• Aprobado Por: ${detalleAprobador}\n` +
+            `• Fecha y Hora de Aprobación: ${fechaRespuestaFormatted}\n` +
+            `• Estatus Final: APROBADA`,
             'SUCCESS'
         );
 
@@ -857,8 +970,23 @@ export class FlotillaService {
         const log = await db.cambioSitioLog.findUnique({ where: { id } });
         
         if (log) {
-            const detalleAutor = await this.obtenerDetalleUsuario(usuarioAprobador || 'sistema');
-            
+            const detalleRechazador = await this.obtenerDetalleUsuario(usuarioAprobador || 'sistema');
+            const fechaRespuesta = new Date();
+            const fechaRespuestaFormatted = this.formatFechaLarga(fechaRespuesta);
+
+            let datosPropuestos: any = {};
+            try { datosPropuestos = JSON.parse(log.motivo || '{}'); } catch(e) {}
+
+            const equipo = await db.activo.findUnique({ where: { id: log.activo_id } });
+            const sitioAnteriorObj = log.sitio_anterior_id ? await db.sitio.findUnique({ where: { id: log.sitio_anterior_id } }) : null;
+            const sitioNuevoObj = log.sitio_nuevo_id ? await db.sitio.findUnique({ where: { id: log.sitio_nuevo_id } }) : null;
+
+            const accionNombre = datosPropuestos?.accion_nombre || (datosPropuestos?.tipo === 'ALTA' ? 'Alta de Equipo' : datosPropuestos?.tipo === 'EDICION' ? 'Edición de Equipo' : 'Transferencia de Sitio');
+            const solicitanteNombre = datosPropuestos?.solicitante || await this.obtenerDetalleUsuario(log.usuario_id);
+            const fechaEnvioFormatted = datosPropuestos?.fecha_envio_formatted || this.formatFechaLarga(log.fecha);
+            const sitioAnteriorNombre = datosPropuestos?.sitio_anterior_nombre || sitioAnteriorObj?.nombre || 'Sin sitio anterior';
+            const sitioNuevoNombre = datosPropuestos?.sitio_nuevo_nombre || sitioNuevoObj?.nombre || 'Sin sitio nuevo';
+
             // Auditoría del rechazo
             await db.auditoria.create({
                 data: {
@@ -868,26 +996,42 @@ export class FlotillaService {
                     usuario_id: usuarioAprobador || log.usuario_id,
                     valor_anterior: { motivo: log.motivo },
                     valor_nuevo: { estado: 'RECHAZADA' },
-                    observaciones: `Solicitud rechazada por ${detalleAutor}`
+                    observaciones: `Solicitud de ${accionNombre} rechazada por ${detalleRechazador}. Solicitada por ${solicitanteNombre} el ${fechaEnvioFormatted}.`
                 }
             });
             
-            const equipo = await db.activo.findUnique({ where: { id: log.activo_id } });
+            // Notificar al Solicitante (ADC) con todos los detalles completos
             await this.notificarUsuario(
                 log.usuario_id,
-                'Solicitud Rechazada',
-                `Tu solicitud para el equipo con serie ${equipo?.serie || log.activo_id} ha sido rechazada por ${detalleAutor}.`,
+                `❌ Solicitud Rechazada: ${accionNombre} - Serie: ${equipo?.serie || log.activo_id}`,
+                `❌ TU SOLICITUD HA SIDO RECHAZADA\n` +
+                `• Acción: ${accionNombre}\n` +
+                `• Equipo: Serie ${equipo?.serie || log.activo_id} (Modelo: ${equipo?.modelo || datosPropuestos?.equipo_modelo || '-'})\n` +
+                `• Solicitante / ADC: ${solicitanteNombre}\n` +
+                `• Sitio Anterior: ${sitioAnteriorNombre}\n` +
+                `• Sitio Propuesto (Nuevo): ${sitioNuevoNombre}\n` +
+                `• Fecha y Hora de Envío: ${fechaEnvioFormatted}\n` +
+                `• Rechazado Por: ${detalleRechazador}\n` +
+                `• Fecha y Hora de Rechazo: ${fechaRespuestaFormatted}\n` +
+                `• Estatus Final: RECHAZADA`,
                 'ERROR'
             );
 
-            let parsedMotivo: any = { tipo: 'RECHAZO' };
-            try { parsedMotivo = JSON.parse(log.motivo || '{}'); } catch(e) {}
-            parsedMotivo.estado = 'RECHAZADA';
-            parsedMotivo.rechazado_por = detalleAutor;
+            const motivoActualizado = {
+                ...datosPropuestos,
+                estado: 'RECHAZADA',
+                rechazado_por: detalleRechazador,
+                rechazado_id: usuarioAprobador,
+                fecha_respuesta: fechaRespuesta.toISOString(),
+                fecha_respuesta_formatted: fechaRespuestaFormatted,
+                sitio_anterior_nombre: sitioAnteriorNombre,
+                sitio_nuevo_nombre: sitioNuevoNombre,
+                solicitante: solicitanteNombre
+            };
 
             await db.cambioSitioLog.update({
                 where: { id },
-                data: { motivo: JSON.stringify(parsedMotivo) }
+                data: { motivo: JSON.stringify(motivoActualizado) }
             });
         }
 

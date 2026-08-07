@@ -23,6 +23,8 @@ interface SearchResult {
     url: string
 }
 
+import NotificationBell from './NotificationBell'
+
 export default function Navbar() {
     const router = useRouter()
     const { user, signOut } = useAuthStore()
@@ -190,6 +192,8 @@ export default function Navbar() {
                 <div className="block [&>button]:bg-gray-800 [&>button]:border-gray-700 [&>button:hover]:bg-gray-700 [&>button]:text-gray-300 [&>button]:shadow-none">
                     <ThemeSwitcher />
                 </div>
+
+                <NotificationBell />
 
                 {/* Language Switcher - Mobile */}
                 <div className="block [&>div>button]:bg-gray-800 [&>div>button]:border-gray-700 [&>div>button:hover]:bg-gray-700 [&>div>button]:text-gray-300 [&>div>button]:px-2 [&>div>button]:py-1.5 [&>div>button]:text-xs [&>div>button]:border [&>div>button]:shadow-none">

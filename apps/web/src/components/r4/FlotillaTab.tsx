@@ -820,43 +820,58 @@ export default function FlotillaTab() {
             <AlertTriangle className="w-5 h-5" />
             Solicitudes Pendientes de Aprobación
           </h2>
-          <div className="overflow-x-auto bg-white rounded-2xl border border-red-100">
+          <div className="overflow-x-auto bg-white rounded-2xl border border-red-100 shadow-sm">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-red-50 text-[9px] text-red-700 uppercase tracking-widest border-b border-red-100">
                 <tr>
-                  <th className="px-4 py-3 font-black">Equipo (Serie)</th>
+                  <th className="px-4 py-3 font-black">Solicitante (ADC)</th>
+                  <th className="px-4 py-3 font-black">Acción</th>
+                  <th className="px-4 py-3 font-black">Equipo (Serie / Modelo)</th>
+                  <th className="px-4 py-3 font-black">Sitio Anterior</th>
                   <th className="px-4 py-3 font-black">Sitio Propuesto</th>
                   <th className="px-4 py-3 font-black">Detalles Propuestos</th>
-                  <th className="px-4 py-3 font-black">Fecha</th>
+                  <th className="px-4 py-3 font-black">Fecha / Hora Envío</th>
                   <th className="px-4 py-3 font-black text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-red-50 text-slate-700 font-bold">
-                {pendingApprovals.map((sol: any) => (
-                  <tr key={sol.id}>
-                    <td className="px-4 py-3 text-slate-900 font-black">{sol.activoSerie} ({sol.activoModelo})</td>
-                    <td className="px-4 py-3">{allSites.find(s => s.id === sol.sitioNuevoId)?.nombre || sol.sitioNuevoId}</td>
-                    <td className="px-4 py-3">
-                      {sol.datosPropuestos?.tipo === 'EDICION' || sol.datosPropuestos?.tipo === 'ALTA' ? (
-                        <div className="space-y-0.5 text-[10px]">
-                          {sol.datosPropuestos?.tipo === 'ALTA' && (
-                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-black uppercase text-[8px] mb-1 inline-block">Alta de Equipo Nuevo</span>
-                          )}
-                          {Object.entries(sol.datosPropuestos.datos).map(([k, v]: any) => (
-                            <div key={k}><span className="text-slate-400">{k}:</span> {String(v)}</div>
-                          ))}
+                {pendingApprovals.map((sol: any) => {
+                  const sitioAntNombre = sol.sitioAnteriorNombre || allSites.find(s => s.id === sol.sitioAnteriorId)?.nombre || 'Sin sitio anterior';
+                  const sitioNvoNombre = sol.sitioNuevoNombre || allSites.find(s => s.id === sol.sitioNuevoId)?.nombre || sol.sitioNuevoId;
+                  const accionBadge = sol.accionNombre || (sol.datosPropuestos?.tipo === 'ALTA' ? 'Alta de Equipo' : sol.datosPropuestos?.tipo === 'EDICION' ? 'Edición de Equipo' : 'Transferencia de Sitio');
+
+                  return (
+                    <tr key={sol.id} className="hover:bg-red-50/50 transition-colors">
+                      <td className="px-4 py-3 font-black text-slate-900">{sol.solicitante || 'ADC Solicitante'}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                          {accionBadge}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-900 font-black">{sol.activoSerie} ({sol.activoModelo})</td>
+                      <td className="px-4 py-3 text-slate-500">{sitioAntNombre}</td>
+                      <td className="px-4 py-3 text-red-700 font-black">{sitioNvoNombre}</td>
+                      <td className="px-4 py-3">
+                        {sol.datosPropuestos?.datos ? (
+                          <div className="space-y-0.5 text-[10px]">
+                            {Object.entries(sol.datosPropuestos.datos).map(([k, v]: any) => (
+                              <div key={k}><span className="text-slate-400 font-normal">{k}:</span> {String(v)}</div>
+                            ))}
+                          </div>
+                        ) : <span className="text-slate-400 italic">Transferencia de sitio</span>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 text-[10px] font-medium">
+                        {sol.fechaEnvioFormatted || new Date(sol.fecha).toLocaleString('es-MX')}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => handleApprove(sol.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition-all">Aprobar</button>
+                          <button onClick={() => handleReject(sol.id)} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition-all">Rechazar</button>
                         </div>
-                      ) : 'Transferencia directa'}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{new Date(sol.fecha).toLocaleDateString('es-MX')}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex gap-2 justify-end">
-                        <button onClick={() => handleApprove(sol.id)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider">Aprobar</button>
-                        <button onClick={() => handleReject(sol.id)} className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider">Rechazar</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

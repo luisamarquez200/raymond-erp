@@ -65,6 +65,7 @@ export class UsersService {
                 role_id: createUserDto.role_id,
                 is_active: true, // New users are active by default
                 ubicacion: createUserDto.ubicacion,
+                adc_asociado_name: createUserDto.adc_asociado_name,
                 updated_at: new Date(), // Required field
             } as any,
             include: {

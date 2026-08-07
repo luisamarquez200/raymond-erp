@@ -18,12 +18,17 @@ export class DashboardService {
             const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             
             // 1. Equipos en flotilla (Activos con estatus 'ACTIVO' o 'OPERATIVO' o 'EN RENTA')
-            const activos = await db.activo.findMany({
+            // Exclude ALL inactive variants: 'Inactivo', 'Inactivo con Cliente', 'Inactivo - Con Cliente'
+            const allActivosRaw = await db.activo.findMany({
                 where: {
                     estatus_operativo: { notIn: ['INACTIVO'] },
-                    estatus: { notIn: ['Inactivo', 'Inactivo con Cliente'] }
                 },
                 include: { cliente: true, sitio: true }
+            });
+            // Filter inactive in memory to handle all DB string variants
+            const activos = allActivosRaw.filter((a: any) => {
+                const e = (a.estatus || '').trim().toUpperCase();
+                return !e.startsWith('INACTIVO');
             });
             
             const totalEquiposFlotilla = activos.length;

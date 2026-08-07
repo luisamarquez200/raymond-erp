@@ -27,6 +27,8 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 
+import NotificationBell from './NotificationBell';
+
 interface SidebarProps {
     isCollapsed?: boolean;
     onToggle?: () => void;
@@ -99,13 +101,16 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                 )}
                 <div className="flex items-center gap-1">
                     {!isCollapsed && (
-                        <Link
-                            href="/es/site-selection"
-                            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-red-600"
-                            title="Volver a selección"
-                        >
-                            <LayoutDashboard className="w-4 h-4" />
-                        </Link>
+                        <>
+                            <NotificationBell />
+                            <Link
+                                href="/es/site-selection"
+                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-red-600"
+                                title="Volver a selección"
+                            >
+                                <LayoutDashboard className="w-4 h-4" />
+                            </Link>
+                        </>
                     )}
                     <button
                         onClick={onToggle}

@@ -10,6 +10,8 @@ import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 
+import NotificationBell from '@/components/navigation/NotificationBell';
+
 const queryClient = new QueryClient();
 
 export default function R4Layout({ children }: { children: React.ReactNode }) {
@@ -70,12 +72,13 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
                             </div>
                         </SheetContent>
                     </Sheet>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col flex-1">
                         <span className="text-xl font-black text-amber-600 font-brand tracking-tighter leading-none">RAYMOND</span>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">
                             Admin Comercial
                         </span>
                     </div>
+                    <NotificationBell />
                 </div>
 
                 <AdminComercialSidebar

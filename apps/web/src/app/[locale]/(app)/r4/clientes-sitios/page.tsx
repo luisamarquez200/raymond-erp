@@ -293,7 +293,6 @@ export default function ClientesSitios() {
 
   const selectedCliente = clientes.find(c => c.id === selectedClienteId) || null;
 
-  // Flatten and sort all sites for Directory Tab
   const allSites = clientes
     .flatMap((cliente: any) => 
       (cliente.sitios || []).map((sitio: any) => ({
@@ -305,6 +304,7 @@ export default function ClientesSitios() {
       }))
     )
     .sort((a: any, b: any) => {
+      // Sort by client name first, then by site nombre (primary DB field)
       const clientCompare = (a.clienteRazonSocial || '').localeCompare(b.clienteRazonSocial || '', 'es', { sensitivity: 'base' });
       if (clientCompare !== 0) return clientCompare;
       const nameA = a.nombre || a.tienda || '';
@@ -609,7 +609,12 @@ export default function ClientesSitios() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedCliente.sitios?.length > 0 ? [...selectedCliente.sitios].sort((a: any, b: any) => (a.tienda || a.nombre || a.cuenta || '').localeCompare(b.tienda || b.nombre || b.cuenta || '', 'es', { sensitivity: 'base' })).map((sitio: any, idx: number) => (
+                    {selectedCliente.sitios?.length > 0 ? [...selectedCliente.sitios].sort((a: any, b: any) => {
+                      // Sort by what the user visually reads: "{cuenta} / {tienda || nombre}"
+                      const labelA = `${a.cuenta || ''} ${a.tienda || a.nombre || ''}`.trim();
+                      const labelB = `${b.cuenta || ''} ${b.tienda || b.nombre || ''}`.trim();
+                      return labelA.localeCompare(labelB, 'es', { sensitivity: 'base' });
+                    }).map((sitio: any, idx: number) => (
                       <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
                         <div className="p-5 flex-1 space-y-3" style={{ borderLeft: `4px solid ${currentColor}` }}>
                           <div className="flex justify-between items-start mb-2">

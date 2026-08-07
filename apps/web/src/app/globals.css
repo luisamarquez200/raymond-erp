@@ -199,101 +199,100 @@ h6,
   letter-spacing: -0.02em;
 }
 
-/* Global Scrollbar Styles */
+/* ============================================
+   Global Scrollbar Styles — Thick & Accessible
+   ============================================ */
+
+/* Webkit (Chrome, Safari, Edge) — global */
 ::-webkit-scrollbar {
-  width: 18px;
-  height: 18px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.28);
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  /* NO border trick — full width is used for the visible thumb */
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(0, 0, 0, 0.55);
 }
 
+::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* Dark mode */
 .dark ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.28);
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(255, 255, 255, 0.55);
 }
 
-/* Custom Scrollbar Styles (Specific scopes if needed) */
+.dark ::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* Custom Scrollbar Styles (for specific scopes) */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.28);
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
   transition: background 0.2s ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.28);
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(255, 255, 255, 0.35);
+  transition: background 0.2s ease;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(255, 255, 255, 0.55);
 }
 
-/* Firefox */
+/* Firefox — 'auto' respects defined widths; 'thin' ignores them */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(0, 0, 0, 0.35) rgba(0, 0, 0, 0.06);
 }
 
 .dark * {
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
 }
 
-/* Sidebar Scrollbar Styles */
+/* Sidebar Scrollbar Styles — slightly narrower for sidebars */
 .sidebar-scrollbar::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-track {
@@ -301,18 +300,18 @@ h6,
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 4px;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.45);
 }
 
 /* Firefox */
 .sidebar-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--primary-700, 220 20% 25%)) hsl(var(--primary-900, 220 20% 10%));
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
 }
 
 /* Branded focus rings */

@@ -464,7 +464,11 @@ export default function RentasTab() {
   // Auto-select single equipo in Nueva Renta modal
   useEffect(() => {
     if (isNewRentaModalOpen && newRentaFormData.sitio_id) {
-      const siteAssets = equiposDisponibles.filter(e => e.sitio_id === newRentaFormData.sitio_id);
+      const siteAssets = equiposDisponibles.filter(e => {
+        if (e.sitio_id !== newRentaFormData.sitio_id) return false;
+        const st = (e.estatus || '').trim().toUpperCase();
+        return st.startsWith('INACTIVO');
+      });
       if (siteAssets.length === 1 && newRentaFormData.activo_id !== siteAssets[0].id) {
         setNewRentaFormData(prev => ({ ...prev, activo_id: siteAssets[0].id }));
       }
@@ -2334,10 +2338,9 @@ export default function RentasTab() {
                             <div className="max-h-[200px] overflow-y-auto space-y-1">
                               {equiposDisponibles
                                 .filter((e) => {
-                                  const st = e.estatus?.toUpperCase();
-                                  if (st !== 'DISPONIBLE' && st !== 'BACK UP') return false;
-                                  const hasVigente = rentas.some((r: any) => r.activo?.id === e.id && r.estado === 'VIGENTE');
-                                  if (hasVigente) return false;
+                                  // Show only equipment available for rent: Inactivo or Inactivo con Cliente (all DB variants)
+                                  const st = (e.estatus || '').trim().toUpperCase();
+                                  if (!st.startsWith('INACTIVO')) return false;
                                   const term = equipoSearchTerm.toLowerCase();
                                   return (e.serie?.toLowerCase().includes(term) || e.modelo?.toLowerCase().includes(term));
                                 })
@@ -2364,10 +2367,8 @@ export default function RentasTab() {
                                   </button>
                                 ))}
                                 {equiposDisponibles.filter((e) => {
-                                  const st = e.estatus?.toUpperCase();
-                                  if (st !== 'DISPONIBLE' && st !== 'BACK UP') return false;
-                                  const hasVigente = rentas.some((r: any) => r.activo?.id === e.id && r.estado === 'VIGENTE');
-                                  if (hasVigente) return false;
+                                  const st = (e.estatus || '').trim().toUpperCase();
+                                  if (!st.startsWith('INACTIVO')) return false;
                                   const term = equipoSearchTerm.toLowerCase();
                                   return (e.serie?.toLowerCase().includes(term) || e.modelo?.toLowerCase().includes(term));
                                 }).length === 0 && (

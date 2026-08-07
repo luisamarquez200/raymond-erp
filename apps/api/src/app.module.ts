@@ -27,6 +27,8 @@ import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { join } from 'path';
 import { ServeStaticModule } from '@nestjs/serve-static';
 
+import { NotificationsModule } from './modules/notifications/notifications.module';
+
 @Module({
     imports: [
         ServeStaticModule.forRoot({
@@ -67,6 +69,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
         PhasesModule,
         TallerR1Module,
         ComercialR4Module,
+        NotificationsModule,
     ],
     controllers: [AppController],
     providers: [AppService, PrismaService],

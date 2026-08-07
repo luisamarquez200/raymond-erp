@@ -65,10 +65,11 @@ export class ClientesService {
                         return {
                             id: s.id,
                             nombre: s.nombre,
+                            tienda: s.tienda,
+                            cuenta: s.cuenta,
                             ciudad: s.ciudad,
                             direccion: s.direccion,
                             no_totvs: s.no_totvs,
-                            cuenta: s.cuenta,
                             region: contacto.region || '-',
                             responsable: contacto.responsable || '-',
                             distribuidor: s.distribuidor || '-',
@@ -129,6 +130,8 @@ export class ClientesService {
                     return {
                         id: s.id,
                         nombre: s.nombre,
+                        tienda: s.tienda,
+                        cuenta: s.cuenta,
                         ciudad: s.ciudad,
                         direccion: s.direccion,
                         no_totvs: s.no_totvs,

@@ -23,4 +23,9 @@ export class CreateUserDto {
     @IsString()
     @IsOptional()
     ubicacion?: string;
+
+    @IsString()
+    @IsOptional()
+    adc_asociado_name?: string;
 }
+
