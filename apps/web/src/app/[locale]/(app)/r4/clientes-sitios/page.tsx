@@ -610,10 +610,10 @@ export default function ClientesSitios() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {selectedCliente.sitios?.length > 0 ? [...selectedCliente.sitios].sort((a: any, b: any) => {
-                      // Sort by what the user visually reads: "{cuenta} / {tienda || nombre}"
-                      const labelA = `${a.cuenta || ''} ${a.tienda || a.nombre || ''}`.trim();
-                      const labelB = `${b.cuenta || ''} ${b.tienda || b.nombre || ''}`.trim();
-                      return labelA.localeCompare(labelB, 'es', { sensitivity: 'base' });
+                      // Construct the EXACT title displayed on the card: "{sitio.cuenta || selectedCliente.razonSocial} / {sitio.tienda || sitio.nombre}"
+                      const titleA = `${a.cuenta || selectedCliente?.razonSocial || ''} / ${a.tienda || a.nombre || ''}`.trim();
+                      const titleB = `${b.cuenta || selectedCliente?.razonSocial || ''} / ${b.tienda || b.nombre || ''}`.trim();
+                      return titleA.localeCompare(titleB, 'es', { sensitivity: 'base', numeric: true });
                     }).map((sitio: any, idx: number) => (
                       <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
                         <div className="p-5 flex-1 space-y-3" style={{ borderLeft: `4px solid ${currentColor}` }}>

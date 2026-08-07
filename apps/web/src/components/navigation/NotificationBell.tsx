@@ -15,7 +15,11 @@ interface NotificationItem {
     created_at: string;
 }
 
-export default function NotificationBell() {
+interface NotificationBellProps {
+    align?: 'left' | 'right' | 'popout';
+}
+
+export default function NotificationBell({ align = 'right' }: NotificationBellProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -116,24 +120,29 @@ export default function NotificationBell() {
                     if (!isOpen) fetchNotifications();
                 }}
                 className={cn(
-                    "relative p-2.5 rounded-xl transition-all border flex items-center justify-center",
+                    "relative p-2 rounded-xl transition-all flex items-center justify-center border",
                     isOpen 
                         ? "bg-slate-100 border-slate-300 text-slate-900" 
-                        : "bg-white hover:bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 shadow-sm"
+                        : "bg-transparent hover:bg-slate-100 border-transparent text-slate-500 hover:text-slate-900"
                 )}
                 title="Notificaciones"
                 aria-label="Campana de Notificaciones"
             >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-black text-white shadow-md animate-pulse">
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white shadow-md animate-pulse">
                         {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                 )}
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-80 md:w-96 rounded-2xl bg-white shadow-2xl border-2 border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <div className={cn(
+                    "absolute w-80 md:w-96 rounded-2xl bg-white shadow-2xl border-2 border-slate-100 z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-150",
+                    align === 'left' && "left-0 top-full mt-2",
+                    align === 'popout' && "left-0 sm:left-full top-full sm:top-0 mt-2 sm:mt-0 sm:ml-3",
+                    align === 'right' && "right-0 top-full mt-2"
+                )}>
                     {/* Header */}
                     <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                         <div className="flex items-center gap-2">

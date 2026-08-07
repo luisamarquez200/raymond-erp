@@ -102,7 +102,7 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                 <div className="flex items-center gap-1">
                     {!isCollapsed && (
                         <>
-                            <NotificationBell />
+                            <NotificationBell align="popout" />
                             <Link
                                 href="/es/site-selection"
                                 className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-red-600"
