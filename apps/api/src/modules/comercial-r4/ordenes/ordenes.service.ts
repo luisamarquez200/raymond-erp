@@ -18,7 +18,13 @@ export class OrdenesService {
                 include: { 
                     cliente: true, 
                     renta: true,
-                    activo: true, 
+                    activo: {
+                        include: {
+                            accesorios: {
+                                include: { accesorio: true }
+                            }
+                        }
+                    }, 
                 },
                 orderBy: { periodo: 'desc' },
             });
@@ -31,6 +37,14 @@ export class OrdenesService {
                 estado: o.estado,
                 cliente: o.cliente?.razon_social || 'Desconocido',
                 activo: o.activo?.serie || o.activo_id,
+                activo_modelo: o.activo?.modelo || '-',
+                accesorios: o.activo?.accesorios?.map((acc: any) => ({
+                    id: acc.accesorio?.id,
+                    serie: acc.accesorio?.serie,
+                    modelo: acc.accesorio?.modelo,
+                    tipo: acc.tipo_relacion,
+                    cantidad: acc.cantidad || 1
+                })) || [],
                 renta_id: o.renta_id
             }));
         } catch (error: any) {

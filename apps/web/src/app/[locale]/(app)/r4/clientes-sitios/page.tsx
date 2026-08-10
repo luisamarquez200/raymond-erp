@@ -725,11 +725,11 @@ export default function ClientesSitios() {
                       </div>
                     </td>
                     <td className="p-4">
-                      {site.adc && site.adc !== '-' ? (
+                      {site.adc && site.adc !== '-' && site.adc !== 'Sin ADC' ? (
                         <div className="flex flex-col text-xs">
                           <span className="font-bold text-slate-800">{site.adc}</span>
-                          <span className="text-slate-500">{site.contacto_operativo?.adc_telefono || '-'}</span>
-                          <span style={{ color: currentColor }}>{site.contacto_operativo?.adc_correo || '-'}</span>
+                          {site.contacto_operativo?.adc_telefono && <span className="text-slate-500">{site.contacto_operativo.adc_telefono}</span>}
+                          {site.contacto_operativo?.adc_correo && <span style={{ color: currentColor }}>{site.contacto_operativo.adc_correo}</span>}
                         </div>
                       ) : (
                         <span className="text-slate-400 text-xs italic">Sin ADC</span>
@@ -742,11 +742,15 @@ export default function ClientesSitios() {
                       </span>
                     </td>
                     <td className="p-4">
-                      {site.distribuidor_contacto_nombre && site.distribuidor_contacto_nombre !== '-' ? (
+                      {site.distribuidor_contacto_nombre && site.distribuidor_contacto_nombre !== '-' && String(site.distribuidor_contacto_nombre) !== '[object Object]' ? (
                         <div className="flex flex-col text-xs">
-                          <span className="font-bold text-slate-800">{site.distribuidor_contacto_nombre}</span>
-                          <span className="text-slate-500">{site.distribuidor_contacto_telefono || '-'}</span>
-                          <span style={{ color: currentColor }}>{site.distribuidor_contacto_correo || '-'}</span>
+                          <span className="font-bold text-slate-800">
+                            {typeof site.distribuidor_contacto_nombre === 'object'
+                              ? (site.distribuidor_contacto_nombre.nombre || site.distribuidor_contacto_nombre.contacto_nombre || JSON.stringify(site.distribuidor_contacto_nombre))
+                              : String(site.distribuidor_contacto_nombre)}
+                          </span>
+                          <span className="text-slate-500">{typeof site.distribuidor_contacto_telefono === 'object' ? '-' : (site.distribuidor_contacto_telefono || '-')}</span>
+                          <span style={{ color: currentColor }}>{typeof site.distribuidor_contacto_correo === 'object' ? '-' : (site.distribuidor_contacto_correo || '-')}</span>
                         </div>
                       ) : (
                         <span className="text-slate-400 text-xs italic">Sin contacto registrado</span>

@@ -85,15 +85,16 @@ export default function OrdenesMensualesPage() {
                 <th className="px-6 py-5 font-black">PO (Orden Compra)</th>
                 <th className="px-6 py-5 font-black">Cliente</th>
                 <th className="px-6 py-5 font-black">Activo (Serie)</th>
+                <th className="px-6 py-5 font-black">Accesorios Vinculados</th>
                 <th className="px-6 py-5 font-black text-right">Tarifa Facturable</th>
                 <th className="px-6 py-5 font-black">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando órdenes...</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-bold">Cargando órdenes...</td></tr>
               ) : filteredOrdenes.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron órdenes.</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron órdenes.</td></tr>
               ) : paginatedOrdenes.map((orden) => (
                 <tr key={orden.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4">
@@ -110,7 +111,27 @@ export default function OrdenesMensualesPage() {
                     <span className="text-slate-600 font-bold">{orden.cliente}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{orden.activo}</span>
+                    <div>
+                      <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded-md">{orden.activo}</span>
+                      {orden.activo_modelo && <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{orden.activo_modelo}</p>}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {(!orden.accesorios || orden.accesorios.length === 0) ? (
+                      <span className="text-[10px] font-semibold text-slate-400 italic">Sin accesorios</span>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        {orden.accesorios.map((acc: any, i: number) => (
+                          <div key={i} className="inline-flex items-center gap-1.5 text-[11px]">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                              {acc.tipo || 'ACC'}
+                            </span>
+                            <span className="font-mono font-bold text-slate-700">{acc.serie || acc.id}</span>
+                            {acc.modelo && <span className="text-slate-400 text-[10px]">({acc.modelo})</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span className="font-black text-slate-900 text-base">

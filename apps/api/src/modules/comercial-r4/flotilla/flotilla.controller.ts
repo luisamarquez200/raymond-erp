@@ -1,23 +1,29 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Request, Res, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Request, Res, HttpStatus, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { FlotillaService } from './flotilla.service';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('r4/flotilla')
 export class FlotillaController {
     constructor(private readonly flotillaService: FlotillaService) {}
 
+    private getUserId(req: any): string {
+        return req.user?.id || req.user?.sub || req.user?.userId || 'sistema';
+    }
+
     @Get()
-    async getFlotilla() {
+    async getFlotilla(@Request() req: any) {
         return {
             success: true,
-            data: await this.flotillaService.obtenerFlotilla()
+            data: await this.flotillaService.obtenerFlotilla(req.user)
         };
     }
 
     @Post()
     async crearActivo(@Body() dto: any, @Request() req: any) {
-        const userId = req.user?.id || 'sistema';
+        const userId = this.getUserId(req);
         return {
             success: true,
             data: await this.flotillaService.crearActivo(dto, userId)
@@ -34,13 +40,13 @@ export class FlotillaController {
 
     @Post('solicitudes/:id/aprobar')
     async aprobar(@Param('id') id: string, @Request() req: any) {
-        const usuarioId = req.user?.id || req.user?.sub;
+        const usuarioId = this.getUserId(req);
         return await this.flotillaService.aprobarSolicitud(id, usuarioId);
     }
 
     @Post('solicitudes/:id/rechazar')
     async rechazar(@Param('id') id: string, @Request() req: any) {
-        const usuarioId = req.user?.id || req.user?.sub;
+        const usuarioId = this.getUserId(req);
         return await this.flotillaService.rechazarSolicitud(id, usuarioId);
     }
 
@@ -77,10 +83,11 @@ export class FlotillaController {
         if (!db) throw new Error('Database client for R4 not initialized');
         const statusLimpio = dto.estatus_operativo ? this.flotillaService.unificarEstatus(dto.estatus_operativo) : undefined;
         
-        const activoAnterior = await db.activo.findUnique({ where: { id } });
+        const activoAnterior = await db.activo.findFirst({ where: { OR: [{ id }, { serie: id }] } });
+        const targetId = activoAnterior?.id || id;
 
         const updated = await db.activo.update({
-            where: { id },
+            where: { id: targetId },
             data: {
                 ...(dto.clase !== undefined && { clase: dto.clase }),
                 ...(dto.modelo !== undefined && { modelo: dto.modelo }),
@@ -95,7 +102,7 @@ export class FlotillaController {
         // Also check if any rent terms are edited (like tarifa, tipo_poliza etc.)
         if (dto.renta_precio !== undefined || dto.tipo_poliza !== undefined || dto.costo_poliza_distribuidor !== undefined) {
             const rentas = await db.renta.findMany({
-                where: { activo_id: id, estado: { in: ['VIGENTE', 'IMPORTADA'] } }
+                where: { activo_id: targetId, estado: { in: ['VIGENTE', 'IMPORTADA'] } }
             });
             for (const renta of rentas) {
                 const condiciones = (renta.condiciones as any) || {};
@@ -127,13 +134,27 @@ export class FlotillaController {
             }
         }
 
-        const userId = req.user?.id || 'sistema';
+        const userId = this.getUserId(req);
+        const detalleUsuario = await this.flotillaService['obtenerDetalleUsuario'](userId);
+        const sitioAnteriorObj = activoAnterior?.sitio_id ? await db.sitio.findUnique({ where: { id: activoAnterior.sitio_id } }) : null;
+        const sitioNuevoObj = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : sitioAnteriorObj;
+
         await db.cambioSitioLog.create({
             data: {
-                activo_id: id,
+                activo_id: targetId,
                 sitio_anterior_id: activoAnterior?.sitio_id || null,
                 sitio_nuevo_id: dto.sitio_id || activoAnterior?.sitio_id || 'sin_sitio',
-                motivo: dto.motivo || JSON.stringify({ tipo: 'EDICION', datos: dto }),
+                motivo: JSON.stringify({
+                    tipo: 'EDICION',
+                    accion_nombre: 'Edición de Equipo',
+                    solicitante: detalleUsuario,
+                    solicitante_id: userId,
+                    aprobado_por: detalleUsuario,
+                    estado: 'APROBADA',
+                    sitio_anterior_nombre: sitioAnteriorObj?.nombre || 'Sin sitio anterior',
+                    sitio_nuevo_nombre: sitioNuevoObj?.nombre || 'Sin sitio nuevo',
+                    datos: dto
+                }),
                 aprobado: true,
                 usuario_id: userId
             }
@@ -151,7 +172,7 @@ export class FlotillaController {
         @Body('estatus') estatus: string,
         @Request() req: any
     ) {
-        const userId = req.user?.id || 'sistema';
+        const userId = this.getUserId(req);
         return {
             success: true,
             data: await this.flotillaService.actualizarEstatus(id, estatus, userId)
@@ -164,7 +185,7 @@ export class FlotillaController {
         @Body() dto: any,
         @Request() req: any
     ) {
-        const userId = req.user?.id || 'sistema';
+        const userId = this.getUserId(req);
         return await this.flotillaService.solicitarCambio(id, dto, userId);
     }
 
@@ -173,8 +194,37 @@ export class FlotillaController {
         @Body() dto: any,
         @Request() req: any
     ) {
-        const userId = req.user?.id || 'sistema';
+        const userId = this.getUserId(req);
         return await this.flotillaService.solicitarAlta(dto, userId);
+    }
+
+    @Post(':id/solicitar-accesorios')
+    async solicitarVinculoAccesorio(
+        @Param('id') id: string,
+        @Body() dto: { accesorio_id: string, tipo_relacion: string },
+        @Request() req: any
+    ) {
+        const userId = this.getUserId(req);
+        return await this.flotillaService.solicitarVinculoAccesorio(
+            id,
+            dto.accesorio_id,
+            dto.tipo_relacion,
+            userId
+        );
+    }
+
+    @Post(':id/solicitar-desvincular-accesorios/:accesorioId')
+    async solicitarDesvinculoAccesorio(
+        @Param('id') id: string,
+        @Param('accesorioId') accesorioId: string,
+        @Request() req: any
+    ) {
+        const userId = this.getUserId(req);
+        return await this.flotillaService.solicitarDesvinculoAccesorio(
+            id,
+            accesorioId,
+            userId
+        );
     }
 
     @Post(':id/accesorios')
@@ -183,7 +233,7 @@ export class FlotillaController {
         @Body() dto: { accesorio_id: string, tipo_relacion: string, cantidad?: number, notas?: string },
         @Request() req: any
     ) {
-        const userId = req.user?.id || 'sistema';
+        const userId = this.getUserId(req);
         return {
             success: true,
             data: await this.flotillaService.vincularAccesorio(
@@ -203,7 +253,7 @@ export class FlotillaController {
         @Param('accesorioId') accesorioId: string,
         @Request() req: any
     ) {
-        const userId = req.user?.id || 'sistema';
+        const userId = this.getUserId(req);
         return await this.flotillaService.desvincularAccesorio(id, accesorioId, userId);
     }
 }

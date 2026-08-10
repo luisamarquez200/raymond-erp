@@ -265,8 +265,13 @@ export class FlotillaService {
 
     async obtenerCarnetEquipo(id: string) {
         const db = this.getDb();
-        const activo = await db.activo.findUnique({
-            where: { id },
+        const activo = await db.activo.findFirst({
+            where: {
+                OR: [
+                    { id: id },
+                    { serie: id }
+                ]
+            },
             include: {
                 cliente: true,
                 sitio: true,
@@ -287,75 +292,153 @@ export class FlotillaService {
                 }
             }
         });
-
         if (!activo) throw new NotFoundException(`Equipo con serie ${id} no encontrado`);
 
         // Fetch all sites to resolve names in the history
         const sitiosList = await db.sitio.findMany({ select: { id: true, nombre: true } });
         const mapSitios = Object.fromEntries(sitiosList.map(s => [s.id, s.nombre]));
 
-        // Fetch user names from main DB (r1)
+        // Fetch user names from current system DB and fallback to legacy DB if needed
         const mainDb = PrismaDynamicService.clients.r1;
         const userIds = [...new Set(activo.historial_sitios.map(l => l.usuario_id).filter(Boolean))] as string[];
         let mapUsuarios: Record<string, string> = {};
-        if (userIds.length > 0 && mainDb) {
+        if (userIds.length > 0) {
             try {
-                const usuarios = await mainDb.usuarios.findMany({ where: { IDUsuarios: { in: userIds } }, select: { IDUsuarios: true, Usuario: true, Correo: true } });
-                mapUsuarios = Object.fromEntries(usuarios.map((u: any) => [u.IDUsuarios, u.Usuario || u.Correo?.split('@')[0]]));
+                const sysUsers = await this.prismaService.users.findMany({
+                    where: { id: { in: userIds } },
+                    include: { roles: true }
+                });
+                for (const u of sysUsers) {
+                    let name = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
+                    if (u.roles?.name) name += ` (${u.roles.name})`;
+                    mapUsuarios[u.id] = name;
+                }
             } catch (e) {
-                this.logger.warn('Could not fetch user names for logs', e);
+                this.logger.warn('Could not fetch system users for logs', e);
+            }
+
+            if (mainDb) {
+                try {
+                    const usuarios = await mainDb.usuarios.findMany({ where: { IDUsuarios: { in: userIds } }, select: { IDUsuarios: true, Usuario: true, Correo: true } });
+                    usuarios.forEach((u: any) => {
+                        if (!mapUsuarios[u.IDUsuarios]) {
+                            mapUsuarios[u.IDUsuarios] = u.Usuario || u.Correo?.split('@')[0];
+                        }
+                    });
+                } catch (e) {
+                    // Ignore fallback errors
+                }
             }
         }
 
         // Get unique log records with parsed values if needed
         const logs = activo.historial_sitios.map(log => {
             let detail = log.motivo;
-            let displaySitioId = null; // No longer return raw IDs
+            let displaySitioId = null;
             const autor = log.usuario_id ? (mapUsuarios[log.usuario_id] || 'Usuario') : 'Sistema';
+            const hasValidAutor = autor !== 'Sistema' && autor !== 'Usuario';
+            let parsed: any = null;
 
             try {
                 if (log.motivo?.startsWith('{')) {
-                    const parsed = JSON.parse(log.motivo);
-                    if (parsed.tipo === 'EDICION') {
-                        const keys = Object.keys(parsed.datos);
+                    parsed = JSON.parse(log.motivo);
+                    const rawSol = parsed.solicitante;
+                    const rawAprob = parsed.aprobado_por;
+                    const rawRech = parsed.rechazado_por;
+
+                    const isGenericSol = !rawSol || rawSol === 'sistema' || rawSol === 'Usuario' || rawSol === 'ADC / Solicitante';
+                    const isGenericAprob = !rawAprob || rawAprob === 'sistema' || rawAprob === 'Sistema' || rawAprob === 'Administración';
+
+                    const solicitanteStr = !isGenericSol
+                        ? rawSol
+                        : (hasValidAutor ? autor : (rawSol || 'Solicitante'));
+
+                    const aprobadoStr = !isGenericAprob
+                        ? rawAprob
+                        : (log.aprobado ? (hasValidAutor ? autor : 'Administración / Gerencia') : null);
+
+                    const rechazadoStr = (rawRech && rawRech !== 'sistema' && rawRech !== 'Sistema')
+                        ? rawRech
+                        : (parsed.estado === 'RECHAZADA' ? (hasValidAutor ? autor : 'Administración / Gerencia') : null);
+
+                    const sitioAntName = parsed.sitio_anterior_nombre || (log.sitio_anterior_id ? mapSitios[log.sitio_anterior_id] : null);
+                    const sitioNvoName = parsed.sitio_nuevo_nombre || (log.sitio_nuevo_id ? mapSitios[log.sitio_nuevo_id] : null);
+
+                    if (parsed.tipo === 'TRANSFERENCIA' || parsed.accion_nombre?.includes('Transferencia')) {
+                        const orig = sitioAntName || 'Sin sitio anterior';
+                        const dest = sitioNvoName || 'Sin sitio nuevo';
+                        if (parsed.estado === 'RECHAZADA') {
+                            detail = `Transferencia Rechazada por ${rechazadoStr}: ${orig} → ${dest} (Solicitó: ${solicitanteStr})`;
+                        } else if (parsed.estado === 'APROBADA' || log.aprobado) {
+                            if (solicitanteStr && aprobadoStr && solicitanteStr !== aprobadoStr) {
+                                detail = `Transferencia Aprobada por ${aprobadoStr}: ${orig} → ${dest} (Solicitó: ${solicitanteStr})`;
+                            } else {
+                                detail = `Transferencia Realizada por ${aprobadoStr || solicitanteStr}: ${orig} → ${dest}`;
+                            }
+                        } else {
+                            detail = `Solicitud de Transferencia: ${orig} → ${dest} (Solicitó: ${solicitanteStr})`;
+                        }
+                    } else if (parsed.tipo === 'EDICION' || parsed.tipo === 'VINCULAR_ACCESORIO' || parsed.tipo === 'DESVINCULAR_ACCESORIO') {
+                        const keys = parsed.datos ? Object.keys(parsed.datos) : [];
                         if (keys.length === 0) {
-                             detail = 'Edición de información';
+                             detail = `Edición de información por ${solicitanteStr}`;
                         } else {
                              const dict: any = {
-                               estatus_operativo: 'Estatus',
-                               sitio_id: 'Sitio',
-                               renta_precio: 'Precio de Renta',
-                               renta_moneda: 'Moneda de Renta',
-                               tipo_poliza: 'Tipo de Póliza',
-                               costo_poliza_distribuidor: 'Costo Póliza',
-                               moneda_pago_distribuidor: 'Moneda Pago',
-                               distribuidor: 'Distribuidor',
-                               adc: 'ADC',
-                               cuenta: 'Cuenta',
-                               modelo: 'Modelo',
-                               clase: 'Clase',
-                               propietario: 'Propietario'
+                                estatus_operativo: 'Estatus',
+                                sitio_id: 'Sitio',
+                                renta_precio: 'Precio de Renta',
+                                renta_moneda: 'Moneda de Renta',
+                                tipo_poliza: 'Tipo de Póliza',
+                                costo_poliza_distribuidor: 'Costo Póliza',
+                                moneda_pago_distribuidor: 'Moneda Pago',
+                                distribuidor: 'Distribuidor',
+                                adc: 'ADC',
+                                cuenta: 'Cuenta',
+                                modelo: 'Modelo',
+                                clase: 'Clase',
+                                propietario: 'Propietario',
+                                accesorio_serie: 'Serie de Accesorio',
+                                accesorio_modelo: 'Modelo de Accesorio',
+                                tipo_relacion: 'Tipo de Relación',
+                                cantidad: 'Cantidad'
                              };
                              
                              let summaryParts = keys.map(k => {
                                if (k === 'sitio_id') {
                                  const siteName = mapSitios[parsed.datos.sitio_id] || parsed.datos.sitio_id;
-                                 return `Sitio a -> ${siteName}`;
+                                 return `Sitio: ${siteName}`;
                                }
-                               if (k === 'estatus_operativo') return `Estatus a -> ${parsed.datos.estatus_operativo}`;
-                               return dict[k] || k;
+                               if (k === 'estatus_operativo') return `Estatus: ${parsed.datos.estatus_operativo}`;
+                               return `${dict[k] || k}: ${parsed.datos[k]}`;
                              });
 
                              const mapped = summaryParts.join(', ');
-                             detail = log.aprobado ? `Actualización por ${autor}: ${mapped}` : `Solicitud de ${autor}: ${mapped}`;
+                             const actionLabel = parsed.accion_nombre || 'Actualización';
+                             
                              if (parsed.estado === 'RECHAZADA') {
-                                 detail = `Rechazada por ${parsed.rechazado_por || 'Sistema'}: ${mapped} (Solicitó: ${autor})`;
+                                 detail = `${actionLabel} Rechazada por ${rechazadoStr}: ${mapped} (Solicitó: ${solicitanteStr})`;
+                             } else if (parsed.estado === 'APROBADA' || log.aprobado) {
+                                 if (rawSol && rawAprob && rawSol !== rawAprob && rawSol !== 'ADC / Solicitante') {
+                                     detail = `${actionLabel} Aprobada por ${aprobadoStr}: ${mapped} (Solicitó: ${solicitanteStr})`;
+                                 } else {
+                                     const actor = (aprobadoStr && aprobadoStr !== 'Administración') ? aprobadoStr : (solicitanteStr || autor);
+                                     detail = `${actionLabel} realizada por ${actor}: ${mapped}`;
+                                 }
+                             } else {
+                                 detail = `Solicitud de ${actionLabel}: ${mapped} (Solicitó: ${solicitanteStr})`;
                              }
                         }
                     } else if (parsed.tipo === 'ALTA') {
-                        detail = log.aprobado ? `Alta aprobada (Solicitó: ${autor})` : `Solicitud de Alta por ${autor}`;
                         if (parsed.estado === 'RECHAZADA') {
-                            detail = `Alta rechazada por ${parsed.rechazado_por || 'Sistema'} (Solicitó: ${autor})`;
+                            detail = `Alta rechazada por ${rechazadoStr} (Solicitó: ${solicitanteStr})`;
+                        } else if (log.aprobado) {
+                            if (solicitanteStr && aprobadoStr && solicitanteStr !== aprobadoStr) {
+                                detail = `Alta aprobada por ${aprobadoStr} (Solicitó: ${solicitanteStr})`;
+                            } else {
+                                detail = `Alta de equipo realizada por ${aprobadoStr || solicitanteStr}`;
+                            }
+                        } else {
+                            detail = `Solicitud de Alta por ${solicitanteStr}`;
                         }
                     }
                 } else if (log.motivo?.includes('Cambio de estatus')) {
@@ -364,12 +447,37 @@ export class FlotillaService {
                      detail = `${log.motivo} (Por: ${autor})`;
                 }
             } catch (e) {}
+
+            const rawSol = parsed?.solicitante;
+            const rawAprob = parsed?.aprobado_por;
+            const rawRech = parsed?.rechazado_por;
+
+            const finalSolicitante = (rawSol && rawSol !== 'sistema' && rawSol !== 'Usuario')
+                ? rawSol
+                : (hasValidAutor ? autor : (rawSol || 'ADC / Solicitante'));
+
+            const finalAprobadoPor = (rawAprob && rawAprob !== 'sistema' && rawAprob !== 'Sistema')
+                ? rawAprob
+                : (log.aprobado ? (hasValidAutor ? autor : 'Administración') : null);
+
+            const finalRechazadoPor = (rawRech && rawRech !== 'sistema' && rawRech !== 'Sistema')
+                ? rawRech
+                : (parsed?.estado === 'RECHAZADA' ? (hasValidAutor ? autor : 'Administración') : null);
+
             return {
                 id: log.id,
                 fecha: log.fecha,
                 motivo: detail,
                 aprobado: log.aprobado,
-                sitioNuevoId: displaySitioId
+                sitioNuevoId: displaySitioId,
+                tipo: parsed?.tipo || (log.motivo?.includes('Transferencia') ? 'TRANSFERENCIA' : 'MOVIMIENTO'),
+                estado: parsed?.estado || (log.aprobado ? 'APROBADA' : 'REGISTRADA'),
+                solicitante: finalSolicitante,
+                aprobadoPor: finalAprobadoPor,
+                rechazadoPor: finalRechazadoPor,
+                sitioAnterior: parsed?.sitio_anterior_nombre || (log.sitio_anterior_id ? mapSitios[log.sitio_anterior_id] : null),
+                sitioNuevo: parsed?.sitio_nuevo_nombre || (log.sitio_nuevo_id ? mapSitios[log.sitio_nuevo_id] : null),
+                rawParsed: parsed
             };
         });
 
@@ -391,6 +499,17 @@ export class FlotillaService {
             distribuidor: activo.distribuidor || '-',
             propietario: activo.propietario || '-',
             rentaActiva: activo.rentas.find(r => r.estado === 'VIGENTE' || r.estado === 'IMPORTADA') || null,
+            accesorios: activo.accesorios?.map((acc: any) => ({
+                id: acc.accesorio.id,
+                serie: acc.accesorio.serie,
+                modelo: acc.accesorio.modelo,
+                oach: acc.accesorio.oach,
+                clase: acc.accesorio.clase,
+                tipo: acc.accesorio.tipo,
+                tipo_relacion: acc.tipo_relacion,
+                cantidad: acc.cantidad || 1,
+                notas: acc.notas || ''
+            })) || [],
             historialCambios: logs
         };
     }
@@ -740,7 +859,13 @@ export class FlotillaService {
                 datosPropuestos = { tipo: 'TRANSFERENCIA', raw: s.motivo };
             }
 
-            const solicitanteDetalle = datosPropuestos?.solicitante || await this.obtenerDetalleUsuario(s.usuario_id);
+            let solicitanteDetalle = (datosPropuestos?.solicitante && datosPropuestos.solicitante !== 'sistema' && datosPropuestos.solicitante !== 'Usuario' && datosPropuestos.solicitante !== 'ADC / Solicitante')
+                ? datosPropuestos.solicitante
+                : await this.obtenerDetalleUsuario(s.usuario_id);
+
+            if (!solicitanteDetalle || solicitanteDetalle === 'sistema' || solicitanteDetalle === 'Usuario' || solicitanteDetalle === 'ADC / Solicitante') {
+                solicitanteDetalle = s.activo?.adc || datosPropuestos?.datos?.adc || 'Sin especificar';
+            }
             const sitioAnterior = s.sitio_anterior_id ? await db.sitio.findUnique({ where: { id: s.sitio_anterior_id } }) : null;
             const sitioNuevo = s.sitio_nuevo_id ? await db.sitio.findUnique({ where: { id: s.sitio_nuevo_id } }) : null;
             const fechaEnvioFormatted = datosPropuestos?.fecha_envio_formatted || this.formatFechaLarga(s.fecha);
@@ -890,6 +1015,23 @@ export class FlotillaService {
                     }
                 }
             }
+        } else if (datosPropuestos && datosPropuestos.tipo === 'VINCULAR_ACCESORIO') {
+            const d = datosPropuestos.datos;
+            await this.vincularAccesorio(
+                log.activo_id,
+                d.accesorio_id,
+                d.tipo_relacion || 'ACCESORIO',
+                d.cantidad || 1,
+                d.notas || '',
+                usuarioAprobador
+            );
+        } else if (datosPropuestos && datosPropuestos.tipo === 'DESVINCULAR_ACCESORIO') {
+            const d = datosPropuestos.datos;
+            await this.desvincularAccesorio(
+                log.activo_id,
+                d.accesorio_id,
+                usuarioAprobador
+            );
         } else {
             await db.activo.update({
                 where: { id: log.activo_id },
@@ -1038,34 +1180,233 @@ export class FlotillaService {
         return { success: true, message: 'Solicitud rechazada y registrada en historial' };
     }
 
-    async vincularAccesorio(activoId: string, accesorioId: string, tipoRelacion: string, cantidad: number = 1, notas: string = '', usuarioId?: string) {
+    async solicitarVinculoAccesorio(activoId: string, accesorioId: string, tipoRelacion: string, usuarioId: string) {
         const db = this.getDb();
-        const principal = await db.activo.findUnique({ where: { id: activoId } });
-        const accesorio = await db.activo.findUnique({ where: { id: accesorioId } });
+        const principal = await db.activo.findFirst({
+            where: { OR: [{ id: activoId }, { serie: activoId }] },
+            include: { cliente: true, sitio: true }
+        });
+        const accesorio = await db.activo.findFirst({
+            where: { OR: [{ id: accesorioId }, { serie: accesorioId }] }
+        });
 
         if (!principal || !accesorio) {
             throw new NotFoundException('El equipo principal o el accesorio no existen');
         }
 
-        const vinculo = await db.activoAccesorio.create({
+        const detalleAutor = await this.obtenerDetalleUsuario(usuarioId);
+        const fechaEnvio = new Date();
+        const fechaEnvioFormatted = this.formatFechaLarga(fechaEnvio);
+        const accionNombre = `Vincular ${tipoRelacion || 'Accesorio'}`;
+
+        const motivoData = {
+            tipo: 'VINCULAR_ACCESORIO',
+            accion_nombre: accionNombre,
+            solicitante: detalleAutor,
+            solicitante_id: usuarioId,
+            equipo_serie: principal.serie,
+            equipo_modelo: principal.modelo || '-',
+            cliente_nombre: principal.cliente?.razon_social || '-',
+            sitio_anterior_nombre: principal.sitio?.nombre || 'Sin sitio',
+            sitio_nuevo_nombre: principal.sitio?.nombre || 'Sin sitio',
+            fecha_envio: fechaEnvio.toISOString(),
+            fecha_envio_formatted: fechaEnvioFormatted,
+            datos: {
+                accesorio_id: accesorio.id,
+                accesorio_serie: accesorio.serie,
+                accesorio_modelo: accesorio.modelo || '-',
+                tipo_relacion: tipoRelacion,
+                cantidad: 1
+            }
+        };
+
+        await db.auditoria.create({
             data: {
-                activo_id: activoId,
-                accesorio_id: accesorioId,
+                modulo: 'FLOTILLA',
+                registro_id: principal.id,
+                accion: 'SOLICITUD_VINCULO_ACCESORIO',
+                usuario_id: usuarioId,
+                valor_anterior: null,
+                valor_nuevo: { accesorio_id: accesorio.id, serie: accesorio.serie, tipo_relacion: tipoRelacion },
+                observaciones: `Solicitud de vinculación de ${accesorio.serie} a equipo ${principal.serie} enviada por ${detalleAutor}`
+            }
+        });
+
+        const log = await db.cambioSitioLog.create({
+            data: {
+                activo_id: principal.id,
+                sitio_anterior_id: principal.sitio_id || null,
+                sitio_nuevo_id: principal.sitio_id || 'sin_sitio',
+                motivo: JSON.stringify(motivoData),
+                aprobado: false,
+                usuario_id: usuarioId
+            }
+        });
+
+        await this.notificarAdmins(
+            `📋 Nueva Solicitud: ${accionNombre} - Serie: ${principal.serie}`,
+            `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
+            `• Acción: ${accionNombre}\n` +
+            `• Solicitante / ADC: ${detalleAutor}\n` +
+            `• Equipo Principal: Serie ${principal.serie} (${principal.modelo || '-'})\n` +
+            `• Accesorio: Serie ${accesorio.serie} (${accesorio.modelo || '-'})\n` +
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
+        );
+
+        return {
+            success: true,
+            message: 'Solicitud de vinculación enviada para aprobación de Administración/Gerencia',
+            logId: log.id
+        };
+    }
+
+    async solicitarDesvinculoAccesorio(activoId: string, accesorioId: string, usuarioId: string) {
+        const db = this.getDb();
+        const principal = await db.activo.findFirst({
+            where: { OR: [{ id: activoId }, { serie: activoId }] },
+            include: { cliente: true, sitio: true }
+        });
+        const accesorio = await db.activo.findFirst({
+            where: { OR: [{ id: accesorioId }, { serie: accesorioId }] }
+        });
+
+        if (!principal || !accesorio) {
+            throw new NotFoundException('El equipo principal o el accesorio no existen');
+        }
+
+        const detalleAutor = await this.obtenerDetalleUsuario(usuarioId);
+        const fechaEnvio = new Date();
+        const fechaEnvioFormatted = this.formatFechaLarga(fechaEnvio);
+        const accionNombre = 'Desvincular Accesorio';
+
+        const motivoData = {
+            tipo: 'DESVINCULAR_ACCESORIO',
+            accion_nombre: accionNombre,
+            solicitante: detalleAutor,
+            solicitante_id: usuarioId,
+            equipo_serie: principal.serie,
+            equipo_modelo: principal.modelo || '-',
+            cliente_nombre: principal.cliente?.razon_social || '-',
+            sitio_anterior_nombre: principal.sitio?.nombre || 'Sin sitio',
+            sitio_nuevo_nombre: principal.sitio?.nombre || 'Sin sitio',
+            fecha_envio: fechaEnvio.toISOString(),
+            fecha_envio_formatted: fechaEnvioFormatted,
+            datos: {
+                accesorio_id: accesorio.id,
+                accesorio_serie: accesorio.serie,
+                accesorio_modelo: accesorio.modelo || '-'
+            }
+        };
+
+        await db.auditoria.create({
+            data: {
+                modulo: 'FLOTILLA',
+                registro_id: principal.id,
+                accion: 'SOLICITUD_DESVINCULO_ACCESORIO',
+                usuario_id: usuarioId,
+                valor_anterior: null,
+                valor_nuevo: { accesorio_id: accesorio.id, serie: accesorio.serie },
+                observaciones: `Solicitud de desvinculación de ${accesorio.serie} enviada por ${detalleAutor}`
+            }
+        });
+
+        const log = await db.cambioSitioLog.create({
+            data: {
+                activo_id: principal.id,
+                sitio_anterior_id: principal.sitio_id || null,
+                sitio_nuevo_id: principal.sitio_id || 'sin_sitio',
+                motivo: JSON.stringify(motivoData),
+                aprobado: false,
+                usuario_id: usuarioId
+            }
+        });
+
+        await this.notificarAdmins(
+            `📋 Nueva Solicitud: ${accionNombre} - Serie: ${principal.serie}`,
+            `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
+            `• Acción: ${accionNombre}\n` +
+            `• Solicitante / ADC: ${detalleAutor}\n` +
+            `• Equipo Principal: Serie ${principal.serie}\n` +
+            `• Accesorio a Desvincular: Serie ${accesorio.serie}\n` +
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
+        );
+
+        return {
+            success: true,
+            message: 'Solicitud de desvinculación enviada para aprobación de Administración/Gerencia',
+            logId: log.id
+        };
+    }
+
+    async vincularAccesorio(activoId: string, accesorioId: string, tipoRelacion: string, cantidad: number = 1, notas: string = '', usuarioId?: string) {
+        const db = this.getDb();
+        const principal = await db.activo.findFirst({
+            where: { OR: [{ id: activoId }, { serie: activoId }] }
+        });
+        const accesorio = await db.activo.findFirst({
+            where: { OR: [{ id: accesorioId }, { serie: accesorioId }] }
+        });
+
+        if (!principal || !accesorio) {
+            throw new NotFoundException('El equipo principal o el accesorio no existen');
+        }
+
+        const vinculo = await db.activoAccesorio.upsert({
+            where: {
+                activo_id_accesorio_id: {
+                    activo_id: principal.id,
+                    accesorio_id: accesorio.id
+                }
+            },
+            update: {
+                tipo_relacion: tipoRelacion.toUpperCase(),
+                cantidad,
+                notas
+            },
+            create: {
+                activo_id: principal.id,
+                accesorio_id: accesorio.id,
                 tipo_relacion: tipoRelacion.toUpperCase(),
                 cantidad,
                 notas
             }
         });
 
+        const detalleUsuario = await this.obtenerDetalleUsuario(usuarioId || 'sistema');
+
         await db.auditoria.create({
             data: {
                 modulo: 'FLOTILLA',
-                registro_id: activoId,
+                registro_id: principal.id,
                 accion: 'VINCULAR_ACCESORIO',
                 usuario_id: usuarioId || 'sistema',
                 valor_anterior: null,
-                valor_nuevo: { accesorio_id: accesorioId, serie_accesorio: accesorio.id, tipo_relacion: tipoRelacion },
-                observaciones: `Se vinculó el accesorio ${accesorio.id} al equipo ${principal.id}`
+                valor_nuevo: { accesorio_id: accesorio.id, serie_accesorio: accesorio.serie, modelo: accesorio.modelo, tipo_relacion: tipoRelacion, cantidad },
+                observaciones: `Se vinculó el accesorio ${accesorio.tipo || 'ACCESORIO'} (Serie: ${accesorio.serie}, Modelo: ${accesorio.modelo || '-'}) al equipo (Serie: ${principal.serie}). Realizado por: ${detalleUsuario}`
+            }
+        });
+
+        await db.cambioSitioLog.create({
+            data: {
+                activo_id: principal.id,
+                sitio_anterior_id: principal.sitio_id || null,
+                sitio_nuevo_id: principal.sitio_id || 'sin_sitio',
+                motivo: JSON.stringify({
+                    tipo: 'EDICION',
+                    accion_nombre: 'Vincular Accesorio',
+                    solicitante: detalleUsuario,
+                    solicitante_id: usuarioId || 'sistema',
+                    estado: 'APROBADA',
+                    aprobado_por: detalleUsuario,
+                    datos: {
+                        accesorio_serie: accesorio.serie,
+                        accesorio_modelo: accesorio.modelo || '-',
+                        tipo_relacion: tipoRelacion,
+                        cantidad
+                    }
+                }),
+                aprobado: true,
+                usuario_id: usuarioId || 'sistema'
             }
         });
 
@@ -1074,12 +1415,22 @@ export class FlotillaService {
 
     async desvincularAccesorio(activoId: string, accesorioId: string, usuarioId?: string) {
         const db = this.getDb();
-        
+        const principal = await db.activo.findFirst({
+            where: { OR: [{ id: activoId }, { serie: activoId }] }
+        });
+        const accesorio = await db.activo.findFirst({
+            where: { OR: [{ id: accesorioId }, { serie: accesorioId }] }
+        });
+
+        if (!principal || !accesorio) {
+            throw new NotFoundException('El equipo principal o el accesorio no existen');
+        }
+
         const vinculo = await db.activoAccesorio.findUnique({
             where: {
                 activo_id_accesorio_id: {
-                    activo_id: activoId,
-                    accesorio_id: accesorioId
+                    activo_id: principal.id,
+                    accesorio_id: accesorio.id
                 }
             }
         });
@@ -1091,21 +1442,44 @@ export class FlotillaService {
         await db.activoAccesorio.delete({
             where: {
                 activo_id_accesorio_id: {
-                    activo_id: activoId,
-                    accesorio_id: accesorioId
+                    activo_id: principal.id,
+                    accesorio_id: accesorio.id
                 }
             }
         });
 
+        const detalleUsuario = await this.obtenerDetalleUsuario(usuarioId || 'sistema');
+
         await db.auditoria.create({
             data: {
                 modulo: 'FLOTILLA',
-                registro_id: activoId,
+                registro_id: principal.id,
                 accion: 'DESVINCULAR_ACCESORIO',
                 usuario_id: usuarioId || 'sistema',
-                valor_anterior: { accesorio_id: accesorioId },
+                valor_anterior: { accesorio_id: accesorio.id, serie: accesorio.serie },
                 valor_nuevo: null,
-                observaciones: `Se desvinculó el accesorio ${accesorioId} del equipo ${activoId}`
+                observaciones: `Se desvinculó el accesorio (Serie: ${accesorio.serie}) del equipo (Serie: ${principal.serie}). Realizado por: ${detalleUsuario}`
+            }
+        });
+
+        await db.cambioSitioLog.create({
+            data: {
+                activo_id: principal.id,
+                sitio_anterior_id: principal.sitio_id || null,
+                sitio_nuevo_id: principal.sitio_id || 'sin_sitio',
+                motivo: JSON.stringify({
+                    tipo: 'EDICION',
+                    accion_nombre: 'Desvincular Accesorio',
+                    solicitante: detalleUsuario,
+                    solicitante_id: usuarioId || 'sistema',
+                    estado: 'APROBADA',
+                    aprobado_por: detalleUsuario,
+                    datos: {
+                        accesorio_desvinculado: accesorio.serie
+                    }
+                }),
+                aprobado: true,
+                usuario_id: usuarioId || 'sistema'
             }
         });
 

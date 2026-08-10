@@ -2,6 +2,8 @@ import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
+import TooltipInfo from '@/components/ui/TooltipInfo';
+
 export default function TotalPorClienteTable({ data, moneda }: { data: any[], moneda: string }) {
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('es-MX', { style: 'currency', currency: moneda }).format(val);
@@ -10,7 +12,10 @@ export default function TotalPorClienteTable({ data, moneda }: { data: any[], mo
     return (
         <Card className="shadow-sm border-slate-100 overflow-hidden">
             <CardHeader className="bg-slate-50 border-b border-slate-100">
-                <CardTitle className="text-lg font-bold text-slate-800">Total a Facturar por Cliente</CardTitle>
+                <CardTitle className="text-lg font-bold text-slate-800 flex items-center">
+                    Total a Facturar por Cliente
+                    <TooltipInfo text="Desglose del monto total proyectado para facturar desglosado por cada cliente." />
+                </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
                 <div className="max-h-[300px] overflow-auto">

@@ -70,6 +70,14 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
     const { user, signOut } = useAuthStore();
     const { roleColors } = useConfigStore();
 
+    const stringRole = (typeof user?.role === 'string' ? user.role : (user?.role as any)?.name || '')?.toLowerCase();
+    const currentColor = roleColors[stringRole] || (stringRole.includes('gerent') ? '#16a34a' : roleColors.administrador);
+    const subtitleText = stringRole.includes('gerent') 
+        ? 'Gerencia Comercial' 
+        : stringRole.includes('adc') 
+            ? 'ADC Comercial' 
+            : 'Admin Comercial';
+
     const handleConfirmLogout = async () => {
         await signOut();
         window.location.href = '/login';
@@ -90,12 +98,12 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                     <div className="flex flex-col -gap-1">
                         <span 
                             className="text-2xl font-black font-brand tracking-tighter leading-none"
-                            style={{ color: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador }}
+                            style={{ color: currentColor }}
                         >
                             RAYMOND
                         </span>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">
-                            Admin Comercial
+                            {subtitleText}
                         </span>
                     </div>
                 )}

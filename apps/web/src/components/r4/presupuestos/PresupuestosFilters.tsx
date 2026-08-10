@@ -3,15 +3,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, Search, Loader2, RotateCcw } from 'lucide-react';
 import dayjs from 'dayjs';
 
 interface FiltersProps {
     filters: any;
     setFilters: (filters: any) => void;
+    onSearch?: () => void;
+    onReset?: () => void;
+    isSearching?: boolean;
 }
 
-export default function PresupuestosFilters({ filters, setFilters }: FiltersProps) {
+export default function PresupuestosFilters({ filters, setFilters, onSearch, onReset, isSearching }: FiltersProps) {
     const years = Array.from({ length: 5 }, (_, i) => (dayjs().year() - 2 + i).toString());
     const months = [
         { val: '1', label: 'Enero' }, { val: '2', label: 'Febrero' }, { val: '3', label: 'Marzo' },
@@ -66,20 +69,40 @@ export default function PresupuestosFilters({ filters, setFilters }: FiltersProp
                         </Select>
                     </div>
 
-                    <div className="space-y-1.5 lg:col-span-2 flex items-end">
-                        <div className="w-full space-y-1.5 opacity-50 cursor-not-allowed">
-                             {/* Placeholder for Client/Site select which needs data fetching */}
-                             <Label className="text-xs font-semibold text-slate-500 uppercase">Filtros Adicionales (Cliente/ADC)</Label>
-                             <div className="h-10 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 flex items-center">
-                                 Todos los clientes y ADCs
-                             </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end">
+                    <div className="flex items-center gap-2 lg:col-span-3 justify-end">
+                        {onReset && (
+                            <Button
+                                variant="outline"
+                                onClick={onReset}
+                                title="Restaurar filtros iniciales"
+                                className="border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-bold"
+                            >
+                                <RotateCcw className="w-4 h-4 mr-2" />
+                                Restaurar
+                            </Button>
+                        )}
+                        {onSearch && (
+                            <Button 
+                                onClick={onSearch}
+                                disabled={isSearching}
+                                className="flex-1 lg:flex-initial bg-slate-900 text-white hover:bg-slate-800 font-bold px-6"
+                            >
+                                {isSearching ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin text-white" />
+                                        Buscando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Search className="w-4 h-4 mr-2" />
+                                        Buscar
+                                    </>
+                                )}
+                            </Button>
+                        )}
                         <Button 
                             variant="outline" 
-                            className="w-full lg:w-auto border-amber-600 text-amber-700 hover:bg-amber-50"
+                            className="flex-1 lg:flex-initial border-slate-200 text-slate-700 hover:bg-slate-50"
                             onClick={() => alert('Generando reporte PDF/Excel...')}
                         >
                             <Download className="w-4 h-4 mr-2" />

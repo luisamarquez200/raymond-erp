@@ -107,6 +107,10 @@ export default function GestionUsuarios() {
         setShowPassword(false);
         setAdcAsociadoName('ninguno');
         setIsCreateOpen(true);
+        setTimeout(() => {
+            setEmail('');
+            setPassword('');
+        }, 100);
     };
 
     const handleOpenEdit = (user: User) => {
@@ -336,72 +340,92 @@ export default function GestionUsuarios() {
 
             {/* CREATE MODAL */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="max-w-md rounded-3xl p-6">
+                <DialogContent className="max-w-md rounded-3xl p-6 bg-white border border-slate-200 text-slate-900 shadow-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black text-slate-900">Crear Nuevo Usuario</DialogTitle>
                         <DialogDescription className="text-slate-500 font-medium mt-1">
                             Ingresa los datos para registrar una nueva cuenta.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleCreate} className="space-y-4 py-4">
+                    <form onSubmit={handleCreate} className="space-y-4 py-4" autoComplete="off">
+                        {/* Hidden fake inputs to prevent browser autofill of saved credentials */}
+                        <input type="text" name="fake_username" className="hidden" tabIndex={-1} aria-hidden="true" autoComplete="off" />
+                        <input type="password" name="fake_password" className="hidden" tabIndex={-1} aria-hidden="true" autoComplete="off" />
+
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="c-firstName">Nombre *</Label>
-                                <Input id="c-firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required placeholder="Juan" className="rounded-xl" />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="c-firstName" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Nombre *</Label>
+                                <Input id="c-firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required placeholder="Juan" className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold placeholder:text-slate-400 focus:bg-white" autoComplete="off" />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="c-lastName">Apellido *</Label>
-                                <Input id="c-lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} required placeholder="Pérez" className="rounded-xl" />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="c-lastName" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Apellido *</Label>
+                                <Input id="c-lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} required placeholder="Pérez" className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold placeholder:text-slate-400 focus:bg-white" autoComplete="off" />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="c-email">Email *</Label>
-                            <Input id="c-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="correo@raymond.com" className="rounded-xl" />
+                        <div className="space-y-1.5">
+                            <Label htmlFor="c-email" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Email *</Label>
+                            <Input 
+                                id="c-email" 
+                                type="text" 
+                                readOnly
+                                onFocus={(e) => e.target.removeAttribute('readonly')}
+                                value={email} 
+                                onChange={(e) => setEmail(e.target.value)} 
+                                required 
+                                placeholder="correo@raymond.com" 
+                                className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold placeholder:text-slate-400 focus:bg-white" 
+                                autoComplete="off" 
+                                name="create_user_email_no_autofill" 
+                            />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="c-password">Contraseña *</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="c-password" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Contraseña *</Label>
                             <div className="relative">
                                 <Input 
                                     id="c-password" 
                                     type={showPassword ? 'text' : 'password'} 
+                                    readOnly
+                                    onFocus={(e) => e.target.removeAttribute('readonly')}
                                     value={password} 
                                     onChange={(e) => setPassword(e.target.value)} 
                                     required 
                                     placeholder="********" 
-                                    className="rounded-xl pr-10" 
+                                    className="rounded-xl pr-10 bg-slate-50 border-slate-200 text-slate-900 font-bold placeholder:text-slate-400 focus:bg-white" 
+                                    autoComplete="new-password"
+                                    name="create_user_password_no_autofill"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
                                 >
                                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="c-role">Rol *</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="c-role" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Rol *</Label>
                             <Select value={roleId} onValueChange={setRoleId}>
-                                <SelectTrigger className="rounded-xl">
+                                <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold focus:bg-white">
                                     <SelectValue placeholder="Selecciona un rol" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl">
+                                <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
                                     {roles.map((r: any) => (
-                                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                        <SelectItem key={r.id} value={r.id} className="text-slate-900 font-bold cursor-pointer">{r.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="c-adcAsociado">Asociar a un ADC (Opcional)</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="c-adcAsociado" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a un ADC (Opcional)</Label>
                             <Select value={adcAsociadoName} onValueChange={setAdcAsociadoName}>
-                                <SelectTrigger className="rounded-xl">
+                                <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold focus:bg-white">
                                     <SelectValue placeholder="Ninguno" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl">
-                                    <SelectItem value="ninguno">Ninguno</SelectItem>
+                                <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                    <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
                                     {adcsList.map((adc: any, idx: number) => (
-                                        <SelectItem key={idx} value={adc.name}>{adc.name}</SelectItem>
+                                        <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -423,30 +447,30 @@ export default function GestionUsuarios() {
 
             {/* EDIT MODAL */}
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                <DialogContent className="max-w-md rounded-3xl p-6">
+                <DialogContent className="max-w-md rounded-3xl p-6 bg-white border border-slate-200 text-slate-900 shadow-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black text-slate-900">Editar Usuario</DialogTitle>
                         <DialogDescription className="text-slate-500 font-medium mt-1">
                             Modifica los datos del usuario. Deja la contraseña en blanco si no quieres cambiarla.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleEdit} className="space-y-4 py-4">
+                    <form onSubmit={handleEdit} className="space-y-4 py-4" autoComplete="off">
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="e-firstName">Nombre *</Label>
-                                <Input id="e-firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="rounded-xl" />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="e-firstName" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Nombre *</Label>
+                                <Input id="e-firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold" />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="e-lastName">Apellido *</Label>
-                                <Input id="e-lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="rounded-xl" />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="e-lastName" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Apellido *</Label>
+                                <Input id="e-lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold" />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="e-email">Email *</Label>
-                            <Input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="rounded-xl" />
+                        <div className="space-y-1.5">
+                            <Label htmlFor="e-email" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Email *</Label>
+                            <Input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold" />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="e-password">Contraseña (Nueva)</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="e-password" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Contraseña (Nueva)</Label>
                             <div className="relative">
                                 <Input 
                                     id="e-password" 
@@ -454,40 +478,41 @@ export default function GestionUsuarios() {
                                     value={password} 
                                     onChange={(e) => setPassword(e.target.value)} 
                                     placeholder="Dejar en blanco para no cambiar" 
-                                    className="rounded-xl pr-10" 
+                                    className="rounded-xl pr-10 bg-slate-50 border-slate-200 text-slate-900 font-bold placeholder:text-slate-400" 
+                                    autoComplete="new-password"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
                                 >
                                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="e-role">Rol *</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="e-role" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Rol *</Label>
                             <Select value={roleId} onValueChange={setRoleId}>
-                                <SelectTrigger className="rounded-xl">
+                                <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold">
                                     <SelectValue placeholder="Selecciona un rol" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl">
+                                <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
                                     {roles.map((r: any) => (
-                                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                        <SelectItem key={r.id} value={r.id} className="text-slate-900 font-bold cursor-pointer">{r.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="e-adcAsociado">Asociar a un ADC (Opcional)</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="e-adcAsociado" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a un ADC (Opcional)</Label>
                             <Select value={adcAsociadoName} onValueChange={setAdcAsociadoName}>
-                                <SelectTrigger className="rounded-xl">
+                                <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold">
                                     <SelectValue placeholder="Ninguno" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl">
-                                    <SelectItem value="ninguno">Ninguno</SelectItem>
+                                <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                    <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
                                     {adcsList.map((adc: any, idx: number) => (
-                                        <SelectItem key={idx} value={adc.name}>{adc.name}</SelectItem>
+                                        <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

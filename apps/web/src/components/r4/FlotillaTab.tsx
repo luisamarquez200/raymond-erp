@@ -197,8 +197,14 @@ export default function FlotillaTab() {
   const loggedInAdcName = user 
     ? (userRole === 'auxiliar' || userRole.includes('auxiliar'))
       ? (user.adc_asociado_name || '')
-      : `${user.firstName} ${user.lastName || ''}`.trim()
+      : `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || ''
     : '';
+
+  useEffect(() => {
+    if (isNewAssetModalOpen && isAdc && loggedInAdcName) {
+      setNewAssetAdc(loggedInAdcName);
+    }
+  }, [isNewAssetModalOpen, isAdc, loggedInAdcName]);
 
   const fetchFlotilla = async () => {
     try {
@@ -482,20 +488,27 @@ export default function FlotillaTab() {
         estatus_operativo: newAssetEstatus,
         cliente_id: newAssetCliente,
         sitio_id: newAssetSitio,
-        adc: newAssetAdc || loggedInAdcName,
+        adc: isAdc ? (loggedInAdcName || newAssetAdc) : (newAssetAdc || loggedInAdcName),
         distribuidor: newAssetDistribuidor,
         propietario: newAssetPropietario,
         ...(rentaPayload && { renta: rentaPayload }),
       };
 
-      // Direct creation (only allowed for admins/coordinators)
-      await api.post('/r4/flotilla', payload);
-      toast.success(hasRentaData ? 'Equipo y Renta registrados con éxito' : 'Equipo registrado con éxito');
+      if (isAdc) {
+        // Altas solicitadas por ADC requieren aprobación de Administrador / Gerencia
+        await api.post('/r4/flotilla/solicitar-alta', payload);
+        toast.success('Solicitud de alta enviada para aprobación de Administración/Gerencia');
+      } else {
+        // Creación directa permitida para Administradores, Gerencia y Coordinación
+        await api.post('/r4/flotilla', payload);
+        toast.success(hasRentaData ? 'Equipo y Renta registrados con éxito' : 'Equipo registrado con éxito');
+      }
       setIsNewAssetModalOpen(false);
       fetchFlotilla();
+      fetchPendingApprovals();
     } catch (error) {
       console.error('Error creating asset:', error);
-      toast.error('Error al dar de alta el equipo');
+      toast.error('Error al procesar el alta del equipo');
     }
   };
 
@@ -1280,11 +1293,24 @@ export default function FlotillaTab() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Ejecutivo (ADC)</label>
-                    <select value={newAssetAdc} onChange={(e) => setNewAssetAdc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
-                      <option value="">Seleccionar ADC</option>
-                      {uniqueADCs.map(adc => <option key={adc} value={adc}>{adc}</option>)}
-                    </select>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-bold text-slate-700">Ejecutivo (ADC) *</label>
+                    {isAdc ? (
+                      <div>
+                        <input 
+                          type="text" 
+                          value={newAssetAdc || loggedInAdcName} 
+                          readOnly 
+                          disabled 
+                          className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-800 font-bold focus:outline-none cursor-not-allowed" 
+                        />
+                        <p className="text-[9px] text-amber-600 font-semibold mt-1">Asignado automáticamente a tu sesión de ADC</p>
+                      </div>
+                    ) : (
+                      <select value={newAssetAdc} onChange={(e) => setNewAssetAdc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                        <option value="">Seleccionar ADC</option>
+                        {uniqueADCs.map(adc => <option key={adc} value={adc}>{adc}</option>)}
+                      </select>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>

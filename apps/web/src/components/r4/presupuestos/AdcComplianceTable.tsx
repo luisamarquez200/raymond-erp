@@ -10,6 +10,8 @@ interface AdcCompliance {
     cumplimiento: number;
 }
 
+import TooltipInfo from '@/components/ui/TooltipInfo';
+
 export default function AdcComplianceTable({ data }: { data: AdcCompliance[] }) {
     const sortedData = [...data].sort((a, b) => b.cumplimiento - a.cumplimiento);
 
@@ -20,7 +22,10 @@ export default function AdcComplianceTable({ data }: { data: AdcCompliance[] }) 
     return (
         <Card className="shadow-sm border-slate-100 overflow-hidden">
             <CardHeader className="bg-slate-50 border-b border-slate-100">
-                <CardTitle className="text-lg font-bold text-slate-800">Cumplimiento por ADC</CardTitle>
+                <CardTitle className="text-lg font-bold text-slate-800 flex items-center">
+                    Cumplimiento por ADC
+                    <TooltipInfo text="Muestra el porcentaje de avance individual alcanzado por cada Ejecutivo Comercial (ADC) en su cartera de clientes." />
+                </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
                 <div className="max-h-[400px] overflow-auto">

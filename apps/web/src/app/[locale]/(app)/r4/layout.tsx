@@ -11,16 +11,26 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 
 import NotificationBell from '@/components/navigation/NotificationBell';
+import { useConfigStore } from '@/store/config.store';
 
 const queryClient = new QueryClient();
 
 export default function R4Layout({ children }: { children: React.ReactNode }) {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const { user, isLoading } = useAuthStore();
+    const { roleColors } = useConfigStore();
     const router = useRouter();
     const pathname = usePathname();
     const params = useParams();
     const [isClient, setIsClient] = useState(false);
+
+    const stringRole = (typeof user?.role === 'string' ? user.role : (user?.role as any)?.name || '')?.toLowerCase();
+    const currentColor = roleColors[stringRole] || (stringRole.includes('gerent') ? '#16a34a' : roleColors.administrador);
+    const subtitleText = stringRole.includes('gerent') 
+        ? 'Gerencia Comercial' 
+        : stringRole.includes('adc') 
+            ? 'ADC Comercial' 
+            : 'Admin Comercial';
 
     useEffect(() => {
         setIsClient(true);
@@ -36,7 +46,12 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
                 const roleLower = user.role?.toLowerCase() || '';
                 const hasR4Access = user.isSuperadmin || 
                     roleLower === 'administrador' || 
+                    roleLower === 'admin' ||
                     roleLower === 'adc' ||
+                    roleLower.includes('gerent') ||
+                    roleLower.includes('coordinad') ||
+                    roleLower.includes('coordinaci') ||
+                    roleLower.includes('auxiliar') ||
                     roleLower.includes('r4') ||
                     (user as any).sitio?.includes('R4');
                 
@@ -73,9 +88,14 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
                         </SheetContent>
                     </Sheet>
                     <div className="flex flex-col flex-1">
-                        <span className="text-xl font-black text-amber-600 font-brand tracking-tighter leading-none">RAYMOND</span>
+                        <span 
+                            className="text-xl font-black font-brand tracking-tighter leading-none"
+                            style={{ color: currentColor }}
+                        >
+                            RAYMOND
+                        </span>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">
-                            Admin Comercial
+                            {subtitleText}
                         </span>
                     </div>
                     <NotificationBell />

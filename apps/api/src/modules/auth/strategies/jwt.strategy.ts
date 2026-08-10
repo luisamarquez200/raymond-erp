@@ -93,25 +93,28 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             organization_id = user.organization_id || null;
         }
 
+        const roleName = user.roles?.name || (typeof user.roles === 'string' ? user.roles : payload.role || 'Usuario');
+
         // CRITICAL: Set UserContext BEFORE returning user object
         // This ensures Prisma extension can access it
         UserContext.setUser({
             id: user.id,
-            roles: user.roles.name,
+            roles: roleName,
             isSuperadmin: isSuperadmin,
         });
 
         if (process.env.NODE_ENV === 'development') {
-            console.log(`[JwtStrategy] UserContext set - id: ${user.id}, roles: ${user.roles.name}, isSuperadmin: ${isSuperadmin}, isCEO: ${isCEO}, org: ${organization_id}`);
+            console.log(`[JwtStrategy] UserContext set - id: ${user.id}, roles: ${roleName}, isSuperadmin: ${isSuperadmin}, isCEO: ${isCEO}, org: ${organization_id}`);
         }
 
         return {
             id: user.id,
             email: user.email,
             role_id: user.role_id,
-            roles: user.roles.name,
+            roles: roleName,
             first_name: user.first_name,
             last_name: user.last_name,
+            adc_asociado_name: (user as any).adc_asociado_name,
             organization_id,
             isSuperadmin, // Add flag for guards and services
             isCEO, // Add CEO flag for role-specific validations

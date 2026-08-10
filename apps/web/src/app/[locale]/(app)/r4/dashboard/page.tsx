@@ -9,6 +9,7 @@ import api from '@/lib/api';
 import { useConfigStore } from '@/store/config.store';
 import { useAuthStore } from '@/store/auth.store';
 import { Loader2, Truck, Users, Receipt, TrendingUp, BarChart3, PieChart, Activity } from 'lucide-react';
+import TooltipInfo from '@/components/ui/TooltipInfo';
 
 export default function R4DashboardPage() {
   const { user } = useAuthStore();
@@ -108,7 +109,10 @@ export default function R4DashboardPage() {
                   <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl">
                     <Truck className="w-5 h-5" />
                   </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Equipos en flotilla</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                    Equipos en flotilla
+                    <TooltipInfo text="Inventario total de equipos y montacargas registrados en la flotilla." />
+                  </p>
                 </div>
                 <h3 className="text-3xl font-bold text-slate-900 mt-2">{kpisPrincipales?.equiposFlotilla?.toLocaleString() || 0}</h3>
                 <p className="text-[11px] text-slate-400 font-semibold mt-2">Total asignado</p>
@@ -120,7 +124,10 @@ export default function R4DashboardPage() {
                   <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl">
                     <Users className="w-5 h-5" />
                   </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cuentas activas</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                    Cuentas activas
+                    <TooltipInfo text="Total de clientes con al menos un contrato o equipo activo en operación." />
+                  </p>
                 </div>
                 <h3 className="text-3xl font-bold text-slate-900 mt-2">{kpisPrincipales?.cuentasActivas?.toLocaleString() || 0}</h3>
                 <p className="text-[11px] text-slate-400 font-semibold mt-2">Con equipo o contrato vigente</p>
@@ -132,7 +139,10 @@ export default function R4DashboardPage() {
                   <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl">
                     <Receipt className="w-5 h-5" />
                   </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pedidos generados</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                    Pedidos generados
+                    <TooltipInfo text="Suma monetaria total de las órdenes colocadas durante el mes corriente." />
+                  </p>
                 </div>
                 <h3 className="text-3xl font-bold text-slate-900 mt-2">{formatCurrency(kpisPrincipales?.pedidosGenerados || 0)}</h3>
                 <p className="text-[11px] text-slate-400 font-semibold mt-2">Mes corriente</p>
@@ -144,7 +154,10 @@ export default function R4DashboardPage() {
                   <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl">
                     <TrendingUp className="w-5 h-5" />
                   </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Avance presupuesto</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                    Avance presupuesto
+                    <TooltipInfo text="Porcentaje global de facturación logrado respecto a la meta del mes." />
+                  </p>
                 </div>
                 <h3 className="text-3xl font-bold text-slate-900 mt-2">{(kpisPrincipales?.avancePresupuesto || 0).toFixed(0)}%</h3>
                 <p className="text-[11px] text-slate-400 font-semibold mt-2">Mes corriente</p>
@@ -157,13 +170,19 @@ export default function R4DashboardPage() {
                 <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
                     <PieChart className="w-5 h-5" />
                 </div>
-                <h2 className="text-lg font-bold text-slate-900">Composición de la flotilla</h2>
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  Composición de la flotilla
+                  <TooltipInfo text="Desglose por tipo/clase de equipos y la cuota de participación por Ejecutivo (ADC)." />
+                </h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                 {/* Clase de equipo */}
                 <div>
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Clase de equipo</h3>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-1">
+                      Clase de equipo
+                      <TooltipInfo text="Porcentaje de la flotilla dividida por sus distintas categorías y clases operativas." />
+                    </h3>
                     <div className="space-y-5">
                         {composicionFlotilla?.claseEquipo?.map((item: any, idx: number) => {
                             const pctTotal = (item.value / totalClase) * 100;
@@ -185,7 +204,10 @@ export default function R4DashboardPage() {
 
                 {/* Participación por ADC */}
                 <div>
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Participación en volumen por ADC</h3>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-1">
+                      Participación en volumen por ADC
+                      <TooltipInfo text="Proporción del volumen de flotilla administrado por cada Ejecutivo comercial." />
+                    </h3>
                     <div className="space-y-5 overflow-y-auto max-h-[300px] pr-4 scrollbar-thin">
                         {composicionFlotilla?.participacionAdc?.map((item: any, idx: number) => {
                             const pctTotal = (item.value / totalAdc) * 100;
@@ -213,24 +235,39 @@ export default function R4DashboardPage() {
                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                     <Activity className="w-5 h-5" />
                 </div>
-                <h2 className="text-lg font-bold text-slate-900">Presupuesto del mes y comportamiento histórico</h2>
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  Presupuesto del mes y comportamiento histórico
+                  <TooltipInfo text="Evolución mensual comparativa del objetivo presupuestal frente a lo cubierto y pendientes." />
+                </h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Objetivo del mes</p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                      Objetivo del mes
+                      <TooltipInfo text="Meta presupuestal fijada para el mes en curso." />
+                    </p>
                     <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(presupuestoHistorico?.stats?.objetivo || 0)}</h3>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Cubierto del mes</p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                      Cubierto del mes
+                      <TooltipInfo text="Monto de facturación efectivamente cubierto en el mes." />
+                    </p>
                     <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(presupuestoHistorico?.stats?.cubierto || 0)}</h3>
                 </div>
                 <div className="bg-red-50 p-5 rounded-2xl border border-red-100">
-                    <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">Pendiente meses pasados</p>
+                    <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1 flex items-center gap-1">
+                      Pendiente meses pasados
+                      <TooltipInfo text="Acumulado por recuperar derivado de meses anteriores no cubiertos." />
+                    </p>
                     <h3 className="text-2xl font-bold text-red-600">{formatCurrency(presupuestoHistorico?.stats?.pendienteMesesPasados || 0)}</h3>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Meta real por cubrir</p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                      Meta real por cubrir
+                      <TooltipInfo text="Meta total a alcanzar sumando el objetivo actual y el pendiente acumulado." />
+                    </p>
                     <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(presupuestoHistorico?.stats?.metaRealCubrir || 0)}</h3>
                 </div>
             </div>

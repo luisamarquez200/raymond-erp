@@ -18,6 +18,8 @@ interface SummaryCardsProps {
     moneda: string;
 }
 
+import TooltipInfo from '@/components/ui/TooltipInfo';
+
 export default function SummaryCards({ stats, moneda }: SummaryCardsProps) {
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('es-MX', { style: 'currency', currency: moneda }).format(val);
@@ -32,7 +34,10 @@ export default function SummaryCards({ stats, moneda }: SummaryCardsProps) {
             {/* Presupuesto del Mes */}
             <Card className="hover:shadow-lg transition-all duration-300 border-slate-100 group">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                    <CardTitle className="text-sm font-medium text-slate-500">Presupuesto del Mes</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-500 flex items-center">
+                        Presupuesto del Mes
+                        <TooltipInfo text="Monto total estimado como meta de facturación mensual para el periodo seleccionado." />
+                    </CardTitle>
                     <DollarSign className="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition-colors" />
                 </CardHeader>
                 <CardContent>
@@ -44,7 +49,10 @@ export default function SummaryCards({ stats, moneda }: SummaryCardsProps) {
             {/* Acumulado */}
             <Card className="hover:shadow-lg transition-all duration-300 border-slate-100 group">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                    <CardTitle className="text-sm font-medium text-slate-500">Pendiente Acumulado</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-500 flex items-center">
+                        Pendiente Acumulado
+                        <TooltipInfo text="Suma acumulada de los montos no cubiertos en meses anteriores que requieren recuperación." />
+                    </CardTitle>
                     <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition-colors" />
                 </CardHeader>
                 <CardContent>
@@ -56,7 +64,10 @@ export default function SummaryCards({ stats, moneda }: SummaryCardsProps) {
             {/* Total a Facturar */}
             <Card className="hover:shadow-lg transition-all duration-300 border-slate-100 bg-amber-50/50 group">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                    <CardTitle className="text-sm font-bold text-amber-900">Total a Facturar</CardTitle>
+                    <CardTitle className="text-sm font-bold text-amber-900 flex items-center">
+                        Total a Facturar
+                        <TooltipInfo text="Meta total combinada: Presupuesto del mes actual más el Pendiente acumulado de meses anteriores." />
+                    </CardTitle>
                     <TrendingUp className="w-4 h-4 text-amber-600" />
                 </CardHeader>
                 <CardContent>
@@ -68,7 +79,10 @@ export default function SummaryCards({ stats, moneda }: SummaryCardsProps) {
             {/* Cumplimiento */}
             <Card className="hover:shadow-lg transition-all duration-300 border-slate-100 group">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                    <CardTitle className="text-sm font-medium text-slate-500">Cumplimiento General</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-500 flex items-center">
+                        Cumplimiento General
+                        <TooltipInfo text="Porcentaje global alcanzado respecto a la meta presupuestal total." />
+                    </CardTitle>
                     <CheckCircle2 className={cn("w-4 h-4 transition-colors", stats.cumplimiento_general >= 100 ? "text-emerald-500" : "text-amber-500")} />
                 </CardHeader>
                 <CardContent>
@@ -85,7 +99,10 @@ export default function SummaryCards({ stats, moneda }: SummaryCardsProps) {
             {/* Pedidos Enviados */}
             <Card className="hover:shadow-lg transition-all duration-300 border-slate-100 group">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                    <CardTitle className="text-sm font-medium text-slate-500">Pedidos Enviados</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-500 flex items-center">
+                        Pedidos Enviados
+                        <TooltipInfo text="Monto total de las órdenes y contratos colocados durante el mes." />
+                    </CardTitle>
                     <FileText className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
                 </CardHeader>
                 <CardContent>
@@ -97,7 +114,10 @@ export default function SummaryCards({ stats, moneda }: SummaryCardsProps) {
             {/* Faltante */}
             <Card className="hover:shadow-lg transition-all duration-300 border-slate-100 group">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                    <CardTitle className="text-sm font-medium text-slate-500">Faltante</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-500 flex items-center">
+                        Faltante
+                        <TooltipInfo text="Diferencia monetaria entre el Total a facturar y el monto total de pedidos enviados." />
+                    </CardTitle>
                     <AlertCircle className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
                 </CardHeader>
                 <CardContent>

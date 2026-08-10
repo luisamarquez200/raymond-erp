@@ -61,7 +61,43 @@ export class ClientesService {
                     sitiosCount: cliente.sitios?.length || 0,
                     activosCount: cliente.activos?.length || 0,
                     sitios: cliente.sitios?.map(s => {
-                        const contacto = (s.contacto_operativo as any) || {};
+                        let contacto: any = {};
+                        try {
+                            if (typeof s.contacto_operativo === 'string' && s.contacto_operativo.startsWith('{')) {
+                                contacto = JSON.parse(s.contacto_operativo);
+                            } else if (typeof s.contacto_operativo === 'object' && s.contacto_operativo !== null) {
+                                contacto = s.contacto_operativo;
+                            }
+                        } catch (e) {
+                            contacto = {};
+                        }
+
+                        // Cross-reference ADC from site, site contact, site assets operating in Flotilla, or client comercial
+                        const siteActivoAdc = s.activos?.find((a: any) => a.adc && a.adc !== '-' && a.adc !== 'Sin ADC')?.adc;
+                        const siteAdc = s.adc || contacto.adc || siteActivoAdc || comercial.adc || '-';
+
+                        // Extract distribuidor string safely
+                        let distName = '-';
+                        if (typeof s.distribuidor === 'string') {
+                            distName = s.distribuidor;
+                        } else if (typeof s.distribuidor === 'object' && s.distribuidor !== null) {
+                            distName = (s.distribuidor as any).nombre || (s.distribuidor as any).razon_social || '-';
+                        }
+
+                        // Extract contact info
+                        const cNombre = typeof contacto.distribuidor_contacto_nombre === 'string' ? contacto.distribuidor_contacto_nombre
+                            : (typeof contacto.contacto_nombre === 'string' ? contacto.contacto_nombre
+                            : (typeof contacto.nombre === 'string' ? contacto.nombre
+                            : (typeof contacto.tecnico === 'string' ? contacto.tecnico : '-')));
+
+                        const cTelefono = typeof contacto.distribuidor_contacto_telefono === 'string' ? contacto.distribuidor_contacto_telefono
+                            : (typeof contacto.telefono === 'string' ? contacto.telefono
+                            : (typeof contacto.tel === 'string' ? contacto.tel : '-'));
+
+                        const cCorreo = typeof contacto.distribuidor_contacto_correo === 'string' ? contacto.distribuidor_contacto_correo
+                            : (typeof contacto.correo === 'string' ? contacto.correo
+                            : (typeof contacto.email === 'string' ? contacto.email : '-'));
+
                         return {
                             id: s.id,
                             nombre: s.nombre,
@@ -70,12 +106,14 @@ export class ClientesService {
                             ciudad: s.ciudad,
                             direccion: s.direccion,
                             no_totvs: s.no_totvs,
+                            adc: siteAdc,
                             region: contacto.region || '-',
                             responsable: contacto.responsable || '-',
-                            distribuidor: s.distribuidor || '-',
-                            distribuidor_contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
-                            distribuidor_contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
-                            distribuidor_contacto_correo: contacto.distribuidor_contacto_correo || '-',
+                            distribuidor: distName,
+                            distribuidor_contacto_nombre: cNombre,
+                            distribuidor_contacto_telefono: cTelefono,
+                            distribuidor_contacto_correo: cCorreo,
+                            contacto_operativo: contacto,
                             activosCount: s.activos?.length || 0
                         };
                     })

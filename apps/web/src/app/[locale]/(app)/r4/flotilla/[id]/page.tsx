@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Truck, HardDrive, ShieldCheck, MapPin, 
-  User, Briefcase, Calendar, Clock, Edit, FileSpreadsheet, CheckCircle2, Wrench, Search, X, BatteryCharging, Link as LinkIcon, Unlink
+  User, Briefcase, Calendar, Clock, Edit, FileSpreadsheet, CheckCircle2, XCircle, ArrowRight, Wrench, Search, X, BatteryCharging, Link as LinkIcon, Unlink
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import api from '@/lib/api';
@@ -66,14 +66,36 @@ export default function AssetCarnetPage() {
     if (!accessorySearch.trim()) return;
     try {
       setSearchingAccessories(true);
-      // Busca en la flotilla equipos que sean Batería o Cargador, y que coincidan con la búsqueda
       const res = await api.get('/r4/flotilla');
-      const allAssets = res.data?.data || [];
-      const filtered = allAssets.filter((a: any) => 
-        (a.tipo === 'Batería' || a.tipo === 'Cargador' || a.tipo?.toLowerCase().includes('bateria') || a.tipo?.toLowerCase().includes('cargador')) &&
-        (a.serie.toLowerCase().includes(accessorySearch.toLowerCase()) || 
-         a.oach?.toLowerCase().includes(accessorySearch.toLowerCase()))
-      );
+      const allAssets = res.data?.data || res.data || [];
+      const query = accessorySearch.toLowerCase().trim();
+      const filtered = (Array.isArray(allAssets) ? allAssets : []).filter((a: any) => {
+        if (!a) return false;
+        if (a.id === asset?.id || a.serie === asset?.serie) return false;
+
+        const serie = (a.serie || '').toLowerCase();
+        const oach = (a.oach || '').toLowerCase();
+        const modelo = (a.modelo || '').toLowerCase();
+        const tipo = (a.tipo || '').toLowerCase();
+        const clase = (a.clase || '').toLowerCase();
+        const idStr = (a.id || '').toLowerCase();
+
+        return (
+          serie.includes(query) ||
+          oach.includes(query) ||
+          modelo.includes(query) ||
+          tipo.includes(query) ||
+          clase.includes(query) ||
+          idStr.includes(query)
+        );
+      });
+      if (isAdc && loggedInAdcName) {
+        filtered.sort((a: any, b: any) => {
+          const aMatch = (a.adc || '').toLowerCase() === loggedInAdcName.toLowerCase() ? 1 : 0;
+          const bMatch = (b.adc || '').toLowerCase() === loggedInAdcName.toLowerCase() ? 1 : 0;
+          return bMatch - aMatch;
+        });
+      }
       setAccessoryResults(filtered);
     } catch (error) {
       toast.error('Error al buscar accesorios');
@@ -85,17 +107,26 @@ export default function AssetCarnetPage() {
   const handleLinkAccessory = async (accesorioId: string, tipo: string) => {
     try {
       setLinkingAccessory(true);
-      await api.post(`/r4/flotilla/${id}/accesorios`, {
-        accesorio_id: accesorioId,
-        tipo_relacion: tipo || 'ACCESORIO'
-      });
-      toast.success('Accesorio vinculado exitosamente');
+      const targetId = id || params.id;
+      if (isAdc) {
+        await api.post(`/r4/flotilla/${targetId}/solicitar-accesorios`, {
+          accesorio_id: accesorioId,
+          tipo_relacion: tipo || 'ACCESORIO'
+        });
+        toast.success('Solicitud de vinculación enviada a Administración/Gerencia para su aprobación');
+      } else {
+        await api.post(`/r4/flotilla/${targetId}/accesorios`, {
+          accesorio_id: accesorioId,
+          tipo_relacion: tipo || 'ACCESORIO'
+        });
+        toast.success('Accesorio vinculado exitosamente');
+      }
       setLinkModalOpen(false);
       setAccessorySearch('');
       setAccessoryResults([]);
       fetchAssetDetails();
     } catch (error) {
-      toast.error('Error al vincular el accesorio');
+      toast.error('Error al solicitar la vinculación del accesorio');
     } finally {
       setLinkingAccessory(false);
     }
@@ -104,8 +135,14 @@ export default function AssetCarnetPage() {
   const handleUnlinkAccessory = async (accesorioId: string) => {
     if (!confirm('¿Estás seguro de desvincular este accesorio?')) return;
     try {
-      await api.delete(`/r4/flotilla/${id}/accesorios/${accesorioId}`);
-      toast.success('Accesorio desvinculado');
+      const targetId = id || params.id;
+      if (isAdc) {
+        await api.post(`/r4/flotilla/${targetId}/solicitar-desvincular-accesorios/${accesorioId}`);
+        toast.success('Solicitud de desvinculación enviada a Administración/Gerencia');
+      } else {
+        await api.delete(`/r4/flotilla/${targetId}/accesorios/${accesorioId}`);
+        toast.success('Accesorio desvinculado');
+      }
       fetchAssetDetails();
     } catch (error) {
       toast.error('Error al desvincular el accesorio');
@@ -121,6 +158,11 @@ export default function AssetCarnetPage() {
     userRole === 'SUPERADMIN' ||
     userRole === 'ADMIN' ||
     userRole === 'ADMINISTRADOR';
+
+  const isAdc = !isCoordinacionOrGerencia;
+  const loggedInAdcName = user 
+    ? (userRole === 'AUXILIAR' ? (user.adc_asociado_name || '') : `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '')
+    : '';
 
   if (loading) {
     return (
@@ -244,39 +286,45 @@ export default function AssetCarnetPage() {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                 <BatteryCharging className="w-4 h-4 text-amber-500" />
-                Accesorios
+                Baterías y Cargadores Vinculados
               </h3>
-              {isCoordinacionOrGerencia && (
-                <button
-                  onClick={() => setLinkModalOpen(true)}
-                  className="text-[10px] font-black uppercase tracking-widest bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-                >
-                  <LinkIcon className="w-3 h-3" /> Vincular
-                </button>
-              )}
+              <button
+                onClick={() => setLinkModalOpen(true)}
+                className="text-[10px] font-black uppercase tracking-widest bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all shadow-xs"
+              >
+                <LinkIcon className="w-3 h-3" /> Vincular
+              </button>
             </div>
 
             <div className="space-y-3">
               {(!asset.accesorios || asset.accesorios.length === 0) ? (
-                <div className="text-center py-6 bg-slate-50 border border-slate-100 rounded-2xl border-dashed">
-                  <p className="text-xs font-bold text-slate-400">Sin accesorios vinculados</p>
+                <div className="text-center py-6 bg-slate-50 border border-slate-200/60 rounded-2xl border-dashed">
+                  <p className="text-xs font-bold text-slate-400">Sin accesorios vinculados a este equipo</p>
                 </div>
               ) : (
-                asset.accesorios.map((acc: any) => (
-                  <div key={acc.accesorio_id} className="flex items-center justify-between bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
-                    <div>
-                      <p className="text-xs font-black text-slate-800">{acc.accesorio?.tipo || 'Accesorio'}</p>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">Serie: {acc.accesorio?.serie || '-'}</p>
+                asset.accesorios.map((acc: any, index: number) => (
+                  <div key={acc.id || acc.serie || index} className="flex items-center justify-between bg-slate-50/80 border border-slate-200/80 p-3.5 rounded-2xl shadow-xs hover:bg-white transition-all">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                          {acc.tipo_relacion || acc.tipo || 'ACCESORIO'}
+                        </span>
+                        <p className="text-xs font-black text-slate-900">{acc.serie || acc.id || '-'}</p>
+                      </div>
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        Modelo: <strong className="text-slate-700">{acc.modelo || '-'}</strong> {acc.oach ? `| OACH: ${acc.oach}` : ''}
+                      </p>
+                      {acc.cantidad > 1 && (
+                        <p className="text-[10px] font-black text-amber-600">Cantidad: {acc.cantidad}</p>
+                      )}
                     </div>
-                    {isCoordinacionOrGerencia && (
-                      <button 
-                        onClick={() => handleUnlinkAccessory(acc.accesorio_id)}
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Desvincular"
-                      >
-                        <Unlink className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => handleUnlinkAccessory(acc.id || acc.serie)}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                      title="Desvincular accesorio"
+                    >
+                      <Unlink className="w-4 h-4" />
+                    </button>
                   </div>
                 ))
               )}
@@ -366,32 +414,138 @@ export default function AssetCarnetPage() {
           </div>
 
           {/* Timeline Tracking */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6 overflow-hidden max-w-full">
             <div>
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Historial de Cambios y Tracking</h3>
-              <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Historial completo de transferencias, cambios de sitio y estatus</p>
+              <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Historial completo de transferencias, cambios de sitio y estatus con trazabilidad de usuarios</p>
             </div>
             
-            <div className="relative border-l border-slate-100 pl-6 ml-3 space-y-6">
+            <div className="relative border-l border-slate-200 pl-6 ml-3 space-y-6 max-w-full">
               {asset.historialCambios?.length === 0 ? (
                 <p className="text-xs font-bold text-slate-400 py-4">No hay registros de movimientos previos.</p>
               ) : (
-                asset.historialCambios?.map((log: any, idx: number) => (
-                  <div key={log.id || idx} className="relative group">
-                    <div className="absolute -left-[31px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-200 border-2 border-white group-hover:bg-amber-500 transition-colors" />
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1">
-                      <div>
-                        <p className="text-xs font-black text-slate-900">{log.motivo}</p>
-                        {log.sitioNuevoId && (
-                          <p className="text-[10px] font-bold text-slate-400 mt-0.5">Ubicación destino: {log.sitioNuevoId}</p>
+                asset.historialCambios?.map((log: any, idx: number) => {
+                  let parsedJson: any = log.rawParsed || null;
+                  let motivoText = log.motivo || '';
+
+                  if (!parsedJson && typeof motivoText === 'string' && motivoText.trim().startsWith('{')) {
+                    try { parsedJson = JSON.parse(motivoText); } catch (e) {}
+                  }
+
+                  const tipo = log.tipo || parsedJson?.tipo || (motivoText.toLowerCase().includes('transferencia') ? 'TRANSFERENCIA' : 'MOVIMIENTO');
+                  const estado = log.estado || parsedJson?.estado || (log.aprobado ? 'APROBADA' : 'REGISTRADA');
+                  
+                  const rawSol = log.solicitante || parsedJson?.solicitante;
+                  const rawAprob = log.aprobadoPor || parsedJson?.aprobado_por;
+                  const rawRech = log.rechazadoPor || parsedJson?.rechazado_por;
+
+                  const solicitante = (rawSol && rawSol !== 'Usuario' && rawSol !== 'sistema') ? rawSol : 'ADC / Solicitante';
+                  const aprobadoPor = (rawAprob && rawAprob !== 'Sistema' && rawAprob !== 'sistema') ? rawAprob : (log.aprobado ? 'Administración' : null);
+                  const rechazadoPor = (rawRech && rawRech !== 'Sistema' && rawRech !== 'sistema') ? rawRech : (estado === 'RECHAZADA' ? 'Administración' : null);
+
+                  const sitioAnterior = log.sitioAnterior || parsedJson?.sitio_anterior_nombre || null;
+                  const sitioNuevo = log.sitioNuevo || parsedJson?.sitio_nuevo_nombre || log.sitioNuevoId || null;
+
+                  if (typeof motivoText === 'string' && motivoText.trim().startsWith('{')) {
+                    if (tipo === 'TRANSFERENCIA' || parsedJson?.accion_nombre?.includes('Transferencia')) {
+                      const orig = sitioAnterior || 'Sin sitio anterior';
+                      const dest = sitioNuevo || 'Sin sitio nuevo';
+                      if (estado === 'RECHAZADA') {
+                        motivoText = `Transferencia Rechazada: ${orig} → ${dest}`;
+                      } else if (estado === 'APROBADA' || log.aprobado) {
+                        motivoText = `Transferencia Aprobada: ${orig} → ${dest}`;
+                      } else {
+                        motivoText = `Solicitud de Transferencia: ${orig} → ${dest}`;
+                      }
+                    } else if (parsedJson?.datos) {
+                      const keys = Object.keys(parsedJson.datos);
+                      const changes = keys.map(k => `${k}: ${parsedJson.datos[k]}`).join(', ');
+                      motivoText = `Modificación de equipo: ${changes}`;
+                    } else {
+                      motivoText = parsedJson?.accion_nombre || 'Registro de movimiento';
+                    }
+                  }
+
+                  if (typeof motivoText === 'string') {
+                    motivoText = motivoText
+                      .replace('por Sistema:', 'por Administración:')
+                      .replace('por Sistema (', 'por Administración (')
+                      .replace('(Solicitó: Usuario)', `(Solicitó: ${solicitante})`)
+                      .replace('(Solicitó: sistema)', `(Solicitó: ${solicitante})`);
+                  }
+
+                  return (
+                    <div key={log.id || idx} className="relative group bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 hover:border-amber-400/60 hover:bg-white transition-all space-y-3 max-w-full overflow-hidden shadow-xs">
+                      <div className="absolute -left-[31px] top-4 w-3 h-3 rounded-full bg-slate-300 border-2 border-white group-hover:bg-amber-500 transition-colors shadow-xs" />
+                      
+                      {/* Header row: Badges and timestamp */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-200/80 text-slate-700">
+                            {tipo}
+                          </span>
+                          
+                          {estado === 'APROBADA' || log.aprobado ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3" /> Aprobada
+                            </span>
+                          ) : estado === 'RECHAZADA' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200">
+                              <XCircle className="w-3 h-3" /> Rechazada
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                              <Clock className="w-3 h-3" /> Pendiente
+                            </span>
+                          )}
+                        </div>
+
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">
+                          {new Date(log.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      {/* Main description text with explicit line wrapping */}
+                      <p className="text-xs font-bold text-slate-800 leading-relaxed break-words whitespace-normal max-w-full">
+                        {motivoText}
+                      </p>
+
+                      {/* Transfer Route Box if sites exist */}
+                      {(sitioAnterior || sitioNuevo) && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-slate-200/80 text-xs font-semibold text-slate-700 max-w-full overflow-hidden">
+                          <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full">
+                            <span className="truncate max-w-[200px] text-slate-600">{sitioAnterior || 'Sitio Origen'}</span>
+                            <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="font-bold text-slate-900 truncate max-w-[200px]">{sitioNuevo || 'Sitio Destino'}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* User Traceability Footer */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1.5 text-[11px] text-slate-500 border-t border-slate-200/50">
+                        <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                          <User className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="truncate">
+                            <strong className="text-slate-700">Solicitó (ADC/Usuario):</strong> {solicitante}
+                          </span>
+                        </div>
+
+                        {(aprobadoPor || rechazadoPor) && (
+                          <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                            <ShieldCheck className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                            <span className="truncate">
+                              <strong className="text-slate-700">
+                                {rechazadoPor ? 'Rechazó (Admin):' : 'Aprobó (Admin):'}
+                              </strong>{' '}
+                              {rechazadoPor || aprobadoPor}
+                            </span>
+                          </div>
                         )}
                       </div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {new Date(log.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -445,17 +599,17 @@ export default function AssetCarnetPage() {
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Resultados ({accessoryResults.length})</h4>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                     {accessoryResults.map((acc: any) => (
-                      <div key={acc.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors">
+                      <div key={acc.id} className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 hover:border-amber-300 hover:bg-amber-50/40 transition-colors">
                         <div>
-                          <p className="text-sm font-black text-slate-800">{acc.serie}</p>
-                          <p className="text-xs font-bold text-slate-500">{acc.tipo} {acc.oach ? `- OACH: ${acc.oach}` : ''}</p>
+                          <p className="text-sm font-black text-slate-900">{acc.serie || acc.id}</p>
+                          <p className="text-xs font-bold text-slate-500">{acc.tipo || acc.clase || 'Accesorio'} {acc.modelo ? `- Modelo: ${acc.modelo}` : ''} {acc.oach ? `- OACH: ${acc.oach}` : ''}</p>
                         </div>
                         <button
-                          onClick={() => handleLinkAccessory(acc.id, acc.tipo?.toUpperCase() === 'CARGADOR' ? 'CARGADOR' : 'BATERIA')}
-                          disabled={linkingAccessory || asset.accesorios?.some((a: any) => a.accesorio_id === acc.id)}
-                          className="text-[10px] px-3 py-1.5 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg font-black uppercase tracking-widest transition-colors disabled:opacity-50"
+                          onClick={() => handleLinkAccessory(acc.id || acc.serie, (acc.tipo?.toUpperCase().includes('CARGADOR') || acc.clase?.toUpperCase().includes('CARGADOR')) ? 'CARGADOR' : 'BATERIA')}
+                          disabled={linkingAccessory || asset.accesorios?.some((a: any) => a.id === acc.id || a.serie === acc.serie)}
+                          className="text-[10px] px-3.5 py-2 bg-amber-500 text-white hover:bg-amber-600 rounded-xl font-black uppercase tracking-widest transition-colors shadow-xs disabled:opacity-50"
                         >
-                          {asset.accesorios?.some((a: any) => a.accesorio_id === acc.id) ? 'Vinculado' : 'Vincular'}
+                          {asset.accesorios?.some((a: any) => a.id === acc.id || a.serie === acc.serie) ? 'Vinculado' : 'Vincular'}
                         </button>
                       </div>
                     ))}
