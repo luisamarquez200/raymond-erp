@@ -23,7 +23,6 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    const [loading, setLoading] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
 
     const fetchNotifications = async () => {
@@ -40,9 +39,25 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
         }
     };
 
+    const handleOpenBell = async () => {
+        const willOpen = !isOpen;
+        setIsOpen(willOpen);
+        if (willOpen) {
+            await fetchNotifications();
+            // Automatically mark all as read when opening so unread badge clears
+            if (unreadCount > 0) {
+                try {
+                    await api.put('/notifications/mark-all-read');
+                    setUnreadCount(0);
+                    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                } catch (e) {}
+            }
+        }
+    };
+
     useEffect(() => {
         fetchNotifications();
-        const interval = setInterval(fetchNotifications, 10000); // poll every 10s
+        const interval = setInterval(fetchNotifications, 8000); // poll every 8s
         return () => clearInterval(interval);
     }, []);
 
@@ -70,13 +85,26 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
         }
     };
 
-    const handleMarkSingleRead = async (id: string, currentlyRead: boolean) => {
-        if (currentlyRead) return;
+    const handleDeleteSingle = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
         try {
-            await api.put(`/notifications/${id}/read`);
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-            setUnreadCount(prev => Math.max(0, prev - 1));
-        } catch (error) {}
+            await api.delete(`/notifications/${id}`);
+            setNotifications(prev => prev.filter(n => n.id !== id));
+            toast.success('Notificación eliminada');
+        } catch (error) {
+            toast.error('Error al eliminar notificación');
+        }
+    };
+
+    const handleDeleteAll = async () => {
+        try {
+            await api.delete('/notifications');
+            setNotifications([]);
+            setUnreadCount(0);
+            toast.success('Historial de notificaciones vaciado');
+        } catch (error) {
+            toast.error('Error al vaciar notificaciones');
+        }
     };
 
     const getTypeIcon = (type: string) => {
@@ -115,10 +143,7 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
         <div className="relative inline-block" ref={popoverRef}>
             <button
                 type="button"
-                onClick={() => {
-                    setIsOpen(!isOpen);
-                    if (!isOpen) fetchNotifications();
-                }}
+                onClick={handleOpenBell}
                 className={cn(
                     "relative p-2 rounded-xl transition-all flex items-center justify-center border",
                     isOpen 
@@ -150,20 +175,23 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                             <h3 className="font-black text-xs uppercase tracking-wider text-slate-900">Notificaciones</h3>
                             {unreadCount > 0 && (
                                 <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-black">
-                                    {unreadCount} sin leer
+                                    {unreadCount} nuevas
                                 </span>
                             )}
                         </div>
-                        {unreadCount > 0 && (
-                            <button
-                                type="button"
-                                onClick={handleMarkAllRead}
-                                className="text-[10px] font-black text-slate-500 hover:text-slate-800 flex items-center gap-1 hover:underline transition-colors"
-                            >
-                                <CheckCheck className="w-3.5 h-3.5" />
-                                Marcar leídas
-                            </button>
-                        )}
+                        <div className="flex items-center gap-3">
+                            {notifications.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteAll}
+                                    className="text-[10px] font-black text-red-600 hover:text-red-800 flex items-center gap-1 hover:underline transition-colors"
+                                    title="Vaciar todas las notificaciones"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Vaciar
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Notifications List */}
@@ -177,9 +205,8 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                             notifications.map((n) => (
                                 <div
                                     key={n.id}
-                                    onClick={() => handleMarkSingleRead(n.id, n.read)}
                                     className={cn(
-                                        "p-4 transition-colors cursor-pointer flex gap-3 items-start relative group",
+                                        "p-4 transition-colors relative group flex gap-3 items-start",
                                         n.read ? "bg-white hover:bg-slate-50/80" : "bg-slate-50/70 hover:bg-slate-100/80"
                                     )}
                                 >
@@ -189,7 +216,7 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                                     <div className="mt-0.5">
                                         {getTypeIcon(n.type)}
                                     </div>
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex-1 min-w-0 pr-6">
                                         <div className="flex items-baseline justify-between gap-2">
                                             <h4 className={cn("text-xs font-black truncate", n.read ? "text-slate-800" : "text-slate-900 font-black")}>
                                                 {n.title}
@@ -202,6 +229,14 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                                             {n.message}
                                         </p>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => handleDeleteSingle(n.id, e)}
+                                        className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all absolute top-3 right-3"
+                                        title="Eliminar notificación"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             ))
                         )}

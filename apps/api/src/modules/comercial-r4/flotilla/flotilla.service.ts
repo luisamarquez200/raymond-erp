@@ -64,7 +64,7 @@ export class FlotillaService {
         try {
             const admins = await this.prismaService.users.findMany({
                 where: {
-                    roles: { name: { in: ['ADMIN', 'SUPERADMIN', 'Administrador', 'Superadmin', 'SuperAdmin'] } },
+                    roles: { name: { in: ['ADMIN', 'SUPERADMIN', 'Administrador', 'Superadmin', 'SuperAdmin', 'GERENTE', 'Gerente', 'COORDINADOR', 'Coordinador', 'gerente', 'coordinador'] } },
                     is_active: true
                 }
             });
@@ -97,31 +97,80 @@ export class FlotillaService {
         }
     }
 
-    private async notificarUsuario(usuarioId: string, title: string, message: string, type: 'INFO' | 'SUCCESS' | 'ERROR' | 'WARNING' = 'INFO') {
-        if (!usuarioId || usuarioId === 'sistema') return;
+    private async notificarUsuario(
+        usuarioIdOrName: string | (string | null | undefined)[],
+        title: string,
+        message: string,
+        type: 'INFO' | 'SUCCESS' | 'ERROR' | 'WARNING' = 'INFO',
+        extraNames?: (string | null | undefined)[]
+    ) {
         try {
-            await this.prismaService.notifications.create({
-                data: {
-                    user_id: usuarioId,
-                    title,
-                    message,
-                    type: type as any
-                }
-            });
+            const candidates = Array.isArray(usuarioIdOrName) ? usuarioIdOrName : [usuarioIdOrName];
+            if (extraNames && Array.isArray(extraNames)) {
+                candidates.push(...extraNames);
+            }
 
-            if (this.transporter) {
-                const user = await this.prismaService.users.findUnique({ where: { id: usuarioId } });
-                if (user?.email) {
-                    await this.transporter.sendMail({
-                        from: '"Raymond ERP" <no-reply@raymond.com>',
-                        to: user.email,
-                        subject: `[Raymond ERP] ${title}`,
-                        text: message
-                    });
+            const validCandidates = candidates
+                .filter(Boolean)
+                .map(c => String(c).trim())
+                .filter(c => c && c.toLowerCase() !== 'sistema');
+
+            if (validCandidates.length === 0) return;
+
+            const allUsers = await this.prismaService.users.findMany({ where: { is_active: true } });
+            const targetUserIds = new Set<string>();
+
+            for (const item of validCandidates) {
+                // Direct ID match
+                const directUser = allUsers.find(u => u.id === item);
+                if (directUser) {
+                    targetUserIds.add(directUser.id);
+                    continue;
+                }
+
+                // Name / Email / ADC Name match
+                const normItem = item.toLowerCase();
+                for (const u of allUsers) {
+                    const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
+                    const email = (u.email || '').trim().toLowerCase();
+                    const adcName = ((u as any).adc_asociado_name || '').trim().toLowerCase();
+
+                    if (
+                        (fullName && (fullName.includes(normItem) || normItem.includes(fullName))) ||
+                        (email && email === normItem) ||
+                        (adcName && normItem.includes(adcName))
+                    ) {
+                        targetUserIds.add(u.id);
+                    }
+                }
+            }
+
+            for (const targetId of targetUserIds) {
+                await this.prismaService.notifications.create({
+                    data: {
+                        user_id: targetId,
+                        title,
+                        message,
+                        type: type as any
+                    }
+                });
+
+                if (this.transporter) {
+                    const user = allUsers.find(u => u.id === targetId);
+                    if (user?.email) {
+                        try {
+                            await this.transporter.sendMail({
+                                from: '"Raymond ERP" <no-reply@raymond.com>',
+                                to: user.email,
+                                subject: `[Raymond ERP] ${title}`,
+                                text: message
+                            });
+                        } catch (e: any) {}
+                    }
                 }
             }
         } catch (e: any) {
-            this.logger.error(`Error enviando notificación al usuario ${usuarioId}: ${e.message}`);
+            this.logger.error(`Error enviando notificación al usuario: ${e.message}`);
         }
     }
 
@@ -1088,8 +1137,15 @@ export class FlotillaService {
         });
 
         // Notificar al Solicitante (ADC) con todos los detalles completos
-        await this.notificarUsuario(
+        const candidateUserTargets = [
             log.usuario_id,
+            datosPropuestos?.solicitante_id,
+            solicitanteNombre,
+            equipo?.adc
+        ];
+
+        await this.notificarUsuario(
+            candidateUserTargets,
             `✅ Solicitud Aprobada: ${accionNombre} - Serie: ${equipo?.serie || log.activo_id}`,
             `✅ TU SOLICITUD HA SIDO APROBADA\n` +
             `• Acción: ${accionNombre}\n` +
@@ -1101,7 +1157,8 @@ export class FlotillaService {
             `• Aprobado Por: ${detalleAprobador}\n` +
             `• Fecha y Hora de Aprobación: ${fechaRespuestaFormatted}\n` +
             `• Estatus Final: APROBADA`,
-            'SUCCESS'
+            'SUCCESS',
+            [solicitanteNombre, equipo?.adc]
         );
 
         return { success: true, message: 'Solicitud aprobada con éxito' };
@@ -1144,7 +1201,7 @@ export class FlotillaService {
             
             // Notificar al Solicitante (ADC) con todos los detalles completos
             await this.notificarUsuario(
-                log.usuario_id,
+                [log.usuario_id, datosPropuestos?.solicitante_id, solicitanteNombre, equipo?.adc],
                 `❌ Solicitud Rechazada: ${accionNombre} - Serie: ${equipo?.serie || log.activo_id}`,
                 `❌ TU SOLICITUD HA SIDO RECHAZADA\n` +
                 `• Acción: ${accionNombre}\n` +
@@ -1156,7 +1213,8 @@ export class FlotillaService {
                 `• Rechazado Por: ${detalleRechazador}\n` +
                 `• Fecha y Hora de Rechazo: ${fechaRespuestaFormatted}\n` +
                 `• Estatus Final: RECHAZADA`,
-                'ERROR'
+                'ERROR',
+                [solicitanteNombre, equipo?.adc]
             );
 
             const motivoActualizado = {

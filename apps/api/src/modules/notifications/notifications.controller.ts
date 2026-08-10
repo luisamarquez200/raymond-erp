@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Param, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Delete, Param, Request, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -32,5 +32,19 @@ export class NotificationsController {
         const userId = req.user.id || req.user.sub;
         await this.notificationsService.markAsRead(id, userId);
         return { success: true, message: 'Notificación marcada como leída' };
+    }
+
+    @Delete(':id')
+    async deleteNotification(@Param('id') id: string, @Request() req: any) {
+        const userId = req.user.id || req.user.sub;
+        await this.notificationsService.deleteNotification(id, userId);
+        return { success: true, message: 'Notificación eliminada' };
+    }
+
+    @Delete()
+    async deleteAllNotifications(@Request() req: any) {
+        const userId = req.user.id || req.user.sub;
+        await this.notificationsService.deleteAllNotifications(userId);
+        return { success: true, message: 'Todas las notificaciones eliminadas' };
     }
 }
