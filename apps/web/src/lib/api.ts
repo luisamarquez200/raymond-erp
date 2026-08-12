@@ -161,8 +161,9 @@ api.interceptors.response.use(
                     { refreshToken: storedRefreshToken }
                 );
 
-                const newAccessToken = refreshResponse.data?.data?.accessToken;
-                const newRefreshToken = refreshResponse.data?.data?.refreshToken;
+                const resData = refreshResponse.data;
+                const newAccessToken = resData?.data?.accessToken || (resData as any)?.accessToken;
+                const newRefreshToken = resData?.data?.refreshToken || (resData as any)?.refreshToken;
 
                 if (!newAccessToken) {
                     throw new Error('No access token returned');

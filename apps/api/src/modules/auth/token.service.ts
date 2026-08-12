@@ -13,18 +13,18 @@ export class TokenService {
         const [accessToken, refreshToken] = await Promise.all([
             this.jwtService.signAsync(payload, {
                 secret: this.configService.get<string>('JWT_SECRET'),
-                expiresIn: '1h',
+                expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '8h',
             }),
             this.jwtService.signAsync(payload, {
                 secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-                expiresIn: '7d',
+                expiresIn: '30d',
             }),
         ]);
 
         return {
             accessToken,
             refreshToken,
-            expiresIn: 3600, // 1 hour
+            expiresIn: 28800, // 8 hours
         };
     }
 

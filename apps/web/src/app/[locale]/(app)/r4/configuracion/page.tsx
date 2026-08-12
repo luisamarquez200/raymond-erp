@@ -1,16 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, ShieldCheck, Palette, Users, UserSquare2 } from 'lucide-react';
+import { Settings, ShieldCheck, Palette, Users, UserSquare2, DollarSign } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useConfigStore } from '@/store/config.store';
 import AdcsPage from '../adcs/page'; // Reuse the existing page for the tab
 import GestionUsuarios from '@/components/r4/GestionUsuarios';
+import GestionTipoCambio from '@/components/r4/GestionTipoCambio';
 
 export default function ConfiguracionPage() {
     const { user } = useAuthStore();
     const isAdmin = user?.role?.toUpperCase() === 'ADMINISTRADOR' || user?.role?.toUpperCase() === 'SUPERADMIN';
-    const [activeTab, setActiveTab] = useState<'adcs' | 'usuarios' | 'roles'>('adcs');
+    const [activeTab, setActiveTab] = useState<'adcs' | 'usuarios' | 'tipo_cambio' | 'roles'>('adcs');
 
     const { roleColors, setRoleColor, resetRoleColors } = useConfigStore();
 
@@ -54,7 +55,7 @@ export default function ConfiguracionPage() {
                 </div>
 
                 <div className="mt-8 border-b border-slate-200">
-                    <nav className="flex space-x-8">
+                    <nav className="flex space-x-8 overflow-x-auto">
                         <button
                             onClick={() => setActiveTab('adcs')}
                             className={`py-4 px-1 border-b-2 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 ${
@@ -86,6 +87,21 @@ export default function ConfiguracionPage() {
                             Gestión de Usuarios
                         </button>
                         <button
+                            onClick={() => setActiveTab('tipo_cambio')}
+                            className={`py-4 px-1 border-b-2 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 ${
+                                activeTab === 'tipo_cambio'
+                                    ? ''
+                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            }`}
+                            style={activeTab === 'tipo_cambio' ? { 
+                                borderColor: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador,
+                                color: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador 
+                            } : {}}
+                        >
+                            <DollarSign className="w-4 h-4" />
+                            Tipo de Cambio
+                        </button>
+                        <button
                             onClick={() => setActiveTab('roles')}
                             className={`py-4 px-1 border-b-2 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 ${
                                 activeTab === 'roles'
@@ -113,6 +129,12 @@ export default function ConfiguracionPage() {
             {activeTab === 'usuarios' && (
                 <div className="animate-in fade-in duration-300">
                     <GestionUsuarios />
+                </div>
+            )}
+
+            {activeTab === 'tipo_cambio' && (
+                <div className="animate-in fade-in duration-300">
+                    <GestionTipoCambio />
                 </div>
             )}
 

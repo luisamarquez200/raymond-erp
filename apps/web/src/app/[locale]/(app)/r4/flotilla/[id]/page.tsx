@@ -10,18 +10,23 @@ import { Link } from '@/i18n/routing';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
+import { useConfigStore } from '@/store/config.store';
+import PageLoader from '@/components/ui/PageLoader';
+import RegistrarMantenimientoModal from '@/components/r4/flotilla/RegistrarMantenimientoModal';
 
 export default function AssetCarnetPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
   const { user } = useAuthStore();
-  
+  const { roleColors } = useConfigStore();
+  const currentColor = user?.role ? (roleColors[(typeof user.role === 'string' ? user.role : (user.role as any)?.name || '').toLowerCase()] || roleColors.administrador) : roleColors.administrador;
   const [asset, setAsset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
 
+  const [mantenimientoModalOpen, setMantenimientoModalOpen] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [accessorySearch, setAccessorySearch] = useState('');
   const [accessoryResults, setAccessoryResults] = useState<any[]>([]);
@@ -166,18 +171,8 @@ export default function AssetCarnetPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col items-center gap-6 max-w-sm w-full animate-in fade-in zoom-in duration-500">
-          <div className="relative w-24 h-24">
-             <div className="absolute inset-0 border-4 border-red-50 rounded-full"></div>
-             <div className="absolute inset-0 border-4 border-[#E1000F] rounded-full border-t-transparent animate-spin"></div>
-             <Truck className="absolute inset-0 m-auto w-10 h-10 text-[#E1000F] animate-pulse" />
-          </div>
-          <div className="text-center">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Cargando detalles</h2>
-            <p className="text-sm font-medium text-slate-500 mt-1">Obteniendo información del equipo...</p>
-          </div>
-        </div>
+      <div className="min-h-screen bg-[#F8FAFC]">
+        <PageLoader title="Cargando detalles" subtitle="Obteniendo información del equipo..." heightClassName="min-h-screen" color={currentColor} />
       </div>
     );
   }
@@ -251,6 +246,48 @@ export default function AssetCarnetPage() {
                   Guardar
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Estado de Mantenimiento (Imagen 4) */}
+          <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm overflow-hidden">
+            <div className="p-5 bg-emerald-50/60 border-b border-emerald-100">
+              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                ESTADO DE MANTENIMIENTO
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-black text-slate-900">Al Día</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-3 border-t border-emerald-200/60 text-xs">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Último SMP Realizado</p>
+                  <p className="font-bold text-slate-800 mt-0.5">15 Abr 2026</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Próximo SMP</p>
+                  <p className="font-bold text-rose-600 mt-0.5">15 May 2026</p>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-emerald-200/40 text-xs">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Distribuidor a Cargo</p>
+                <p className="font-extrabold text-slate-800 flex items-center gap-1 mt-0.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-rose-500" />
+                  {asset.propietario || 'Raymond MTY'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-white">
+              <button
+                onClick={() => setMantenimientoModalOpen(true)}
+                className="w-full py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs"
+              >
+                <Wrench className="w-4 h-4 text-rose-600" />
+                Registrar Mantenimiento
+              </button>
             </div>
           </div>
 
@@ -621,6 +658,15 @@ export default function AssetCarnetPage() {
         </div>
       )}
 
+      {/* Modal para Registrar Mantenimiento */}
+      <RegistrarMantenimientoModal 
+        open={mantenimientoModalOpen} 
+        onOpenChange={setMantenimientoModalOpen}
+        equipoId={asset.id}
+        serie={asset.serie}
+        distribuidorActual={asset.propietario || 'Raymond MTY'}
+        onSuccess={() => fetchAssetDetails()}
+      />
     </div>
   );
 }

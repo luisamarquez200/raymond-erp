@@ -66,6 +66,10 @@ export class UsersService {
                 is_active: true, // New users are active by default
                 ubicacion: createUserDto.ubicacion,
                 adc_asociado_name: createUserDto.adc_asociado_name,
+                supervisor_id: createUserDto.supervisor_id,
+                supervisor_name: createUserDto.supervisor_name,
+                auxiliar_id: createUserDto.auxiliar_id,
+                auxiliar_name: createUserDto.auxiliar_name,
                 updated_at: new Date(), // Required field
             } as any,
             include: {
@@ -247,7 +251,13 @@ export class UsersService {
         }
 
         const updateData: any = { ...updateUserDto };
-
+        
+        // Sanitize empty strings to null for relation fields
+        if (updateData.supervisor_id === "") updateData.supervisor_id = null;
+        if (updateData.auxiliar_id === "") updateData.auxiliar_id = null;
+        // Optionally sanitize empty names if they shouldn't be empty strings
+        if (updateData.supervisor_name === "") updateData.supervisor_name = null;
+        if (updateData.auxiliar_name === "") updateData.auxiliar_name = null;
         // Update user
         const updatedUser = await this.prisma.users.update({
             where: { id },

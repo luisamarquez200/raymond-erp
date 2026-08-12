@@ -3,7 +3,7 @@
 import { 
   Search, Filter, Download, Grid3x3, List, Plus, Eye, Edit, 
   FileText, Clock, CheckCircle, Upload, X, FileSpreadsheet, 
-  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown
+  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -14,6 +14,8 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
 import { useConfigStore } from '@/store/config.store';
+import PageLoader from '@/components/ui/PageLoader';
+import TooltipInfo from '@/components/ui/TooltipInfo';
 import * as XLSX from 'xlsx';
 
 const statusColors = {
@@ -117,7 +119,15 @@ const TableHeaderFilter = ({
   );
 };
 
-export default function FlotillaTab() {
+interface FlotillaTabProps {
+  adminAdcScope?: 'todos' | 'mis_adcs';
+  setAdminAdcScope?: (scope: 'todos' | 'mis_adcs') => void;
+}
+
+export default function FlotillaTab({ 
+  adminAdcScope: externalAdminAdcScope, 
+  setAdminAdcScope: externalSetAdminAdcScope 
+}: FlotillaTabProps = {}) {
   const { user } = useAuthStore();
   const { roleColors } = useConfigStore();
   const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
@@ -186,6 +196,10 @@ export default function FlotillaTab() {
   const [transferDestinationSite, setTransferDestinationSite] = useState('');
   const [allSites, setAllSites] = useState<any[]>([]);
   const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
+
+  const [internalAdminAdcScope, setInternalAdminAdcScope] = useState<'todos' | 'mis_adcs'>('todos');
+  const adminAdcScope = externalAdminAdcScope ?? internalAdminAdcScope;
+  const setAdminAdcScope = externalSetAdminAdcScope ?? setInternalAdminAdcScope;
 
   // User Profile Identification
   let rawRole: any = user?.role;
@@ -317,26 +331,35 @@ export default function FlotillaTab() {
     }
   }, [editingData.modelo]);
 
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
   const handleApprove = async (id: string) => {
+    setActionLoadingId(id);
+    const toastId = toast.loading('Aprobando solicitud...');
     try {
       await api.post(`/r4/flotilla/solicitudes/${id}/aprobar`);
-      toast.success('Cambio aprobado con éxito');
-      fetchPendingApprovals();
-      fetchFlotilla();
+      toast.success('Cambio aprobado con éxito', { id: toastId });
+      await Promise.all([fetchPendingApprovals(), fetchFlotilla()]);
     } catch (error) {
       console.error('Error approving request:', error);
-      toast.error('Error al aprobar el cambio');
+      toast.error('Error al aprobar el cambio', { id: toastId });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleReject = async (id: string) => {
+    setActionLoadingId(id);
+    const toastId = toast.loading('Rechazando solicitud...');
     try {
       await api.post(`/r4/flotilla/solicitudes/${id}/rechazar`);
-      toast.success('Cambio rechazado');
-      fetchPendingApprovals();
+      toast.success('Cambio rechazado', { id: toastId });
+      await fetchPendingApprovals();
     } catch (error) {
       console.error('Error rejecting request:', error);
-      toast.error('Error al rechazar el cambio');
+      toast.error('Error al rechazar el cambio', { id: toastId });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -538,8 +561,11 @@ export default function FlotillaTab() {
   // Bypass filter for the generic "comercial.admin2" testing account
   const isTestingAdmin = user?.email === 'comercial.admin2@run.com' || (user as any)?.username === 'Administrador';
   
-  const baseAssets = (isAdc && !isTestingAdmin)
-    ? fleetAssets.filter(a => {
+  const isAdministrator = userRole === 'administrador' || userRole.includes('coordinaci') || userRole.includes('geren');
+
+  let baseAssets = fleetAssets;
+  if (isAdc && !isTestingAdmin) {
+    baseAssets = fleetAssets.filter(a => {
         const adcLower = a.adc?.toLowerCase() || '';
         const userLower = loggedInAdcName.toLowerCase();
         const usernameLower = (user as any)?.username?.toLowerCase() || '';
@@ -549,8 +575,23 @@ export default function FlotillaTab() {
                (user?.firstName && adcLower.includes(user.firstName.toLowerCase())) ||
                usernameLower.includes(adcLower) ||
                emailLower.includes(adcLower);
-      })
-    : fleetAssets;
+    });
+  } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
+    const currentUserNameLower = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
+    let assignedAdcKeywords: string[] = [];
+    if (currentUserNameLower.includes('cecilia')) {
+      assignedAdcKeywords = ['montserrat', 'andrea'];
+    } else if (currentUserNameLower.includes('paola')) {
+      assignedAdcKeywords = ['angélica', 'angelica', 'alejandra', 'daniel'];
+    } else {
+      assignedAdcKeywords = [(user?.firstName || '').toLowerCase()];
+    }
+
+    baseAssets = fleetAssets.filter(a => {
+      const adcLower = (a.adc || '').toLowerCase();
+      return assignedAdcKeywords.some(kw => adcLower.includes(kw));
+    });
+  }
 
   const normalizedAssets = baseAssets.map(a => {
     // Normalize ESTATUS to the master file nomenclature
@@ -636,16 +677,50 @@ export default function FlotillaTab() {
     currentPage * itemsPerPage
   );
 
-  const getEstatusCount = (statusList: string[]) => 
-    filteredAssets.filter(a => a && a.estatus && statusList.map(s => s.toUpperCase()).includes(a.estatus.toUpperCase())).length;
+  const isAccesorio = (a: any) => {
+    if (!a) return false;
+    if (a.esAccesorio === true || a.isAccesorio === true) return true;
+    
+    const claseStr = (a.clase || '').toString().toLowerCase().trim();
+    const tipoStr = (a.tipo || '').toString().toLowerCase().trim();
+
+    // Clase includes 'bater' (baterias/bateria)
+    if (claseStr.includes('bater')) {
+      return true;
+    }
+
+    // Tipo includes 'accesorio', 'bater', 'cargador'
+    if (
+      tipoStr.includes('accesorio') || 
+      tipoStr.includes('bater') || 
+      tipoStr.includes('cargador')
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const isEquipo = (a: any) => !isAccesorio(a);
+
+  const getEstatusCount = (statusList: string[], category: 'equipos' | 'accesorios') => 
+    filteredAssets.filter(a => {
+      if (!a || !a.estatus) return false;
+      const isAcc = isAccesorio(a);
+      if (category === 'equipos' && isAcc) return false;
+      if (category === 'accesorios' && !isAcc) return false;
+      return statusList.map(s => s.toUpperCase()).includes(a.estatus.toUpperCase());
+    }).length;
 
   const statusCounts = {
-    totalActivos: filteredAssets.length,
-    enRenta: getEstatusCount(['Activo']),
-    disponibles: getEstatusCount(['Back Up']),
-    inactivos: getEstatusCount(['Inactivo', 'Inactivo con Cliente']),
-    porEntregar: getEstatusCount(['Por Entregar']),
-    porRetirar: getEstatusCount(['Por Retirar']),
+    // Row 1: Indicadores para Equipos
+    equiposActivos: getEstatusCount(['Activo', 'Activa', 'En Renta', 'Vigente', 'Comodato', 'Asignado'], 'equipos'),
+    equiposBackup: getEstatusCount(['Back Up', 'Backup'], 'equipos'),
+    equiposInactivoCliente: getEstatusCount(['Inactivo con Cliente'], 'equipos'),
+
+    // Row 2: Indicadores para Accesorios
+    accesoriosActivos: getEstatusCount(['Activo', 'Activa', 'En Renta', 'Vigente', 'Comodato', 'Asignado'], 'accesorios'),
+    accesoriosInactivos: getEstatusCount(['Inactivo', 'Inactivo con Cliente'], 'accesorios'),
   };
 
   const handleDownloadExcel = async () => {
@@ -730,101 +805,142 @@ export default function FlotillaTab() {
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-        <div className="flex flex-col -gap-1">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: currentColor }}>RAYMOND</span>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Flotilla Rental</h1>
-          <p className="text-slate-500 font-medium mt-1">Gestión integral de equipos, mantenimientos y ubicaciones</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1" style={{ color: currentColor }}>RAYMOND</span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">Flotilla Rental</h1>
+          <p className="text-slate-500 font-medium mt-1 text-sm">Gestión integral de equipos, mantenimientos y ubicaciones</p>
         </div>
         
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+        {/* Header Action Buttons (Primary CTA & Alerts Only) */}
+        <div className="flex items-center gap-3 shrink-0">
           {!isAdc && pendingApprovals.length > 0 && (
             <button
               onClick={() => setShowApprovalsTab(!showApprovalsTab)}
-              className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-sm border-2 ${showApprovalsTab ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-100 hover:bg-red-50'}`}
+              className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-sm border-2 ${showApprovalsTab ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}
             >
               <AlertTriangle className="w-4 h-4" />
               Aprobaciones ({pendingApprovals.length})
             </button>
           )}
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-sm whitespace-nowrap"
-          >
-            <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Carga Masiva</span>
-            <span className="sm:hidden">Masiva</span>
-          </button>
-          <button
-            onClick={handleDownloadExcel}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-sm whitespace-nowrap"
-          >
-            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            Exportar
-          </button>
-          <div className="relative group hidden lg:block">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
-            <input
-              type="text"
-              placeholder="Buscar serie..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-48 pl-11 pr-4 py-2.5 sm:py-3 bg-white border-2 border-slate-200 rounded-xl sm:rounded-2xl text-xs font-bold focus:border-red-500 focus:outline-none transition-all shadow-sm"
-            />
-          </div>
-          {hasActiveFilters && (
-            <button onClick={clearFilters} className="flex-1 sm:flex-none px-3 py-2.5 sm:py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl sm:rounded-2xl border-2 border-red-200 flex items-center justify-center transition-colors font-bold shadow-sm" title="Limpiar filtros">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-          <button onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')} className="flex-1 sm:flex-none px-3 py-2.5 sm:py-3 bg-white hover:bg-slate-50 text-slate-600 rounded-xl sm:rounded-2xl border-2 border-slate-200 flex items-center justify-center transition-colors shadow-sm" title="Cambiar vista">
-            {viewMode === 'table' ? <Grid3x3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
-          </button>
           <button 
             onClick={() => setIsNewAssetModalOpen(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:py-3 text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md whitespace-nowrap hover:opacity-90 mt-2 sm:mt-0"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg whitespace-nowrap hover:opacity-90 active:scale-95"
             style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
           >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            Alta de Equipo
+            <Plus className="w-4 h-4" />
+            <span>Alta de Equipo</span>
           </button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="sticky top-16 lg:top-0 z-20 bg-[#F9FAFB]/95 backdrop-blur-md py-3 -my-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-          <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 lg:p-8 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-            <div className="absolute -right-4 -bottom-4 sm:-right-8 sm:-bottom-8 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500">
-              <Truck className="w-24 h-24 sm:w-32 sm:h-32 lg:w-48 lg:h-48" style={{ color: currentColor }} />
-            </div>
-            <div className="relative z-10">
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total Activos</p>
-              <h3 className="text-2xl sm:text-3xl font-black" style={{ color: currentColor }}>
-                {loading ? <span className="text-slate-200">--</span> : statusCounts.totalActivos}
-              </h3>
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-emerald-100 hover:shadow-md transition-all">
-            <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">En Renta</p>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.enRenta}</h3>
-          </div>
-          
-          <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-blue-100 hover:shadow-md transition-all">
-            <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Disponibles</p>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.disponibles}</h3>
-          </div>
+      {/* Global Tab Loader */}
+      {loading && fleetAssets.length === 0 ? (
+        <PageLoader title="Cargando base instalada..." color={currentColor} />
+      ) : (
+        <>
+          {/* Compact Differentiated Indicators Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+            
+            {/* GROUP 1: EQUIPOS (3 Columns) */}
+            <div className="lg:col-span-3 bg-white/60 p-2.5 sm:p-3 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center gap-1.5 px-1">
+                <Truck className="w-3.5 h-3.5 text-red-600" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">Indicadores de Equipos</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Equipos Activos */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 hover:border-emerald-300 hover:shadow-xs transition-all flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <p className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Activos</p>
+                      <TooltipInfo text="Total de equipos activos operando." formula='Count(Activos con Estatus = "Activo")' />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                      {statusCounts.equiposActivos.toLocaleString('es-MX')}
+                    </h3>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
 
-          <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-red-100 hover:shadow-md transition-all">
-            <p className="text-red-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Inactivos</p>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{statusCounts.inactivos}</h3>
+                {/* Equipos Back Up */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 hover:border-purple-300 hover:shadow-xs transition-all flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <p className="text-[10px] font-black text-purple-700 uppercase tracking-wider">Back Up</p>
+                      <TooltipInfo text="Equipos de respaldo en almacén o retenidos." formula='Count(Activos con Estatus = "Back Up")' />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                      {statusCounts.equiposBackup.toLocaleString('es-MX')}
+                    </h3>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                </div>
+
+                {/* Equipos Inactivo con Cliente */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 hover:border-amber-300 hover:shadow-xs transition-all flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider">Inactivo c/ Cliente</p>
+                      <TooltipInfo text="Equipos asignados pero parados o inactivos en sitio del cliente." formula='Count(Activos con Estatus = "Inactivo con Cliente")' />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                      {statusCounts.equiposInactivoCliente.toLocaleString('es-MX')}
+                    </h3>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* GROUP 2: ACCESORIOS (2 Columns) */}
+            <div className="lg:col-span-2 bg-slate-50/80 p-2.5 sm:p-3 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center gap-1.5 px-1">
+                <HardDrive className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">Indicadores de Accesorios</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Accesorios Activos */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 hover:border-blue-300 hover:shadow-xs transition-all flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <p className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Activos</p>
+                      <TooltipInfo text="Accesorios en operación regular." formula='Count(Accesorios con Estatus = "Activo")' />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                      {statusCounts.accesoriosActivos.toLocaleString('es-MX')}
+                    </h3>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                </div>
+
+                {/* Accesorios Inactivos */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 hover:border-rose-300 hover:shadow-xs transition-all flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <p className="text-[10px] font-black text-rose-700 uppercase tracking-wider">Inactivos</p>
+                      <TooltipInfo text="Accesorios inactivos o retirados." formula='Count(Accesorios con Estatus = "Inactivo")' />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                      {statusCounts.accesoriosInactivos.toLocaleString('es-MX')}
+                    </h3>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                    <X className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
-        </div>
-      </div>
 
       {/* Coordinator Approval Drawer */}
       {showApprovalsTab && !isAdc && pendingApprovals.length > 0 && (
@@ -878,8 +994,22 @@ export default function FlotillaTab() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex gap-2 justify-end">
-                          <button onClick={() => handleApprove(sol.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition-all">Aprobar</button>
-                          <button onClick={() => handleReject(sol.id)} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition-all">Rechazar</button>
+                          <button 
+                            disabled={actionLoadingId === sol.id} 
+                            onClick={() => handleApprove(sol.id)} 
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-1.5"
+                          >
+                            {actionLoadingId === sol.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                            <span>Aprobar</span>
+                          </button>
+                          <button 
+                            disabled={actionLoadingId === sol.id} 
+                            onClick={() => handleReject(sol.id)} 
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-1.5"
+                          >
+                            {actionLoadingId === sol.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                            <span>Rechazar</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -891,19 +1021,88 @@ export default function FlotillaTab() {
         </div>
       )}
 
-      {/* SEARCH FOR MOBILE ONLY */}
-      <div className="lg:hidden relative group">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
-        <input
-          type="text"
-          placeholder="Buscar serie..."
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setCurrentPage(1);
-          }}
-          className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold focus:border-red-500 focus:outline-none transition-all shadow-sm"
-        />
+      {/* Dedicated Controls & Search Toolbar */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border-2 border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        {/* Left: Search Bar & Clear Filters */}
+        <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 focus-within:text-red-500 transition-colors" />
+            <input
+              type="text"
+              placeholder="Buscar serie..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-9 py-2.5 bg-slate-50 hover:bg-slate-100/60 focus:bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:border-red-500 focus:outline-none transition-all"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {hasActiveFilters && (
+            <button 
+              onClick={clearFilters} 
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border-2 border-red-200 text-xs font-bold transition-all shadow-sm shrink-0" 
+              title="Limpiar todos los filtros"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Limpiar filtros</span>
+            </button>
+          )}
+        </div>
+
+        {/* Right: Data Actions (Import/Export) + Scope Selector + View Switcher */}
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 justify-between lg:justify-end w-full lg:w-auto">
+          {/* Data Actions: Carga Masiva & Exportar */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap"
+            >
+              <Upload className="w-3.5 h-3.5 text-slate-500" />
+              <span>Carga Masiva</span>
+            </button>
+            <button
+              onClick={handleDownloadExcel}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Exportar</span>
+            </button>
+          </div>
+
+          {/* View Switcher */}
+          <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/80">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="Vista de Tabla"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tabla</span>
+            </button>
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'cards' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="Vista de Tarjetas"
+            >
+              <Grid3x3 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tarjetas</span>
+            </button>
+          </div>
+        </div>
       </div>
 
 
@@ -1115,6 +1314,8 @@ export default function FlotillaTab() {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {/* Modal de Carga Masiva */}

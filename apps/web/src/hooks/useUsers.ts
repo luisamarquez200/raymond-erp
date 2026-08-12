@@ -18,6 +18,10 @@ export interface User {
     createdAt?: string;
     updatedAt?: string;
     adcAsociadoName?: string;
+    supervisorId?: string;
+    supervisorName?: string;
+    auxiliarId?: string;
+    auxiliarName?: string;
 }
 
 export interface CreateUserDto {
@@ -28,6 +32,10 @@ export interface CreateUserDto {
     roleId: string;
     ubicacion?: string;
     adcAsociadoName?: string;
+    supervisorId?: string;
+    supervisorName?: string;
+    auxiliarId?: string;
+    auxiliarName?: string;
 }
 
 export interface UpdateUserDto {
@@ -40,6 +48,10 @@ export interface UpdateUserDto {
     avatarUrl?: string;
     ubicacion?: string;
     adcAsociadoName?: string;
+    supervisorId?: string;
+    supervisorName?: string;
+    auxiliarId?: string;
+    auxiliarName?: string;
 }
 
 export function useUsers() {
@@ -74,6 +86,10 @@ export function useUsers() {
                 createdAt: user.created_at || user.createdAt,
                 updatedAt: user.updated_at || user.updatedAt,
                 adcAsociadoName: user.adc_asociado_name || user.adcAsociadoName,
+                supervisorId: user.supervisor_id || user.supervisorId,
+                supervisorName: user.supervisor_name || user.supervisorName,
+                auxiliarId: user.auxiliar_id || user.auxiliarId,
+                auxiliarName: user.auxiliar_name || user.auxiliarName,
             }));
         },
     });
@@ -101,6 +117,10 @@ export function useUser(id: string) {
                 createdAt: rawUser.created_at || rawUser.createdAt,
                 updatedAt: rawUser.updated_at || rawUser.updatedAt,
                 adcAsociadoName: rawUser.adc_asociado_name || rawUser.adcAsociadoName,
+                supervisorId: rawUser.supervisor_id || rawUser.supervisorId,
+                supervisorName: rawUser.supervisor_name || rawUser.supervisorName,
+                auxiliarId: rawUser.auxiliar_id || rawUser.auxiliarId,
+                auxiliarName: rawUser.auxiliar_name || rawUser.auxiliarName,
             };
         },
         enabled: !!id,
@@ -121,6 +141,10 @@ export function useCreateUser() {
                 role_id: data.roleId,
                 ubicacion: data.ubicacion,
                 adc_asociado_name: data.adcAsociadoName,
+                supervisor_id: data.supervisorId,
+                supervisor_name: data.supervisorName,
+                auxiliar_id: data.auxiliarId,
+                auxiliar_name: data.auxiliarName,
             };
             const response = await api.post("/users", payload);
             return response.data?.data || response.data;
@@ -157,6 +181,10 @@ export function useUpdateUser() {
             if (data.avatarUrl !== undefined) payload.avatar_url = data.avatarUrl;
             if (data.ubicacion !== undefined) payload.ubicacion = data.ubicacion;
             if (data.adcAsociadoName !== undefined) payload.adc_asociado_name = data.adcAsociadoName;
+            if (data.supervisorId !== undefined) payload.supervisor_id = data.supervisorId;
+            if (data.supervisorName !== undefined) payload.supervisor_name = data.supervisorName;
+            if (data.auxiliarId !== undefined) payload.auxiliar_id = data.auxiliarId;
+            if (data.auxiliarName !== undefined) payload.auxiliar_name = data.auxiliarName;
 
             const response = await api.patch(`/users/${id}`, payload);
             return response.data?.data || response.data;

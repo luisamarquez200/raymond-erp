@@ -68,6 +68,11 @@ export default function GestionUsuarios() {
     const [isActive, setIsActive] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
     const [adcAsociadoName, setAdcAsociadoName] = useState('');
+    const [supervisorId, setSupervisorId] = useState('');
+    const [supervisorName, setSupervisorName] = useState('');
+    const [auxiliarId, setAuxiliarId] = useState('');
+    const [auxiliarName, setAuxiliarName] = useState('');
+    const [selectedAdcs, setSelectedAdcs] = useState<string[]>([]);
 
     // Fetch Roles
     const { data: allRoles = [] } = useQuery({
@@ -90,12 +95,40 @@ export default function GestionUsuarios() {
         }
     });
 
-    const ALLOWED_ROLES = ['Administrador', 'ADC', 'Gerente'];
+    const ALLOWED_ROLES = ['Administrador', 'ADC', 'Gerente', 'Auxiliar'];
     const roles = allRoles.filter((role: any) => 
         ALLOWED_ROLES.some(allowed => 
             role.name.toLowerCase() === allowed.toLowerCase()
         )
     );
+
+    // Filtered lists of users for selects
+    const auxiliaresUsers = users.filter(u => (u.role?.name || '').toLowerCase() === 'auxiliar');
+    const adcsUsers = users.filter(u => (u.role?.name || '').toLowerCase() === 'adc');
+    const administradoresUsers = users.filter(u => ['administrador', 'gerente', 'coordinador'].includes((u.role?.name || '').toLowerCase()));
+
+    const defaultAdcNames = [
+        'Montserrat Covarrubias',
+        'Andrea Esquivel',
+        'Angélica Simalú',
+        'Alejandra Arellanes',
+        'Daniel Romero'
+    ];
+
+    const allAdcOptions = Array.from(new Set([
+        ...defaultAdcNames,
+        ...adcsUsers.map((u: any) => `${u.firstName || ''} ${u.lastName || ''}`.trim()),
+        ...adcsList.map((a: any) => a.name)
+    ])).filter(Boolean);
+
+    const toggleAdcSelection = (adcName: string) => {
+        setSelectedAdcs(prev => {
+            const exists = prev.includes(adcName);
+            const updated = exists ? prev.filter(a => a !== adcName) : [...prev, adcName];
+            setAdcAsociadoName(updated.length > 0 ? updated.join(', ') : 'ninguno');
+            return updated;
+        });
+    };
 
     const handleOpenCreate = () => {
         setFirstName('');
@@ -105,7 +138,12 @@ export default function GestionUsuarios() {
         setRoleId(roles[0]?.id || '');
         setIsActive(true);
         setShowPassword(false);
+        setSelectedAdcs([]);
         setAdcAsociadoName('ninguno');
+        setSupervisorId('');
+        setSupervisorName('');
+        setAuxiliarId('');
+        setAuxiliarName('');
         setIsCreateOpen(true);
         setTimeout(() => {
             setEmail('');
@@ -122,7 +160,16 @@ export default function GestionUsuarios() {
         setRoleId(user.role?.id || '');
         setIsActive(user.isActive);
         setShowPassword(false);
+        const rawAdcString = user.adcAsociadoName || '';
+        const parsedAdcs = rawAdcString && rawAdcString !== 'ninguno'
+            ? rawAdcString.split(',').map((s: string) => s.trim()).filter(Boolean)
+            : [];
+        setSelectedAdcs(parsedAdcs);
         setAdcAsociadoName(user.adcAsociadoName || 'ninguno');
+        setSupervisorId(user.supervisorId || '');
+        setSupervisorName(user.supervisorName || '');
+        setAuxiliarId(user.auxiliarId || '');
+        setAuxiliarName(user.auxiliarName || '');
         setIsEditOpen(true);
     };
 
@@ -145,7 +192,11 @@ export default function GestionUsuarios() {
                 email,
                 password,
                 roleId,
-                ...(adcAsociadoName !== 'ninguno' && { adcAsociadoName })
+                ...(adcAsociadoName !== 'ninguno' && { adcAsociadoName }),
+                ...(supervisorId && { supervisorId }),
+                ...(supervisorName && { supervisorName }),
+                ...(auxiliarId && { auxiliarId }),
+                ...(auxiliarName && { auxiliarName }),
             });
             setIsCreateOpen(false);
             refetch();
@@ -170,7 +221,11 @@ export default function GestionUsuarios() {
                     roleId,
                     isActive,
                     ...(password && { password }),
-                    adcAsociadoName: adcAsociadoName === 'ninguno' ? '' : adcAsociadoName
+                    adcAsociadoName: adcAsociadoName === 'ninguno' ? '' : adcAsociadoName,
+                    supervisorId: supervisorId || '',
+                    supervisorName: supervisorName || '',
+                    auxiliarId: auxiliarId || '',
+                    auxiliarName: auxiliarName || '',
                 }
             });
             setIsEditOpen(false);
@@ -187,7 +242,7 @@ export default function GestionUsuarios() {
         } catch (error) {}
     };
 
-    const R4_ROLES = ['administrador', 'adc', 'gerente'];
+    const R4_ROLES = ['administrador', 'adc', 'gerente', 'auxiliar'];
     const filteredUsers = users.filter(u => {
         const uRole = (u.role?.name || '').toLowerCase();
         if (!R4_ROLES.includes(uRole)) return false;
@@ -197,20 +252,25 @@ export default function GestionUsuarios() {
                uRole.includes(searchTerm.toLowerCase());
     });
 
+    const activeSelectedRoleName = (roles.find((r: any) => r.id === roleId)?.name || '').toLowerCase();
+
     return (
         <div className="space-y-6">
             {/* Header / Actions */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <Input
-                        type="text"
-                        placeholder="Buscar por nombre, email o rol..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 rounded-2xl border-slate-200 focus-visible:ring-offset-0 focus-visible:ring-1 bg-[#F9FAFB]/50 focus:bg-white transition-all text-sm h-11"
-                    />
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <div className="relative w-full sm:w-80">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                            type="text"
+                            placeholder="Buscar por nombre, email o rol..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 rounded-2xl border-slate-200 focus-visible:ring-offset-0 focus-visible:ring-1 bg-[#F9FAFB]/50 focus:bg-white transition-all text-sm h-11"
+                        />
+                    </div>
                 </div>
+
                 <button
                     onClick={handleOpenCreate}
                     className="w-full sm:w-auto px-5 py-2.5 text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:opacity-90"
@@ -224,119 +284,130 @@ export default function GestionUsuarios() {
                 </button>
             </div>
 
-            {/* Users Table */}
-            <Card className="rounded-3xl border-slate-100 shadow-sm overflow-hidden">
-                {isLoading ? (
-                    <div className="p-12 flex flex-col items-center justify-center gap-3">
-                        <Loader2 className="w-8 h-8 animate-spin" style={{ color: currentColor }} />
-                        <span className="text-slate-500 font-bold text-sm">Cargando usuarios...</span>
-                    </div>
-                ) : filteredUsers.length === 0 ? (
-                    <div className="p-12 text-center">
-                        <p className="text-slate-500 font-bold">No se encontraron usuarios.</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
-                                    <th className="p-4 pl-6">Usuario</th>
-                                    <th className="p-4">Email</th>
-                                    <th className="p-4">Rol</th>
-                                    <th className="p-4">Estatus</th>
-                                    <th className="p-4 pr-6 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
-                                {filteredUsers.map((u) => {
-                                    const uRoleName = u.role?.name || 'Sin Rol';
-                                    const uColor = roleColors[uRoleName.toLowerCase()] || '#64748B';
-                                    
-                                    return (
-                                        <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="p-4 pl-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div 
-                                                        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border"
-                                                        style={{ 
-                                                            backgroundColor: `${uColor}15`, 
-                                                            color: uColor,
-                                                            borderColor: `${uColor}30`
-                                                        }}
-                                                    >
-                                                        {(u.firstName?.[0] || '').toUpperCase()}{(u.lastName?.[0] || '').toUpperCase()}
+            {/* VIEW MODE: TABLE */}
+            {/* Table */}
+            <Card className="rounded-3xl border-slate-100 shadow-sm overflow-hidden bg-white">
+                    {isLoading ? (
+                        <div className="p-12 flex flex-col items-center justify-center gap-3">
+                            <Loader2 className="w-8 h-8 animate-spin" style={{ color: currentColor }} />
+                            <span className="text-slate-500 font-bold text-sm">Cargando usuarios...</span>
+                        </div>
+                    ) : filteredUsers.length === 0 ? (
+                        <div className="p-12 text-center">
+                            <p className="text-slate-500 font-bold">No se encontraron usuarios.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
+                                        <th className="p-4 pl-6">Usuario</th>
+                                        <th className="p-4">Email</th>
+                                        <th className="p-4">Rol & Asociaciones</th>
+                                        <th className="p-4">Estatus</th>
+                                        <th className="p-4 pr-6 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
+                                    {filteredUsers.map((u) => {
+                                        const uRoleName = u.role?.name || 'Sin Rol';
+                                        const uColor = roleColors[uRoleName.toLowerCase()] || '#64748B';
+                                        
+                                        return (
+                                            <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="p-4 pl-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div 
+                                                            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border shadow-xs"
+                                                            style={{ 
+                                                                backgroundColor: `${uColor}15`, 
+                                                                color: uColor,
+                                                                borderColor: `${uColor}30`
+                                                            }}
+                                                        >
+                                                            {(u.firstName?.[0] || '').toUpperCase()}{(u.lastName?.[0] || '').toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-bold text-slate-900 block">{u.firstName} {u.lastName}</span>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <span className="font-bold text-slate-900 block">{u.firstName} {u.lastName}</span>
+                                                </td>
+                                                <td className="p-4 text-slate-500">
+                                                    <div className="flex items-center gap-2">
+                                                        <Mail className="w-4 h-4 text-slate-400" />
+                                                        {u.email}
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-slate-500">
-                                                <div className="flex items-center gap-2">
-                                                    <Mail className="w-4 h-4 text-slate-400" />
-                                                    {u.email}
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex flex-col items-start gap-1">
-                                                    <span 
-                                                        className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border"
-                                                        style={{ 
-                                                            backgroundColor: `${uColor}15`, 
-                                                            color: uColor,
-                                                            borderColor: `${uColor}30`
-                                                        }}
-                                                    >
-                                                        {uRoleName.toUpperCase()}
-                                                    </span>
-                                                    {u.adcAsociadoName && (
-                                                        <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 mt-0.5 animate-in fade-in duration-200">
-                                                            Asociado: {u.adcAsociadoName}
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <span 
+                                                            className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border"
+                                                            style={{ 
+                                                                backgroundColor: `${uColor}15`, 
+                                                                color: uColor,
+                                                                borderColor: `${uColor}30`
+                                                            }}
+                                                        >
+                                                            {uRoleName.toUpperCase()}
+                                                        </span>
+                                                        {u.supervisorName && (
+                                                            <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 font-bold">
+                                                                Coordinadora: {u.supervisorName}
+                                                            </span>
+                                                        )}
+                                                        {u.adcAsociadoName && (
+                                                            <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200 font-bold">
+                                                                ADC Asociado: {u.adcAsociadoName}
+                                                            </span>
+                                                        )}
+                                                        {u.auxiliarName && (
+                                                            <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-100 font-bold">
+                                                                Auxiliar: {u.auxiliarName}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    {u.isActive ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                            Activo
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                                            Inactivo
                                                         </span>
                                                     )}
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                {u.isActive ? (
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                        Activo
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                                        Inactivo
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="p-4 pr-6 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button
-                                                        onClick={() => handleOpenEdit(u)}
-                                                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
-                                                        title="Editar"
-                                                    >
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    {currentUser?.id !== u.id && (
+                                                </td>
+                                                <td className="p-4 pr-6 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
                                                         <button
-                                                            onClick={() => handleOpenDelete(u)}
-                                                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                                            title="Eliminar"
+                                                            onClick={() => handleOpenEdit(u)}
+                                                            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+                                                            title="Editar"
                                                         >
-                                                            <Trash2 className="w-4 h-4" />
+                                                            <Edit2 className="w-4 h-4" />
                                                         </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </Card>
+                                                        {currentUser?.id !== u.id && (
+                                                            <button
+                                                                onClick={() => handleOpenDelete(u)}
+                                                                className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                                                title="Eliminar"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </Card>
 
             {/* CREATE MODAL */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -344,11 +415,11 @@ export default function GestionUsuarios() {
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black text-slate-900">Crear Nuevo Usuario</DialogTitle>
                         <DialogDescription className="text-slate-500 font-medium mt-1">
-                            Ingresa los datos para registrar una nueva cuenta.
+                            Ingresa los datos para registrar una nueva cuenta y establecer sus relaciones.
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreate} className="space-y-4 py-4" autoComplete="off">
-                        {/* Hidden fake inputs to prevent browser autofill of saved credentials */}
+                        {/* Hidden fake inputs to prevent browser autofill */}
                         <input type="text" name="fake_username" className="hidden" tabIndex={-1} aria-hidden="true" autoComplete="off" />
                         <input type="password" name="fake_password" className="hidden" tabIndex={-1} aria-hidden="true" autoComplete="off" />
 
@@ -416,20 +487,149 @@ export default function GestionUsuarios() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="c-adcAsociado" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a un ADC (Opcional)</Label>
-                            <Select value={adcAsociadoName} onValueChange={setAdcAsociadoName}>
-                                <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold focus:bg-white">
-                                    <SelectValue placeholder="Ninguno" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
-                                    <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
-                                    {adcsList.map((adc: any, idx: number) => (
-                                        <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+
+                        {/* CONDITIONAL ASSOCIATION FIELDS BASED ON ROLE */}
+                        {activeSelectedRoleName === 'adc' && (
+                            <>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="c-supervisor" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Coordinadora / Administrador Cargo *</Label>
+                                    <Select 
+                                        value={supervisorName} 
+                                        onValueChange={(val) => {
+                                            setSupervisorName(val);
+                                            const found = administradoresUsers.find(u => `${u.firstName} ${u.lastName}`.trim() === val);
+                                            setSupervisorId(found ? found.id : '');
+                                        }}
+                                    >
+                                        <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold focus:bg-white">
+                                            <SelectValue placeholder="Seleccionar Coordinadora (ej. Cecilia Sosa, Paola Silva)" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                            <SelectItem value="Cecilia Sosa" className="text-slate-900 font-bold cursor-pointer">Cecilia Sosa (Coordinadora)</SelectItem>
+                                            <SelectItem value="Paola Silva" className="text-slate-900 font-bold cursor-pointer">Paola Silva (Coordinadora)</SelectItem>
+                                            {administradoresUsers.map((adm) => (
+                                                <SelectItem key={adm.id} value={`${adm.firstName} ${adm.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
+                                                    {adm.firstName} {adm.lastName}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="c-auxiliar" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar Auxiliar / Becario (Opcional)</Label>
+                                    <Select 
+                                        value={auxiliarName} 
+                                        onValueChange={(val) => {
+                                            setAuxiliarName(val === 'ninguno' ? '' : val);
+                                            const found = auxiliaresUsers.find(u => `${u.firstName} ${u.lastName}`.trim() === val);
+                                            setAuxiliarId(found ? found.id : '');
+                                        }}
+                                    >
+                                        <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold focus:bg-white">
+                                            <SelectValue placeholder="Ninguno" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                            <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
+                                            <SelectItem value="Salma Salgado" className="text-slate-900 font-bold cursor-pointer">Salma Salgado (Becario / Auxiliar)</SelectItem>
+                                            {auxiliaresUsers.map((aux) => (
+                                                <SelectItem key={aux.id} value={`${aux.firstName} ${aux.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
+                                                    {aux.firstName} {aux.lastName}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </>
+                        )}
+
+                        {activeSelectedRoleName === 'auxiliar' && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="c-adcForAux" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a ADC *</Label>
+                                <Select 
+                                    value={adcAsociadoName} 
+                                    onValueChange={(val) => {
+                                        setAdcAsociadoName(val);
+                                        const found = adcsUsers.find(u => `${u.firstName} ${u.lastName}`.trim() === val || u.firstName === val);
+                                        if (found) {
+                                            setSupervisorId(found.id);
+                                            setSupervisorName(`${found.firstName} ${found.lastName}`.trim());
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold focus:bg-white">
+                                        <SelectValue placeholder="Selecciona el ADC asignado" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                        <SelectItem value="Andrea Esquivel" className="text-slate-900 font-bold cursor-pointer">Andrea Esquivel</SelectItem>
+                                        <SelectItem value="Montserrat Covarrubias" className="text-slate-900 font-bold cursor-pointer">Montserrat Covarrubias</SelectItem>
+                                        <SelectItem value="Angélica Simalú" className="text-slate-900 font-bold cursor-pointer">Angélica Simalú</SelectItem>
+                                        <SelectItem value="Alejandra Arellanes" className="text-slate-900 font-bold cursor-pointer">Alejandra Arellanes</SelectItem>
+                                        <SelectItem value="Daniel Romero" className="text-slate-900 font-bold cursor-pointer">Daniel Romero</SelectItem>
+                                        {adcsList.map((adc: any, idx: number) => (
+                                            <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {activeSelectedRoleName !== 'adc' && activeSelectedRoleName !== 'auxiliar' && (
+                            <div className="space-y-1.5">
+                                <Label className="text-slate-800 font-bold text-xs uppercase tracking-wider block">
+                                    Asociar ADCs a Cargo (Selección Múltiple)
+                                </Label>
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                                    <div className="text-[11px] font-semibold text-slate-500">
+                                        Selecciona uno o más ADCs asignados a este Administrador:
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                                        {allAdcOptions.map((adcName) => {
+                                            const isSelected = selectedAdcs.includes(adcName);
+                                            return (
+                                                <button
+                                                    key={adcName}
+                                                    type="button"
+                                                    onClick={() => toggleAdcSelection(adcName)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                                                        isSelected
+                                                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                                                    }`}
+                                                >
+                                                    <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] ${
+                                                        isSelected ? 'bg-white text-slate-900 border-white font-extrabold' : 'border-slate-300'
+                                                    }`}>
+                                                        {isSelected ? '✓' : ''}
+                                                    </span>
+                                                    {adcName}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedAdcs.length > 0 ? (
+                                        <div className="pt-2 border-t border-slate-200/80 text-[11px] font-bold text-slate-600 flex items-center justify-between">
+                                            <span>Seleccionados ({selectedAdcs.length}): <strong className="text-slate-900">{selectedAdcs.join(', ')}</strong></span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedAdcs([]);
+                                                    setAdcAsociadoName('ninguno');
+                                                }}
+                                                className="text-[10px] text-red-600 hover:underline font-bold uppercase"
+                                            >
+                                                Limpiar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="pt-1 text-[11px] text-slate-400 font-medium italic">
+                                            Ningún ADC seleccionado.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         <DialogFooter className="pt-4 flex sm:justify-end gap-2">
                             <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="rounded-xl font-bold">Cancelar</Button>
                             <Button 
@@ -451,7 +651,7 @@ export default function GestionUsuarios() {
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black text-slate-900">Editar Usuario</DialogTitle>
                         <DialogDescription className="text-slate-500 font-medium mt-1">
-                            Modifica los datos del usuario. Deja la contraseña en blanco si no quieres cambiarla.
+                            Modifica los datos del usuario y sus vinculaciones de jerarquía.
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleEdit} className="space-y-4 py-4" autoComplete="off">
@@ -503,20 +703,148 @@ export default function GestionUsuarios() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="e-adcAsociado" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a un ADC (Opcional)</Label>
-                            <Select value={adcAsociadoName} onValueChange={setAdcAsociadoName}>
-                                <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold">
-                                    <SelectValue placeholder="Ninguno" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
-                                    <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
-                                    {adcsList.map((adc: any, idx: number) => (
-                                        <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+
+                        {/* CONDITIONAL ASSOCIATION FIELDS BASED ON ROLE IN EDIT */}
+                        {activeSelectedRoleName === 'adc' && (
+                            <>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="e-supervisor" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Coordinadora / Administrador Cargo</Label>
+                                    <Select 
+                                        value={supervisorName} 
+                                        onValueChange={(val) => {
+                                            setSupervisorName(val);
+                                            const found = administradoresUsers.find(u => `${u.firstName} ${u.lastName}`.trim() === val);
+                                            setSupervisorId(found ? found.id : '');
+                                        }}
+                                    >
+                                        <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold">
+                                            <SelectValue placeholder="Seleccionar Coordinadora" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                            <SelectItem value="Cecilia Sosa" className="text-slate-900 font-bold cursor-pointer">Cecilia Sosa (Coordinadora)</SelectItem>
+                                            <SelectItem value="Paola Silva" className="text-slate-900 font-bold cursor-pointer">Paola Silva (Coordinadora)</SelectItem>
+                                            {administradoresUsers.map((adm) => (
+                                                <SelectItem key={adm.id} value={`${adm.firstName} ${adm.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
+                                                    {adm.firstName} {adm.lastName}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="e-auxiliar" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar Auxiliar / Becario</Label>
+                                    <Select 
+                                        value={auxiliarName} 
+                                        onValueChange={(val) => {
+                                            setAuxiliarName(val === 'ninguno' ? '' : val);
+                                            const found = auxiliaresUsers.find(u => `${u.firstName} ${u.lastName}`.trim() === val);
+                                            setAuxiliarId(found ? found.id : '');
+                                        }}
+                                    >
+                                        <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold">
+                                            <SelectValue placeholder="Ninguno" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                            <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
+                                            <SelectItem value="Salma Salgado" className="text-slate-900 font-bold cursor-pointer">Salma Salgado (Becario / Auxiliar)</SelectItem>
+                                            {auxiliaresUsers.map((aux) => (
+                                                <SelectItem key={aux.id} value={`${aux.firstName} ${aux.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
+                                                    {aux.firstName} {aux.lastName}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </>
+                        )}
+
+                        {activeSelectedRoleName === 'auxiliar' && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="e-adcForAux" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a ADC</Label>
+                                <Select 
+                                    value={adcAsociadoName} 
+                                    onValueChange={(val) => {
+                                        setAdcAsociadoName(val);
+                                        const found = adcsUsers.find(u => `${u.firstName} ${u.lastName}`.trim() === val || u.firstName === val);
+                                        if (found) {
+                                            setSupervisorId(found.id);
+                                            setSupervisorName(`${found.firstName} ${found.lastName}`.trim());
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold">
+                                        <SelectValue placeholder="Selecciona el ADC asignado" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
+                                        <SelectItem value="Andrea Esquivel" className="text-slate-900 font-bold cursor-pointer">Andrea Esquivel</SelectItem>
+                                        <SelectItem value="Montserrat Covarrubias" className="text-slate-900 font-bold cursor-pointer">Montserrat Covarrubias</SelectItem>
+                                        <SelectItem value="Angélica Simalú" className="text-slate-900 font-bold cursor-pointer">Angélica Simalú</SelectItem>
+                                        <SelectItem value="Alejandra Arellanes" className="text-slate-900 font-bold cursor-pointer">Alejandra Arellanes</SelectItem>
+                                        <SelectItem value="Daniel Romero" className="text-slate-900 font-bold cursor-pointer">Daniel Romero</SelectItem>
+                                        {adcsList.map((adc: any, idx: number) => (
+                                            <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {activeSelectedRoleName !== 'adc' && activeSelectedRoleName !== 'auxiliar' && (
+                            <div className="space-y-1.5">
+                                <Label className="text-slate-800 font-bold text-xs uppercase tracking-wider block">
+                                    Asociar ADCs a Cargo (Selección Múltiple)
+                                </Label>
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                                    <div className="text-[11px] font-semibold text-slate-500">
+                                        Selecciona uno o más ADCs asignados a este Administrador:
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                                        {allAdcOptions.map((adcName) => {
+                                            const isSelected = selectedAdcs.includes(adcName);
+                                            return (
+                                                <button
+                                                    key={adcName}
+                                                    type="button"
+                                                    onClick={() => toggleAdcSelection(adcName)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                                                        isSelected
+                                                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                                                    }`}
+                                                >
+                                                    <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] ${
+                                                        isSelected ? 'bg-white text-slate-900 border-white font-extrabold' : 'border-slate-300'
+                                                    }`}>
+                                                        {isSelected ? '✓' : ''}
+                                                    </span>
+                                                    {adcName}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedAdcs.length > 0 ? (
+                                        <div className="pt-2 border-t border-slate-200/80 text-[11px] font-bold text-slate-600 flex items-center justify-between">
+                                            <span>Seleccionados ({selectedAdcs.length}): <strong className="text-slate-900">{selectedAdcs.join(', ')}</strong></span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedAdcs([]);
+                                                    setAdcAsociadoName('ninguno');
+                                                }}
+                                                className="text-[10px] text-red-600 hover:underline font-bold uppercase"
+                                            >
+                                                Limpiar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="pt-1 text-[11px] text-slate-400 font-medium italic">
+                                            Ningún ADC seleccionado.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                         <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
                             <span className="text-sm font-bold text-slate-700">Estado Activo</span>
                             <button

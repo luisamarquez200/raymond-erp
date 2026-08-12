@@ -13,39 +13,48 @@ export class PrismaDynamicService {
     constructor(@Inject(REQUEST) private request: Request) { }
 
     static async ensureClientsInitialized() {
-        if (PrismaDynamicService.clients.r1 && PrismaDynamicService.clients.r2 && PrismaDynamicService.clients.r3 && PrismaDynamicService.clients.r4) {
-            return;
-        }
-
-        try {
-            if (!PrismaDynamicService.clients.r1) {
+        if (!PrismaDynamicService.clients.r1) {
+            try {
                 const client = new PrismaR1();
                 await client.$connect();
                 PrismaDynamicService.clients.r1 = client;
                 console.log('✅ Conexión establecida: Taller R1');
+            } catch (error: any) {
+                console.error('❌ [PrismaDynamicService] Error connecting Taller R1:', error?.message || error);
+                PrismaDynamicService.clients.r1 = new PrismaR1();
             }
-            if (!PrismaDynamicService.clients.r2) {
+        }
+        if (!PrismaDynamicService.clients.r2) {
+            try {
                 const client = new PrismaNaves();
                 await client.$connect();
                 PrismaDynamicService.clients.r2 = client;
                 console.log('✅ Conexión establecida: Naves (R2)');
+            } catch (error: any) {
+                console.error('❌ [PrismaDynamicService] Error connecting Naves (R2):', error?.message || error);
+                PrismaDynamicService.clients.r2 = new PrismaNaves();
             }
-            if (!PrismaDynamicService.clients.r3) {
+        }
+        if (!PrismaDynamicService.clients.r3) {
+            try {
                 const client = new PrismaFrontera();
                 await client.$connect();
                 PrismaDynamicService.clients.r3 = client;
                 console.log('✅ Conexión establecida: R3');
+            } catch (error: any) {
+                console.error('❌ [PrismaDynamicService] Error connecting R3:', error?.message || error);
+                PrismaDynamicService.clients.r3 = new PrismaFrontera();
             }
-            if (!PrismaDynamicService.clients.r4) {
+        }
+        if (!PrismaDynamicService.clients.r4) {
+            try {
                 const client = new PrismaComercial();
                 await client.$connect();
                 PrismaDynamicService.clients.r4 = client;
                 console.log('✅ Conexión establecida: R4 (Comercial)');
-            }
-        } catch (error: any) {
-            console.error('❌ [PrismaDynamicService] Error initializing clients:', error?.message || error);
-            if (error.stack) {
-                console.error(error.stack);
+            } catch (error: any) {
+                console.error('❌ [PrismaDynamicService] Error connecting R4 (Comercial):', error?.message || error);
+                PrismaDynamicService.clients.r4 = new PrismaComercial();
             }
         }
     }

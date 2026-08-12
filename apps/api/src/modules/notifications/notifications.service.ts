@@ -26,10 +26,10 @@ export class NotificationsService {
 
             // Find logs that are approved or rejected
             const db = this.prisma as any;
-            const logs = await db.cambioSitioLog.findMany({
+            const logs = db.cambioSitioLog ? await db.cambioSitioLog.findMany({
                 take: 100,
                 orderBy: { fecha: 'desc' }
-            });
+            }) : [];
 
             for (const log of logs) {
                 if (existingLogIds.has(log.id)) continue;

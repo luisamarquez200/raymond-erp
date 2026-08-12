@@ -872,6 +872,14 @@ model users {
   ubicacion             String?
   adc_asociado_id       String?
   adc_asociado_name     String?
+  supervisor_id         String?
+  supervisor_name       String?
+  auxiliar_id           String?
+  auxiliar_name         String?
+  supervisor            users?                  @relation("UserSupervisor", fields: [supervisor_id], references: [id], onDelete: SetNull)
+  subordinates          users[]                 @relation("UserSupervisor")
+  auxiliar              users?                  @relation("UserAuxiliar", fields: [auxiliar_id], references: [id], onDelete: SetNull)
+  adcs_as_auxiliar      users[]                 @relation("UserAuxiliar")
   api_keys              api_keys[]
   audit_logs            audit_logs[]
   comments              comments[]
@@ -896,6 +904,8 @@ model users {
   @@index([legacy_user_id])
   @@index([organization_id])
   @@index([role_id])
+  @@index([supervisor_id])
+  @@index([auxiliar_id])
 }
 
 model webhooks {

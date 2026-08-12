@@ -4,7 +4,7 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import { seedEnterprisePermissions } from '../../../prisma/seeds/enterprise-permissions.seed';
+import { seedEnterprisePermissions } from '../../database/seeds/enterprise-permissions.seed';
 
 @Injectable()
 export class SuperadminService {

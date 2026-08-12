@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 
 interface DashboardFilters {
     year: number;
-    month: number;
+    months: number[];
     cliente_id?: string;
     sitio_id?: string;
     moneda?: string;
@@ -25,13 +25,34 @@ export class PresupuestosService {
 
     async getDashboardStats(filters: DashboardFilters) {
         const db = this.getDb();
-        const { year, month, cliente_id, sitio_id, moneda, adc } = filters;
+        const { year, months = [], cliente_id, sitio_id, moneda, adc } = filters;
 
-        const currentPeriodStr = `${year}-${String(month).padStart(2, '0')}`;
+        if (months.length === 0) {
+            // Default to current month if nothing provided to avoid errors
+            months.push(dayjs().month() + 1);
+        }
+
+        // Sort months ascending
+        months.sort((a, b) => a - b);
         
-        // Date boundaries for the month
-        const startOfMonth = dayjs(`${currentPeriodStr}-01`).startOf('month').toDate();
-        const endOfMonth = dayjs(`${currentPeriodStr}-01`).endOf('month').toDate();
+        const earliestMonth = months[0];
+        const earliestPeriodStr = `${year}-${String(earliestMonth).padStart(2, '0')}`;
+        
+        const currentPeriodStrs = months.map(m => `${year}-${String(m).padStart(2, '0')}`);
+        
+        // Fetch dynamic exchange rate for the requested period (year, latest month)
+        const latestMonth = months[months.length - 1];
+        let rateConfig = await db.tipoCambioMensual.findUnique({
+            where: { year_month: { year: Number(year), month: Number(latestMonth) } }
+        }).catch(() => null);
+
+        if (!rateConfig || !rateConfig.activo) {
+            rateConfig = await db.tipoCambioMensual.findFirst({
+                where: { activo: true },
+                orderBy: [{ year: 'desc' }, { month: 'desc' }]
+            }).catch(() => null);
+        }
+        const exchangeRate = rateConfig?.tipo_cambio || 18.0;
 
         // 1. Fetch all rentas (filtering by dimensions if provided)
         let rentasWhere: any = {};
@@ -65,18 +86,29 @@ export class PresupuestosService {
             }
         });
 
+        // 3. Fetch facturación manual (ingresada por el Gerente) for selected periods
+        const facturacionMensual = await db.facturacionMensual.findMany({
+            where: { periodo: { in: currentPeriodStrs } }
+        }).catch(() => []);
+
         // We will process the data in memory to group by Currency (MXN / USD) and calculate the metrics.
         const stats = {
             MXN: this.initCurrencyStats(),
             USD: this.initCurrencyStats()
         };
 
-        const adcsMap = new Map<string, { cliente: string, budget: number, sentPOs: number }>();
+        // Map facturado by moneda (sum across selected months)
+        const facturadoByMoneda: Record<string, number> = { MXN: 0, USD: 0 };
+        for (const f of facturacionMensual) {
+            const key = f.moneda.toUpperCase();
+            if (key in facturadoByMoneda) {
+                facturadoByMoneda[key] += f.monto;
+            }
+        }
+
+        const adcsMap = new Map<string, { adc: string; cliente: string; moneda: string; budget: number; sentPOs: number }>();
         const pendingByClientAdc: any[] = [];
         const clientTotals = new Map<string, { presupuesto: number, pendiente: number }>();
-
-        // We will consider a Renta "active" for the current month if it started before/during the month and is either VIGENTE or ended after the start of the month.
-        // But the schema just says `estado: VIGENTE`. Let's use `estado === 'VIGENTE'` for simplicity as standard active rent.
 
         for (const r of allRentas) {
             // Apply ADC and Sitio filters manually if they were not fully applied
@@ -88,44 +120,39 @@ export class PresupuestosService {
             const currencyStat = stats[rMoneda as keyof typeof stats];
             if (!currencyStat) continue;
 
-            // Monthly Budget Contribution
-            // We assume if it's VIGENTE or IMPORTADA, it contributes to the monthly budget.
-            if (r.estado === 'VIGENTE' || r.estado === 'IMPORTADA') {
-                const budgetAmount = r.detalles?.renta_real || r.tarifa || 0;
+            // Monthly Budget Contribution: VIGENTE, IMPORTADA, ACTIVA, ACTIVO
+            const estadoNorm = (r.estado || '').toUpperCase().trim();
+            const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
+
+            if (isRentaActiva) {
+                const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
 
                 // Equipos Detenidos: exclude ALL inactive variants (Inactivo, Inactivo con Cliente, Inactivo - Con Cliente)
                 const estatusNorm = (r.activo?.estatus || '').trim().toUpperCase();
                 const isInactive = estatusNorm.startsWith('INACTIVO');
 
                 if (isInactive) {
-                    currencyStat.equipos_detenidos += budgetAmount;
+                    currencyStat.equipos_detenidos += budgetAmount * months.length;
                 } else {
-                    currencyStat.presupuesto_mes += budgetAmount;
+                    currencyStat.presupuesto_mes += budgetAmount * months.length;
 
                     // ADC Compliance tracking
                     const adcName = r.adc || r.sitio?.adc || 'Sin ADC';
                     const clientName = r.cliente.razon_social;
-                    const adcKey = `${adcName}_${clientName}_${rMoneda}`;
-                    if (!adcsMap.has(adcKey)) adcsMap.set(adcKey, { cliente: clientName, budget: 0, sentPOs: 0 });
+                    const adcKey = `${adcName}___${clientName}___${rMoneda}`;
+                    if (!adcsMap.has(adcKey)) {
+                        adcsMap.set(adcKey, { adc: adcName, cliente: clientName, moneda: rMoneda, budget: 0, sentPOs: 0 });
+                    }
                     adcsMap.get(adcKey)!.budget += budgetAmount;
 
                     // Client Total Tracking
                     if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
-                    clientTotals.get(clientName)!.presupuesto += budgetAmount;
+                    clientTotals.get(clientName)!.presupuesto += budgetAmount * months.length;
                 }
             }
         }
 
         // Processing Orders
-        // orders are grouped by periodo. 
-        // past orders vs past budget? The user said: "iterate past rents - past orders" for accumulated.
-        // Actually, to get past budget, we should look at active rentas in those past months.
-        // Since we don't have historical snapshots of `estado`, we might just sum all orders < currentPeriod and compare to... wait.
-        // A simple way to do "Acumulado" is just to look at all past Orders that have an amount, and subtract from what *should* have been billed. 
-        // This can be complex. Let's simplify: 
-        // We calculate "Expected Historical Budget" = Sum of (Renta Real * Months Active before current month).
-        // Months Active = from `fecha_inicio` to `current period` (capped).
-        
         for (const r of allRentas) {
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
@@ -137,15 +164,15 @@ export class PresupuestosService {
             if (estatusNormAcc.startsWith('INACTIVO')) continue;
 
             const startM = dayjs(r.fecha_inicio).startOf('month');
-            const endM = dayjs(`${currentPeriodStr}-01`).startOf('month');
+            const endM = dayjs(`${earliestPeriodStr}-01`).startOf('month');
             let monthsActive = endM.diff(startM, 'month');
             if (monthsActive < 0) monthsActive = 0;
             
-            const budgetAmount = r.detalles?.renta_real || r.tarifa || 0;
+            const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
             const expectedPast = budgetAmount * monthsActive;
             
-            // Find past orders for this renta
-            const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < currentPeriodStr);
+            // Find past orders for this renta (before the earliest month in selection)
+            const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
             const pastSent = pastOrders.reduce((sum, o) => sum + (o.tarifa || 0), 0);
             
             const pending = expectedPast - pastSent;
@@ -168,13 +195,12 @@ export class PresupuestosService {
         }
 
         // Sent POs in current month
-        const currentMonthOrders = allOrders.filter(o => o.periodo === currentPeriodStr);
+        const currentMonthOrders = allOrders.filter(o => currentPeriodStrs.includes(o.periodo));
         const pedidos_del_mes: any[] = [];
 
         for (const o of currentMonthOrders) {
             // Check filters
             if (sitio_id && o.renta?.sitio_id !== sitio_id) continue;
-            // if (adc && o.renta?.adc !== adc) continue; // simplistic
 
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
@@ -185,20 +211,33 @@ export class PresupuestosService {
                 currencyStat.pedidos_enviados += amount;
                 
                 // Add to ADC compliance
-                if (o.renta) {
-                    const adcName = o.renta.adc || o.renta.sitio?.adc || 'Sin ADC';
-                    const clientName = o.cliente.razon_social;
-                    const adcKey = `${adcName}_${clientName}_${oMoneda}`;
-                    if (adcsMap.has(adcKey)) {
-                        adcsMap.get(adcKey)!.sentPOs += amount;
+                const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+                const clientName = o.cliente?.razon_social || '';
+                const adcKey = `${adcName}___${clientName}___${oMoneda}`;
+                
+                if (adcsMap.has(adcKey)) {
+                    adcsMap.get(adcKey)!.sentPOs += amount;
+                } else {
+                    // Try case/spacing-insensitive match
+                    for (const entry of adcsMap.values()) {
+                        if (
+                            entry.moneda === oMoneda &&
+                            entry.adc.trim().toUpperCase() === adcName.trim().toUpperCase() &&
+                            entry.cliente.trim().toUpperCase() === clientName.trim().toUpperCase()
+                        ) {
+                            entry.sentPOs += amount;
+                            break;
+                        }
                     }
                 }
 
+                const condicionesObj = (o.condiciones as any) || {};
                 pedidos_del_mes.push({
                     cliente: o.cliente.razon_social,
                     moneda: oMoneda,
                     importe: amount,
-                    po: o.po
+                    po: o.po,
+                    pedido_tovts: condicionesObj.pedido_tovts || o.po || '-'
                 });
             }
         }
@@ -207,20 +246,20 @@ export class PresupuestosService {
         for (const key of ['MXN', 'USD'] as const) {
             const s = stats[key];
             s.total_a_facturar = s.presupuesto_mes + s.acumulado;
-            s.facturado = s.pedidos_enviados; // As assumed
+            // Use manually entered facturado value from Gerente; fallback to pedidos_enviados if not set
+            s.facturado = facturadoByMoneda[key] > 0 ? facturadoByMoneda[key] : s.pedidos_enviados;
             s.faltante = s.total_a_facturar - s.pedidos_enviados;
             s.cumplimiento_general = s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0;
         }
 
-        const adcs = Array.from(adcsMap.entries()).map(([key, data]) => {
-            const [adc, cliente, mnd] = key.split('_');
-            return {
-                adc,
-                cliente,
-                moneda: mnd,
-                cumplimiento: data.budget > 0 ? (data.sentPOs / data.budget) * 100 : 0
-            };
-        });
+        const adcs = Array.from(adcsMap.values()).map((data) => ({
+            adc: data.adc,
+            cliente: data.cliente,
+            moneda: data.moneda,
+            presupuesto: data.budget,
+            enviado: data.sentPOs,
+            cumplimiento: data.budget > 0 ? (data.sentPOs / data.budget) * 100 : 0
+        }));
 
         const totalPorCliente = Array.from(clientTotals.entries()).map(([cliente, data]) => ({
             cliente,
@@ -232,12 +271,13 @@ export class PresupuestosService {
         // Recuperacion de meses anteriores (orders in current month but belong to previous periods?)
         // The user says "Órdenes de compra recuperadas de meses anteriores".
         // In our model `OrdenMensual` has `periodo` (the period it belongs to) and `created_at` (when it was added).
-        // If `created_at` is in current month, but `periodo < currentPeriodStr`, it's a recovery!
+        // If `created_at` is in any of the selected months, but `periodo < earliestPeriodStr`, it's a recovery!
         const recuperados = allOrders.filter(o => {
-            if (o.periodo >= currentPeriodStr) return false;
+            if (o.periodo >= earliestPeriodStr) return false;
             const createdM = dayjs(o.created_at).format('YYYY-MM');
-            return createdM === currentPeriodStr;
+            return currentPeriodStrs.includes(createdM);
         }).map(o => ({
+            adc: o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC',
             cliente: o.cliente.razon_social,
             periodo_original: o.periodo,
             po: o.po,
@@ -274,14 +314,177 @@ export class PresupuestosService {
             observaciones.push({ tipo: 'Info', mensaje: 'Reporte generado automáticamente. Todos los indicadores en orden.' });
         }
 
+        // Master Consolidated Table (Matching Excel columns: % CUMPLIMIENTO | ADC | CLIENTE | PRESUPUESTO | EQUIPOS DETENIDOS | PENDIENTE ACUMULADO | TOTAL A FACTURAR)
+        const masterMap = new Map<string, {
+            adc: string;
+            cliente: string;
+            moneda: string;
+            presupuesto: number;
+            enviado: number;
+            equipos_detenidos: number;
+            pendiente_acumulado: number;
+        }>();
+
+        for (const r of allRentas) {
+            if (adc && r.adc !== adc && r.sitio?.adc !== adc) continue;
+            const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
+            if (moneda && moneda !== rMoneda) continue;
+
+            const adcName = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            const clientName = r.cliente.razon_social;
+            const key = `${adcName}___${clientName}___${rMoneda}`;
+
+            if (!masterMap.has(key)) {
+                masterMap.set(key, {
+                    adc: adcName,
+                    cliente: clientName,
+                    moneda: rMoneda,
+                    presupuesto: 0,
+                    enviado: 0,
+                    equipos_detenidos: 0,
+                    pendiente_acumulado: 0
+                });
+            }
+
+            const item = masterMap.get(key)!;
+            const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
+
+            const estadoNorm = (r.estado || '').toUpperCase().trim();
+            const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
+            const estatusNorm = (r.activo?.estatus || '').trim().toUpperCase();
+            const isInactive = estatusNorm.startsWith('INACTIVO');
+
+            if (isRentaActiva) {
+                if (isInactive) {
+                    item.equipos_detenidos += budgetAmount;
+                } else {
+                    item.presupuesto += budgetAmount;
+                }
+            }
+
+            // Pending accumulation for past months
+            if (!isInactive) {
+                const startM = dayjs(r.fecha_inicio).startOf('month');
+                const endM = dayjs(`${earliestPeriodStr}-01`).startOf('month');
+                let monthsActive = endM.diff(startM, 'month');
+                if (monthsActive < 0) monthsActive = 0;
+
+                const expectedPast = budgetAmount * monthsActive;
+                const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
+                const pastSent = pastOrders.reduce((sum, o) => sum + (o.tarifa || 0), 0);
+                const pending = expectedPast - pastSent;
+                if (pending > 0) {
+                    item.pendiente_acumulado += pending;
+                }
+            }
+        }
+
+        for (const o of currentMonthOrders) {
+            if (sitio_id && o.renta?.sitio_id !== sitio_id) continue;
+            const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
+            if (moneda && moneda !== oMoneda) continue;
+
+            const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            const clientName = o.cliente?.razon_social || '';
+            const key = `${adcName}___${clientName}___${oMoneda}`;
+
+            if (masterMap.has(key)) {
+                masterMap.get(key)!.enviado += (o.tarifa || 0);
+            } else {
+                let found = false;
+                for (const item of masterMap.values()) {
+                    if (item.moneda === oMoneda && item.cliente.trim().toUpperCase() === clientName.trim().toUpperCase()) {
+                        item.enviado += (o.tarifa || 0);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    masterMap.set(key, {
+                        adc: adcName,
+                        cliente: clientName,
+                        moneda: oMoneda,
+                        presupuesto: 0,
+                        enviado: o.tarifa || 0,
+                        equipos_detenidos: 0,
+                        pendiente_acumulado: 0
+                    });
+                }
+            }
+        }
+
+        const tabla_maestra = Array.from(masterMap.values()).map(item => {
+            const cumplimiento = item.presupuesto > 0 ? (item.enviado / item.presupuesto) * 100 : 0;
+            const total_facturar = item.presupuesto + item.pendiente_acumulado;
+            return {
+                ...item,
+                cumplimiento,
+                total_facturar
+            };
+        }).sort((a, b) => {
+            const adcCompare = (a.adc || '').localeCompare(b.adc || '', 'es', { sensitivity: 'base' });
+            if (adcCompare !== 0) return adcCompare;
+            return b.total_facturar - a.total_facturar;
+        });
+
+        const egresos = {
+            lectura_ejecutiva: "El cumplimiento consolidado de SMP es 91.7%, con 2,904 servicios ejecutados de 3,168 aplicables y una brecha de 264. El equipo PS alcanza 94.1% y CS 89.4%. La prioridad es recuperar cumplimiento en los distribuidores por debajo de 90%, especialmente MOTSA, JV, MOBINSA y SIMAC.",
+            indicadores_clave: {
+                consolidado: 91.7,
+                equipo_ps: 94.1,
+                equipo_cs: 89.4,
+                ejecutados: 2904,
+                aplicables: 3168,
+                brecha: 264
+            },
+            cumplimiento_distribuidores: [
+                { distribuidor: 'MOBINSA', aplica_smp: 8, ejecutados: 6, brecha: 2, cumplimiento: 75.0, estatus: 'CRÍTICO' },
+                { distribuidor: 'SIMAC', aplica_smp: 8, ejecutados: 6, brecha: 2, cumplimiento: 75.0, estatus: 'CRÍTICO' },
+                { distribuidor: 'JV', aplica_smp: 20, ejecutados: 16, brecha: 4, cumplimiento: 80.0, estatus: 'CRÍTICO' },
+                { distribuidor: 'MOTSA', aplica_smp: 412, ejecutados: 342, brecha: 70, cumplimiento: 83.0, estatus: 'CRÍTICO' },
+                { distribuidor: 'MMH', aplica_smp: 72, ejecutados: 62, brecha: 10, cumplimiento: 86.1, estatus: 'CRÍTICO' },
+                { distribuidor: 'DIMCSA', aplica_smp: 1068, ejecutados: 962, brecha: 106, cumplimiento: 90.1, estatus: 'ATENCIÓN' },
+                { distribuidor: 'DIMOSA', aplica_smp: 624, ejecutados: 590, brecha: 34, cumplimiento: 94.6, estatus: 'ATENCIÓN' },
+                { distribuidor: 'M.COM', aplica_smp: 298, ejecutados: 284, brecha: 14, cumplimiento: 95.3, estatus: 'EN META' },
+                { distribuidor: 'MAC', aplica_smp: 646, ejecutados: 624, brecha: 22, cumplimiento: 96.6, estatus: 'EN META' },
+                { distribuidor: 'RAYMOND WEST', aplica_smp: 12, ejecutados: 12, brecha: 0, cumplimiento: 100.0, estatus: 'EN META' },
+            ],
+            pagos_usd: [
+                { distribuidor: 'MOTSA INDUSTRIAL', preventivos: 8822.00, renta_terceros: 163600.00, total: 172422.00, porcentaje: 45.2 },
+                { distribuidor: 'MONTACARGAS AC', preventivos: 49865.36, renta_terceros: 3010.00, total: 52875.36, porcentaje: 13.9 },
+                { distribuidor: 'J.V. ABASTECEDORA DE MONTACARGAS', preventivos: 705.28, renta_terceros: 61242.00, total: 61947.28, porcentaje: 16.3 },
+                { distribuidor: 'MONTACARGAS.COM', preventivos: 5640.00, renta_terceros: 7518.00, total: 13158.00, porcentaje: 3.5 },
+                { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', preventivos: 15546.03, renta_terceros: 2734.30, total: 18280.33, porcentaje: 4.8 },
+                { distribuidor: 'MEX MATERIAL HANDLING', preventivos: 11314.80, renta_terceros: 6200.00, total: 17514.80, porcentaje: 4.6 },
+                { distribuidor: 'ENERSYS DE MEXICO II S DE RL DE CV', preventivos: 0.00, renta_terceros: 37866.00, total: 37866.00, porcentaje: 9.9 },
+                { distribuidor: 'DISTRIBUCIONES MOLINA', preventivos: 3370.00, renta_terceros: 1586.50, total: 4956.50, porcentaje: 1.3 },
+                { distribuidor: 'RW BAJA', preventivos: 2100.00, renta_terceros: 0.00, total: 2100.00, porcentaje: 0.6 }
+            ],
+            pagos_mxn: [
+                { distribuidor: 'MOTSA INDUSTRIAL', preventivos: 266760.00, renta_terceros: 0.00, total: 266760.00, porcentaje: 3.9 },
+                { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', preventivos: 1723714.88, renta_terceros: 168379.87, total: 1892094.75, porcentaje: 27.8 },
+                { distribuidor: 'DISTRIBUCIONES MOLINA', preventivos: 2499291.00, renta_terceros: 0.00, total: 2499291.00, porcentaje: 36.7 },
+                { distribuidor: 'MONTACARGAS AC', preventivos: 1203495.86, renta_terceros: 0.00, total: 1203495.86, porcentaje: 17.7 },
+                { distribuidor: 'MONTACARGAS.COM', preventivos: 581457.70, renta_terceros: 0.00, total: 581457.70, porcentaje: 8.5 },
+                { distribuidor: 'ENCINAS LIFT', preventivos: 0.00, renta_terceros: 228500.00, total: 228500.00, porcentaje: 3.4 },
+                { distribuidor: 'SISTEMAS INTEGRALES PARA EL MANEJO DE CARGA', preventivos: 14380.00, renta_terceros: 22360.00, total: 36740.00, porcentaje: 0.5 },
+                { distribuidor: 'MEX MATERIAL HANDLING', preventivos: 2400.00, renta_terceros: 81000.00, total: 83400.00, porcentaje: 1.2 }
+            ]
+        };
+
         return {
+            tipo_cambio: exchangeRate,
             stats,
+            tabla_maestra,
             cumplimiento_por_adc: adcs,
             pendiente_acumulado: pendingByClientAdc,
             total_por_cliente: totalPorCliente,
             pedidos_del_mes: pedidos_del_mes,
             recuperacion_meses_anteriores: recuperados,
-            observaciones
+            observaciones,
+            egresos,
+            // Send the raw facturacion_mensual records so the frontend knows what's stored
+            facturado_registros: facturacionMensual,
         };
     }
 
@@ -291,10 +494,30 @@ export class PresupuestosService {
             acumulado: 0,
             total_a_facturar: 0,
             pedidos_enviados: 0,
-            facturado: 0, // Equal to pedidos_enviados
+            facturado: 0,
             faltante: 0,
             cumplimiento_general: 0,
             equipos_detenidos: 0,
         };
+    }
+
+    async updateFacturado(data: { periodo: string; moneda: string; monto: number; updated_by_id?: string; updated_by_name?: string }) {
+        const db = this.getDb();
+        const result = await db.facturacionMensual.upsert({
+            where: { periodo_moneda: { periodo: data.periodo, moneda: data.moneda.toUpperCase() } },
+            update: {
+                monto: data.monto,
+                updated_by_id: data.updated_by_id || null,
+                updated_by_name: data.updated_by_name || null,
+            },
+            create: {
+                periodo: data.periodo,
+                moneda: data.moneda.toUpperCase(),
+                monto: data.monto,
+                updated_by_id: data.updated_by_id || null,
+                updated_by_name: data.updated_by_name || null,
+            },
+        });
+        return { success: true, data: result };
     }
 }

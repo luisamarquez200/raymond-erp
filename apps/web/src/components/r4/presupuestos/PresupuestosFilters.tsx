@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Download, Search, Loader2, RotateCcw } from 'lucide-react';
 import dayjs from 'dayjs';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 interface FiltersProps {
     filters: any;
@@ -17,13 +18,13 @@ interface FiltersProps {
 export default function PresupuestosFilters({ filters, setFilters, onSearch, onReset, isSearching }: FiltersProps) {
     const years = Array.from({ length: 5 }, (_, i) => (dayjs().year() - 2 + i).toString());
     const months = [
-        { val: '1', label: 'Enero' }, { val: '2', label: 'Febrero' }, { val: '3', label: 'Marzo' },
-        { val: '4', label: 'Abril' }, { val: '5', label: 'Mayo' }, { val: '6', label: 'Junio' },
-        { val: '7', label: 'Julio' }, { val: '8', label: 'Agosto' }, { val: '9', label: 'Septiembre' },
-        { val: '10', label: 'Octubre' }, { val: '11', label: 'Noviembre' }, { val: '12', label: 'Diciembre' },
+        { value: '1', label: 'Enero' }, { value: '2', label: 'Febrero' }, { value: '3', label: 'Marzo' },
+        { value: '4', label: 'Abril' }, { value: '5', label: 'Mayo' }, { value: '6', label: 'Junio' },
+        { value: '7', label: 'Julio' }, { value: '8', label: 'Agosto' }, { value: '9', label: 'Septiembre' },
+        { value: '10', label: 'Octubre' }, { value: '11', label: 'Noviembre' }, { value: '12', label: 'Diciembre' },
     ];
 
-    const handleChange = (key: string, value: string) => {
+    const handleChange = (key: string, value: any) => {
         setFilters((prev: any) => ({ ...prev, [key]: value }));
     };
 
@@ -45,15 +46,13 @@ export default function PresupuestosFilters({ filters, setFilters, onSearch, onR
                     </div>
 
                     <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-500 uppercase">Mes</Label>
-                        <Select value={filters.month} onValueChange={(val) => handleChange('month', val)}>
-                            <SelectTrigger className="w-full bg-slate-50 border-slate-200">
-                                <SelectValue placeholder="Mes" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {months.map(m => <SelectItem key={m.val} value={m.val}>{m.label}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <Label className="text-xs font-semibold text-slate-500 uppercase">Meses</Label>
+                        <MultiSelect 
+                            options={months}
+                            selected={filters.month || []}
+                            onChange={(val) => handleChange('month', val)}
+                            placeholder="Meses"
+                        />
                     </div>
 
                     <div className="space-y-1.5">

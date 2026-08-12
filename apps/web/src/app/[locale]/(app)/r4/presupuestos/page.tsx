@@ -4,16 +4,21 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
+import { useConfigStore } from '@/store/config.store';
 import PresupuestosDashboard from '@/components/r4/presupuestos/PresupuestosDashboard';
-import { Loader2 } from 'lucide-react';
+import PageLoader from '@/components/ui/PageLoader';
 import dayjs from 'dayjs';
 
 export default function PresupuestosPage() {
-    const { accessToken } = useAuthStore();
+    const { accessToken, user } = useAuthStore();
+    const { roleColors } = useConfigStore();
+    const roleName = typeof user?.role === 'string' ? user.role : (user?.role as any)?.name || '';
+    const currentColor = roleName ? (roleColors[roleName.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
+    const canEditFacturado = ['gerente', 'administrador', 'admin', 'superadmin'].includes(roleName.toLowerCase());
     const currentDate = dayjs();
     const initialFilters = {
         year: currentDate.year().toString(),
-        month: (currentDate.month() + 1).toString(),
+        month: [(currentDate.month() + 1).toString()], // Array for multi-select
         cliente_id: '',
         sitio_id: '',
         adc: '',
@@ -23,12 +28,12 @@ export default function PresupuestosPage() {
     const [draftFilters, setDraftFilters] = useState(initialFilters);
     const [activeFilters, setActiveFilters] = useState(initialFilters);
 
-    const { data: dashboardData, isLoading, isFetching, error } = useQuery({
+    const { data: dashboardData, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ['presupuestos-dashboard', activeFilters],
         queryFn: async () => {
             const params = new URLSearchParams();
             if (activeFilters.year) params.append('year', activeFilters.year);
-            if (activeFilters.month) params.append('month', activeFilters.month);
+            if (activeFilters.month && activeFilters.month.length > 0) params.append('month', activeFilters.month.join(','));
             if (activeFilters.cliente_id) params.append('cliente_id', activeFilters.cliente_id);
             if (activeFilters.sitio_id) params.append('sitio_id', activeFilters.sitio_id);
             if (activeFilters.adc) params.append('adc', activeFilters.adc);
@@ -64,9 +69,11 @@ export default function PresupuestosPage() {
             </div>
 
             {showInitialLoader ? (
-                <div className="w-full h-64 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
-                </div>
+                <PageLoader 
+                    title="Cargando información presupuestal" 
+                    subtitle="Calculando acumulados, rentas y cumplimiento de la plataforma..." 
+                    color={currentColor}
+                />
             ) : error && !dashboardData ? (
                 <div className="w-full p-4 bg-red-50 text-red-600 rounded-lg">
                     Error cargando la información presupuestal.
@@ -80,6 +87,8 @@ export default function PresupuestosPage() {
                     onReset={handleReset}
                     activeMoneda={activeFilters.moneda}
                     isSearching={isFetching}
+                    canEditFacturado={canEditFacturado}
+                    onFacturadoSaved={() => refetch()}
                 />
             )}
         </div>

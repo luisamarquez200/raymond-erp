@@ -11,6 +11,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth.store";
 import { useConfigStore } from "@/store/config.store";
+import PageLoader from "@/components/ui/PageLoader";
 import { motion, AnimatePresence } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
@@ -107,7 +108,15 @@ const TableHeaderFilter = ({
   );
 };
 
-export default function RentasTab() {
+interface RentasTabProps {
+  adminAdcScope?: 'todos' | 'mis_adcs';
+  setAdminAdcScope?: (scope: 'todos' | 'mis_adcs') => void;
+}
+
+export default function RentasTab({ 
+  adminAdcScope: externalAdminAdcScope, 
+  setAdminAdcScope: externalSetAdminAdcScope 
+}: RentasTabProps = {}) {
   const { user } = useAuthStore();
   let rawRole: any = user?.role;
   if (Array.isArray(rawRole)) rawRole = rawRole[0]?.name || rawRole[0]?.rol || rawRole[0];
@@ -124,6 +133,9 @@ export default function RentasTab() {
   const { roleColors } = useConfigStore();
   const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
 
+  const [internalAdminAdcScope, setInternalAdminAdcScope] = useState<'todos' | 'mis_adcs'>('todos');
+  const adminAdcScope = externalAdminAdcScope ?? internalAdminAdcScope;
+  const setAdminAdcScope = externalSetAdminAdcScope ?? setInternalAdminAdcScope;
   const [rentas, setRentas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -730,13 +742,31 @@ export default function RentasTab() {
   };
 
   // ADC Visual Filtering Logic
-  const baseRentas = isAdc
-    ? rentas.filter(r => {
+  const isAdministrator = userRole === 'administrador' || userRole.includes('coordinaci') || userRole.includes('geren');
+
+  let baseRentas = rentas;
+  if (isAdc) {
+    baseRentas = rentas.filter(r => {
         const adcLower = r.adc?.toLowerCase() || '';
         const userLower = loggedInAdcName.toLowerCase();
         return adcLower === userLower || userLower.includes(adcLower) || adcLower.includes(user?.firstName?.toLowerCase() || '');
-      })
-    : rentas;
+    });
+  } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
+    const currentUserNameLower = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
+    let assignedAdcKeywords: string[] = [];
+    if (currentUserNameLower.includes('cecilia')) {
+      assignedAdcKeywords = ['montserrat', 'andrea'];
+    } else if (currentUserNameLower.includes('paola')) {
+      assignedAdcKeywords = ['angélica', 'angelica', 'alejandra', 'daniel'];
+    } else {
+      assignedAdcKeywords = [(user?.firstName || '').toLowerCase()];
+    }
+
+    baseRentas = rentas.filter(r => {
+      const adcLower = (r.adc || '').toLowerCase();
+      return assignedAdcKeywords.some(kw => adcLower.includes(kw));
+    });
+  }
 
   const filterUniqueCuentas = Array.from(new Set(baseRentas.map(r => r.cuenta).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
   const filterUniqueSitios = Array.from(new Set(baseRentas.map(r => r.sitio?.nombre).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
@@ -846,108 +876,100 @@ export default function RentasTab() {
   });
 
   // Calculate chart data based on filteredRentas
-  const adcBudgetMap = new Map();
-  const clientBudgetMap = new Map();
+  const adcMap = new Map<string, { name: string; mxn: number; usd: number }>();
+  const distribuidorMap = new Map<string, number>();
+  const equipoTipoMap = new Map<string, number>();
   
   filteredRentas.forEach(r => {
     const estadoRenta = r.estado?.toUpperCase() || '';
     const estadoActivo = r.activo?.estatus?.toUpperCase() || '';
     if (estadoRenta.includes('INACTIV') || estadoActivo.includes('INACTIV')) return;
     
-    // Normalize budget to a single currency for graphing (e.g. MXN, roughly USD * 20)
-    let amount = Number(r.detalles?.renta_base || r.tarifa || 0);
-    if ((r.detalles?.moneda || 'MXN') === 'USD') amount *= 20; // approximate conversion for visual distribution only
-
+    const amount = Number(r.detalles?.renta_base || r.tarifa || 0);
+    const currency = (r.detalles?.moneda || r.moneda || 'MXN').toUpperCase();
     const adc = r.adc || r.cliente?.datos_comerciales?.adc || 'Sin ADC';
-    const client = r.cliente?.razonSocial || r.cliente?.razon_social || 'Sin Cliente';
-    
-    adcBudgetMap.set(adc, (adcBudgetMap.get(adc) || 0) + amount);
-    clientBudgetMap.set(client, (clientBudgetMap.get(client) || 0) + amount);
+
+    // ADC Budget (Separated MXN & USD)
+    if (!adcMap.has(adc)) {
+      adcMap.set(adc, { name: adc, mxn: 0, usd: 0 });
+    }
+    const adcEntry = adcMap.get(adc)!;
+    if (currency === 'USD') {
+      adcEntry.usd += amount;
+    } else {
+      adcEntry.mxn += amount;
+    }
+
+    // Distribuidor Distribution
+    const dist = r.distribuidor || r.activo?.distribuidor || 'Sin Distribuidor';
+    distribuidorMap.set(dist, (distribuidorMap.get(dist) || 0) + 1);
+
+    // Tipo de Equipo Distribution
+    const tipo = r.activo?.tipo || r.tipo || r.activo?.clase || 'Sin Especificar';
+    equipoTipoMap.set(tipo, (equipoTipoMap.get(tipo) || 0) + 1);
   });
   
-  const adcChartData = Array.from(adcBudgetMap.entries())
-    .map(([name, total]) => ({ name, total }))
-    .sort((a, b) => b.total - a.total);
-    
-  const clientChartData = Array.from(clientBudgetMap.entries())
-    .map(([name, total]) => ({ name, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5); // Top 5 clients
+  const totalMxn = Array.from(adcMap.values()).reduce((sum, item) => sum + item.mxn, 0);
+  const totalUsd = Array.from(adcMap.values()).reduce((sum, item) => sum + item.usd, 0);
+
+  const adcChartData = Array.from(adcMap.values())
+    .map(item => ({
+      ...item,
+      mxnPercent: totalMxn > 0 ? (item.mxn / totalMxn) * 100 : 0,
+      usdPercent: totalUsd > 0 ? (item.usd / totalUsd) * 100 : 0,
+    }))
+    .sort((a, b) => (b.mxn + b.usd) - (a.mxn + a.usd));
+
+  const buildTop5ChartData = (mapData: Map<string, number>) => {
+    const sorted = Array.from(mapData.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    if (sorted.length <= 5) return sorted;
+
+    const top5 = sorted.slice(0, 5);
+    const othersCount = sorted.slice(5).reduce((acc, curr) => acc + curr.value, 0);
+    if (othersCount > 0) {
+      top5.push({ name: 'Otros', value: othersCount });
+    }
+    return top5;
+  };
+
+  const distribuidorChartData = buildTop5ChartData(distribuidorMap);
+  const equipoChartData = buildTop5ChartData(equipoTipoMap);
     
   const PIE_COLORS = ['#E5222D', '#334155', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+  const PIE_COLORS_EQUIPOS = ['#8b5cf6', '#10b981', '#f59e0b', '#E5222D', '#3b82f6', '#64748b'];
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-        <div className="flex flex-col -gap-1">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: currentColor }}>RAYMOND</span>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión de Rentas</h1>
-          <p className="text-slate-500 font-medium mt-1">Administración de contratos de renta, vigencias y asignación de activos</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1" style={{ color: currentColor }}>RAYMOND</span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">Gestión de Rentas</h1>
+          <p className="text-slate-500 font-medium mt-1 text-sm">Administración de contratos de renta, vigencias y asignación de activos</p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={exportRentasToCSV}
-            className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-all shadow-md hover:bg-slate-50 flex items-center gap-2 uppercase tracking-widest shrink-0"
-          >
-            <Download className="w-4 h-4" />
-            Exportar
-          </button>
-          <button
-            onClick={() => setIsFichaOcModalOpen(true)}
-            className="px-6 py-3 text-white rounded-2xl font-bold text-xs transition-all shadow-md hover:opacity-90 flex items-center gap-2 uppercase tracking-widest shrink-0 whitespace-nowrap"
-            style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
-          >
-            <FileText className="w-4 h-4" />
-            Registro OC
-          </button>
-          <div className="relative group hidden lg:block">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
-            <input
-              type="text"
-              placeholder="Buscar por cliente, serie..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-48 pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:border-red-500 focus:outline-none transition-all shadow-md"
-            />
-          </div>
-          {(selectedFilterCuenta.length > 0 || selectedFilterSitio.length > 0 || selectedFilterClase.length > 0 || selectedFilterModelo.length > 0 || selectedFilterDistribuidor.length > 0 || selectedFilterPropietario.length > 0 || selectedFilterEquipo.length > 0 || selectedFilterMoneda.length > 0 || selectedFilterPoliza.length > 0) && (
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setSelectedFilterCuenta([]);
-                setSelectedFilterSitio([]);
-                setSelectedFilterClase([]);
-                setSelectedFilterModelo([]);
-                setSelectedFilterDistribuidor([]);
-                setSelectedFilterPropietario([]);
-                setSelectedFilterEquipo([]);
-                setSelectedFilterMoneda([]);
-                setSelectedFilterPoliza([]);
-                setCurrentPage(1);
-              }}
-              className="px-3 py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl border-2 border-red-200 flex items-center justify-center transition-colors font-bold shadow-md shrink-0"
-              title="Limpiar filtros"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+        
+        {/* Header Action Button (Primary CTA Only) */}
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => setIsNewRentaModalOpen(true)}
-            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-xs transition-all shadow-md shadow-slate-900/20 flex items-center gap-2 uppercase tracking-widest shrink-0 whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-slate-900/20 whitespace-nowrap active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            Nueva Renta
+            <span>Nueva Renta</span>
           </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="sticky top-16 lg:top-0 z-20 bg-[#F9FAFB]/95 backdrop-blur-md py-3 -my-3">
+      {loading && rentas.length === 0 ? (
+        <PageLoader title="Cargando información de rentas" subtitle="Obteniendo contratos, montos y vigencias de la plataforma..." color={currentColor} />
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="sticky top-16 lg:top-0 z-20 bg-[#F9FAFB]/95 backdrop-blur-md py-3 -my-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
           <div className="absolute -right-8 -top-8 text-slate-50/50 transform group-hover:scale-110 transition-transform duration-500">
@@ -970,7 +992,7 @@ export default function RentasTab() {
         </div>
 
         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:border-blue-100 hover:shadow-md transition-all flex flex-col justify-center">
-          <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Importe de Pedidos</p>
+          <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-2 line-clamp-1">Total a facturar</p>
           {importeMXN > 0 && <h3 className="text-xl font-black text-slate-900">${importeMXN.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} MXN</h3>}
           {importeUSD > 0 && <h3 className="text-xl font-black text-slate-900">${importeUSD.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD</h3>}
           {importeMXN === 0 && importeUSD === 0 && <h3 className="text-xl font-black text-slate-900">$0.00</h3>}
@@ -979,47 +1001,90 @@ export default function RentasTab() {
       </div>
 
       {/* CHARTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">Presupuesto por ADC</h3>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Chart 1: Presupuesto por ADC (Dos barras: MXN y USD) */}
+        <div className="xl:col-span-1 bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Presupuesto por ADC</h3>
+            <span className="text-[10px] font-extrabold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">% de Cartera</span>
+          </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={adcChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={adcChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
+                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(val) => `${val}%`} />
                 <Tooltip 
                   cursor={{ fill: '#f1f5f9' }} 
                   contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 700, fontSize: '12px' }}
-                  formatter={(val: number) => [`$${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Importe (MXN Eq.)']}
+                  formatter={(val: number, name: string) => [`${val.toFixed(1)}%`, name]}
                 />
-                <Bar dataKey="total" fill={currentColor} radius={[6, 6, 0, 0]} maxBarSize={50} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 700, paddingTop: '8px' }} />
+                <Bar dataKey="mxnPercent" name="MXN (%)" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={35} />
+                <Bar dataKey="usdPercent" name="USD (%)" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={35} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">Top 5 Clientes (Distribución)</h3>
+        {/* Chart 2: Distribución por Distribuidor */}
+        <div className="xl:col-span-1 bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Distribución por Distribuidor</h3>
+            <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">Top 5</span>
+          </div>
           <div className="h-64 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={clientChartData}
+                  data={distribuidorChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
+                  innerRadius={55}
+                  outerRadius={85}
                   paddingAngle={5}
-                  dataKey="total"
+                  dataKey="value"
                   stroke="none"
                 >
-                  {clientChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  {distribuidorChartData.map((entry, index) => (
+                    <Cell key={`cell-dist-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip 
                   contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 700, fontSize: '12px' }}
-                  formatter={(val: number) => [`$${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Importe (MXN Eq.)']}
+                  formatter={(val: number) => [`${val} rentas`, 'Total']}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 700 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 3: Distribución por Tipo de Equipo */}
+        <div className="xl:col-span-1 bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Distribución por Tipo de Equipo</h3>
+            <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">Top 5</span>
+          </div>
+          <div className="h-64 flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={equipoChartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={5}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {equipoChartData.map((entry, index) => (
+                    <Cell key={`cell-eq-${index}`} fill={PIE_COLORS_EQUIPOS[index % PIE_COLORS_EQUIPOS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 700, fontSize: '12px' }}
+                  formatter={(val: number) => [`${val} equipos`, 'Total']}
                 />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 700 }} />
               </PieChart>
@@ -1028,19 +1093,76 @@ export default function RentasTab() {
         </div>
       </div>
 
-      {/* SEARCH FOR MOBILE ONLY */}
-      <div className="lg:hidden relative group">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
-        <input
-          type="text"
-          placeholder="Buscar por cliente, serie, folio OC..."
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setCurrentPage(1);
-          }}
-          className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold focus:border-red-500 focus:outline-none transition-all shadow-sm"
-        />
+      {/* Dedicated Controls & Search Toolbar */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border-2 border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        {/* Left: Search Bar & Clear Filters */}
+        <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 focus-within:text-red-500 transition-colors" />
+            <input
+              type="text"
+              placeholder="Buscar por cliente, serie, folio OC..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-9 py-2.5 bg-slate-50 hover:bg-slate-100/60 focus:bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:border-red-500 focus:outline-none transition-all"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {(searchTerm || selectedFilterCuenta.length > 0 || selectedFilterSitio.length > 0 || selectedFilterClase.length > 0 || selectedFilterModelo.length > 0 || selectedFilterDistribuidor.length > 0 || selectedFilterPropietario.length > 0 || selectedFilterEquipo.length > 0 || selectedFilterMoneda.length > 0 || selectedFilterPoliza.length > 0) && (
+            <button 
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedFilterCuenta([]);
+                setSelectedFilterSitio([]);
+                setSelectedFilterClase([]);
+                setSelectedFilterModelo([]);
+                setSelectedFilterDistribuidor([]);
+                setSelectedFilterPropietario([]);
+                setSelectedFilterEquipo([]);
+                setSelectedFilterMoneda([]);
+                setSelectedFilterPoliza([]);
+                setCurrentPage(1);
+              }} 
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border-2 border-red-200 text-xs font-bold transition-all shadow-sm shrink-0" 
+              title="Limpiar todos los filtros"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Limpiar filtros</span>
+            </button>
+          )}
+        </div>
+
+        {/* Right: Data Actions (Export & Registro OC) + Scope Selector */}
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 justify-between md:justify-end w-full md:w-auto">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportRentasToCSV}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Exportar</span>
+            </button>
+            <button
+              onClick={() => setIsFichaOcModalOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-sm hover:opacity-90 whitespace-nowrap"
+              style={{ backgroundColor: currentColor, boxShadow: `0 2px 8px 0 ${currentColor}30` }}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Registro OC</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Grouped Table */}
@@ -1236,6 +1358,8 @@ export default function RentasTab() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* REGISTER OC MANUAL MODAL */}
       <AnimatePresence>

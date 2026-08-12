@@ -370,3 +370,64 @@ model CargaMasivaLog {
 
   @@map("cargas_masivas_logs")
 }
+
+// -----------------------------------------------------------------------------
+// TIPO DE CAMBIO MENSUAL (MXN / USD) & TRAZABILIDAD
+// -----------------------------------------------------------------------------
+
+model TipoCambioMensual {
+  id                      String   @id @default(cuid()) @db.VarChar(50)
+  year                    Int
+  month                   Int
+  tipo_cambio             Float
+  activo                  Boolean  @default(true)
+  usuario_modificacion_id String?  @db.VarChar(50)
+  usuario_nombre          String?  @db.VarChar(150)
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  historial               TipoCambioHistorial[]
+
+  @@unique([year, month])
+  @@index([year, month])
+  @@map("tipos_cambio_mensuales")
+}
+
+model TipoCambioHistorial {
+  id                        String             @id @default(cuid()) @db.VarChar(50)
+  tipo_cambio_id            String             @db.VarChar(50)
+  year                      Int
+  month                     Int
+  valor_anterior            Float?
+  valor_nuevo               Float
+  usuario_id                String?            @db.VarChar(50)
+  usuario_nombre            String?            @db.VarChar(150)
+  motivo                    String?            @db.Text
+  fecha                     DateTime           @default(now())
+
+  tipoCambioMensual         TipoCambioMensual  @relation(fields: [tipo_cambio_id], references: [id], onDelete: Cascade)
+
+  @@index([tipo_cambio_id])
+  @@index([year, month])
+  @@map("tipos_cambio_historial")
+}
+
+// -----------------------------------------------------------------------------
+// FACTURACIÓN (Gerente)
+// -----------------------------------------------------------------------------
+
+model FacturacionMensual {
+  id              String   @id @default(cuid()) @db.VarChar(50)
+  periodo         String   @db.VarChar(50) // e.g. "2026-08"
+  moneda          String   @db.VarChar(20) // MXN o USD
+  monto           Float    @default(0)
+  
+  updated_by_id   String?  @db.VarChar(100) // ID del usuario (gerente) que lo actualizó
+  updated_by_name String?  @db.VarChar(150) // Nombre del gerente
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  
+  @@unique([periodo, moneda])
+  @@index([periodo])
+  @@map("facturacion_mensual")
+}

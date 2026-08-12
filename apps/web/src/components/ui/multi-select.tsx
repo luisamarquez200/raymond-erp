@@ -57,10 +57,12 @@ export function MultiSelect({
                         )}
                         type="button" // Prevent form submission
                     >
-                        <span className="text-muted-foreground font-normal">
-                            {selected.length > 0 ? `${selected.length} selected` : placeholder}
+                        <span className="text-slate-700 font-normal truncate pr-4">
+                            {selected.length > 0 
+                                ? selected.map(val => options.find(o => o.value === val)?.label).filter(Boolean).join(", ") 
+                                : placeholder}
                         </span>
-                        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                        <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400 absolute right-3" />
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-full p-0" align="start">
@@ -113,30 +115,6 @@ export function MultiSelect({
                     </div>
                 </PopoverContent>
             </Popover>
-
-            {selected.length > 0 && (
-                <div className="flex flex-wrap gap-1 border rounded-md p-2 bg-muted/20">
-                    {selected.map((item) => {
-                        const option = options.find((o) => o.value === item);
-                        return (
-                            <Badge
-                                key={item}
-                                variant="secondary"
-                                className="mr-1 mb-1"
-                            >
-                                {option?.label || item}
-                                <button
-                                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                    onClick={() => handleUnselect(item)}
-                                    type="button" // CRITICAL: Prevent form submission
-                                >
-                                    <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                                </button>
-                            </Badge>
-                        );
-                    })}
-                </div>
-            )}
         </div>
     );
 }

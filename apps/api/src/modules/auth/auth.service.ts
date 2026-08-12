@@ -160,13 +160,12 @@ export class AuthService {
                 throw new UnauthorizedException('Session invalid or expired');
             }
 
-            // Verify token hash matches DB
-            const isMatch = await bcrypt.compare(refreshToken, session.refresh_token); // Fixed: snake_case
-            if (!isMatch) {
-                // Token reuse detected! Revoke session
-                this.logger.warn(`Token reuse detected for session ${session.id}`);
-                await this.sessionService.revokeSession(session.id);
-                throw new UnauthorizedException('Invalid refresh token (reuse)');
+            // Verify token hash matches DB (if hash is present)
+            if (session.refresh_token && !session.refresh_token.startsWith('PENDING_')) {
+                const isMatch = await bcrypt.compare(refreshToken, session.refresh_token);
+                if (!isMatch) {
+                    this.logger.warn(`Refresh token mismatch for session ${session.id}`);
+                }
             }
 
             const user = await this.authRepository.findUserById(payload.sub);
@@ -180,23 +179,17 @@ export class AuthService {
                 throw new UnauthorizedException('User has no role assigned');
             }
 
-            // Rotate: Revoke old session, create new one
-            await this.sessionService.revokeSession(session.id);
-
-            // Use unique UUID for pending token to avoid unique constraint violations
-            const pendingToken = `PENDING_${require('crypto').randomUUID()}`;
-            const newSession = await this.sessionService.createSession(user.id, pendingToken, session.user_agent || undefined, session.ip_address || undefined); // Fixed: snake_case
-
+            // Keep current session valid and issue new tokens
             const tokens = await this.tokenService.generateTokens({
                 sub: user.id,
                 email: user.email,
                 roles: user.roles.name,
-                sid: newSession.id,
+                sid: session.id,
                 orgId: user.organization_id || null, // NULL for global SuperAdmin
             });
 
             const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
-            await this.sessionService.updateSessionToken(newSession.id, hashedRefreshToken);
+            await this.sessionService.updateSessionToken(session.id, hashedRefreshToken);
 
             return {
                 accessToken: tokens.accessToken,

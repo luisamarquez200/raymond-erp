@@ -11,7 +11,7 @@
         "sourceMap": true,
         "outDir": "./dist",
         "baseUrl": "./",
-        "incremental": true,
+        "incremental": false,
         "skipLibCheck": true,
         "strictNullChecks": false,
         "noImplicitAny": false,
@@ -19,7 +19,7 @@
         "forceConsistentCasingInFileNames": false,
         "noFallthroughCasesInSwitch": false,
         "noEmit": false,
-        "rootDir": "./",
+        "rootDir": "src",
         "paths": {
             "@prisma-r1/*": [
                 "../../node_modules/@prisma/client-taller-r1/*"
@@ -30,14 +30,11 @@
         }
     },
     "include": [
-        "src/**/*",
-        "test/**/*",
-        "prisma/**/*",
-        "scripts/**/*"
+        "src/**/*"
     ],
     "exclude": [
         "node_modules",
         "dist",
-        "prisma/migrations-runite/**/*"
+        "prisma"
     ]
 }

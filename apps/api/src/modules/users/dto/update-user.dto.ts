@@ -39,5 +39,21 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
     @IsString()
     @IsOptional()
     adc_asociado_name?: string;
+
+    @IsString()
+    @IsOptional()
+    supervisor_id?: string;
+
+    @IsString()
+    @IsOptional()
+    supervisor_name?: string;
+
+    @IsString()
+    @IsOptional()
+    auxiliar_id?: string;
+
+    @IsString()
+    @IsOptional()
+    auxiliar_name?: string;
 }
 
