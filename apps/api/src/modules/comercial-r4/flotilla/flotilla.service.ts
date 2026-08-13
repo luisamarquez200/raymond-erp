@@ -225,7 +225,7 @@ export class FlotillaService {
                 }
             });
 
-            return activos.map(activo => {
+            const result = activos.map(activo => {
                 const renta = activo.rentas?.[0];
 
                 return {

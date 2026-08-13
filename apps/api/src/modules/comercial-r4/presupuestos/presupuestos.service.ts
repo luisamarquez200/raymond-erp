@@ -512,8 +512,6 @@ export class PresupuestosService {
             // Send the raw facturacion_mensual records so the frontend knows what's stored
             facturado_registros: facturacionMensual,
         };
-
-        const cacheKey = JSON.stringify(filters);
         dashboardCache.set(cacheKey, { timestamp: Date.now(), data: finalResult });
         return finalResult;
     }
