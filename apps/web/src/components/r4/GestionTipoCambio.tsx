@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useConfigStore } from '@/store/config.store';
 import TooltipInfo from '@/components/ui/TooltipInfo';
 import { toast } from 'sonner';
+import api from '@/lib/api';
 
 interface TipoCambioItem {
     id: string;
@@ -66,11 +67,9 @@ export default function GestionTipoCambio() {
     const fetchRates = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/r4/tipo-cambio?year=${selectedYear}`);
-            if (res.ok) {
-                const data = await res.json();
-                setRates(data);
-            }
+            const res = await api.get(`/r4/tipo-cambio?year=${selectedYear}`);
+            const data = res.data?.data || res.data || [];
+            setRates(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching exchange rates:', error);
             toast.error('Error al cargar tipos de cambio');
@@ -81,11 +80,9 @@ export default function GestionTipoCambio() {
 
     const fetchHistorial = async () => {
         try {
-            const res = await fetch(`/api/r4/tipo-cambio/historial?year=${selectedYear}`);
-            if (res.ok) {
-                const data = await res.json();
-                setHistorial(data);
-            }
+            const res = await api.get(`/r4/tipo-cambio/historial?year=${selectedYear}`);
+            const data = res.data?.data || res.data || [];
+            setHistorial(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching exchange rate history:', error);
         }
@@ -106,27 +103,19 @@ export default function GestionTipoCambio() {
         }
 
         try {
-            const res = await fetch('/api/r4/tipo-cambio', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    year: editingItem.year,
-                    month: editingItem.month,
-                    tipo_cambio: numRate,
-                    activo: editingItem.activo,
-                    motivo: editingItem.motivo || 'Modificación manual desde configuración',
-                    usuario_nombre: (user as any)?.nombre || user?.email || 'Administrador'
-                })
+            await api.post('/r4/tipo-cambio', {
+                year: editingItem.year,
+                month: editingItem.month,
+                tipo_cambio: numRate,
+                activo: editingItem.activo,
+                motivo: editingItem.motivo || 'Modificación manual desde configuración',
+                usuario_nombre: (user as any)?.nombre || user?.email || 'Administrador'
             });
 
-            if (res.ok) {
-                toast.success(`Tipo de cambio guardado para ${MONTH_NAMES[editingItem.month - 1]} ${editingItem.year}`);
-                setShowEditModal(false);
-                fetchRates();
-                fetchHistorial();
-            } else {
-                toast.error('Error al guardar el tipo de cambio');
-            }
+            toast.success(`Tipo de cambio guardado para ${MONTH_NAMES[editingItem.month - 1]} ${editingItem.year}`);
+            setShowEditModal(false);
+            fetchRates();
+            fetchHistorial();
         } catch (error) {
             console.error('Error saving exchange rate:', error);
             toast.error('Error en el servidor al guardar el tipo de cambio');

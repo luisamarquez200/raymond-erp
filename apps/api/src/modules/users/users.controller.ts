@@ -55,6 +55,15 @@ export class UsersController {
         return this.usersService.update(req.user.id, updateUserDto, req.user.organization_id || null, req.user);
     }
 
+    @Get('me')
+    @SkipPermissions()
+    @ApiOperation({ summary: 'Get own profile (no permission required)' })
+    @ApiResponse({ status: 200, description: 'Own user details' })
+    @ApiResponse({ status: 404, description: 'User not found' })
+    findMe(@Request() req) {
+        return this.usersService.findOne(req.user.id, req.user.organization_id);
+    }
+
     @Get(':id')
     @Permissions('users:read')
     @ApiOperation({ summary: 'Get user by ID' })

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useOrganizationStore } from "@/store/organization.store";
+import { useAuthStore } from "@/store/auth.store";
 
 export interface User {
     id: string;
@@ -97,11 +98,13 @@ export function useUsers() {
 
 export function useUser(id: string) {
     const { currentOrganization } = useOrganizationStore();
+    const { user } = useAuthStore();
     // CRITICAL: Include organizationId in cache key to prevent cross-org cache pollution
     return useQuery<User>({
         queryKey: ["user", currentOrganization?.id, id],
         queryFn: async () => {
-            const response = await api.get(`/users/${id}`);
+            const endpoint = id === user?.id ? `/users/me` : `/users/${id}`;
+            const response = await api.get(endpoint);
             const rawUser = response.data?.data || response.data;
 
             // Transform snake_case to camelCase
