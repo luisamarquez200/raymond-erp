@@ -18,6 +18,8 @@ interface PresupuestosDashboardProps {
     isSearching?: boolean;
     canEditFacturado?: boolean;
     onFacturadoSaved?: () => void;
+    adminAdcScope?: 'todos' | 'mis_adcs';
+    setAdminAdcScope?: (scope: 'todos' | 'mis_adcs') => void;
 }
 
 export default function PresupuestosDashboard({ 
@@ -30,6 +32,8 @@ export default function PresupuestosDashboard({
     isSearching,
     canEditFacturado,
     onFacturadoSaved,
+    adminAdcScope,
+    setAdminAdcScope,
 }: PresupuestosDashboardProps) {
     const [activeTab, setActiveTab] = useState<'ingresos' | 'egresos'>('ingresos');
 

@@ -32,26 +32,29 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                 api.get('/notifications/unread-count')
             ]);
             const notifData = resNotifs.data?.data || resNotifs.data || [];
-            setNotifications(Array.isArray(notifData) ? notifData : []);
-            setUnreadCount(resCount.data?.unreadCount || 0);
+            const notifList = Array.isArray(notifData) ? notifData : [];
+            const countVal = typeof resCount.data === 'number' 
+                ? resCount.data 
+                : (resCount.data?.unreadCount ?? resCount.data?.data?.unreadCount ?? 0);
+            
+            const calcUnread = notifList.filter((n: any) => !n.read).length;
+            setNotifications(notifList);
+            setUnreadCount(Math.max(countVal, calcUnread));
         } catch (error) {
             // silent fail on poll
         }
     };
+
+    const effectiveUnreadCount = Math.max(
+        unreadCount,
+        notifications.filter(n => !n.read).length
+    );
 
     const handleOpenBell = async () => {
         const willOpen = !isOpen;
         setIsOpen(willOpen);
         if (willOpen) {
             await fetchNotifications();
-            // Automatically mark all as read when opening so unread badge clears
-            if (unreadCount > 0) {
-                try {
-                    await api.put('/notifications/mark-all-read');
-                    setUnreadCount(0);
-                    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-                } catch (e) {}
-            }
         }
     };
 
@@ -85,11 +88,25 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
         }
     };
 
+    const handleNotificationClick = async (n: NotificationItem) => {
+        if (!n.read) {
+            try {
+                await api.put(`/notifications/${n.id}/read`);
+                setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                setUnreadCount(prev => Math.max(0, prev - 1));
+            } catch (e) {}
+        }
+    };
+
     const handleDeleteSingle = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         try {
             await api.delete(`/notifications/${id}`);
+            const target = notifications.find(n => n.id === id);
             setNotifications(prev => prev.filter(n => n.id !== id));
+            if (target && !target.read) {
+                setUnreadCount(prev => Math.max(0, prev - 1));
+            }
             toast.success('Notificación eliminada');
         } catch (error) {
             toast.error('Error al eliminar notificación');
@@ -154,10 +171,13 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                 aria-label="Campana de Notificaciones"
             >
                 <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white shadow-md animate-pulse">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
+                {effectiveUnreadCount > 0 && (
+                    <>
+                        <span className="absolute -top-1 -right-1 flex h-5 w-5 rounded-full bg-rose-500 opacity-75 animate-ping" />
+                        <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white shadow-lg ring-2 ring-white">
+                            {effectiveUnreadCount > 99 ? '99+' : effectiveUnreadCount}
+                        </span>
+                    </>
                 )}
             </button>
 
@@ -173,18 +193,29 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                         <div className="flex items-center gap-2">
                             <Bell className="w-4 h-4 text-slate-700" />
                             <h3 className="font-black text-xs uppercase tracking-wider text-slate-900">Notificaciones</h3>
-                            {unreadCount > 0 && (
-                                <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-black">
-                                    {unreadCount} nuevas
+                            {effectiveUnreadCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black animate-pulse">
+                                    {effectiveUnreadCount} sin leer
                                 </span>
                             )}
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            {unreadCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={handleMarkAllRead}
+                                    className="text-[10px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 hover:underline transition-colors"
+                                    title="Marcar todas como leídas"
+                                >
+                                    <CheckCheck className="w-3.5 h-3.5 text-blue-600" />
+                                    Leídas
+                                </button>
+                            )}
                             {notifications.length > 0 && (
                                 <button
                                     type="button"
                                     onClick={handleDeleteAll}
-                                    className="text-[10px] font-black text-red-600 hover:text-red-800 flex items-center gap-1 hover:underline transition-colors"
+                                    className="text-[10px] font-black text-red-600 hover:text-red-800 flex items-center gap-1 hover:underline transition-colors ml-1"
                                     title="Vaciar todas las notificaciones"
                                 >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -205,20 +236,21 @@ export default function NotificationBell({ align = 'right' }: NotificationBellPr
                             notifications.map((n) => (
                                 <div
                                     key={n.id}
+                                    onClick={() => handleNotificationClick(n)}
                                     className={cn(
-                                        "p-4 transition-colors relative group flex gap-3 items-start",
-                                        n.read ? "bg-white hover:bg-slate-50/80" : "bg-slate-50/70 hover:bg-slate-100/80"
+                                        "p-4 transition-colors relative group flex gap-3 items-start cursor-pointer",
+                                        n.read ? "bg-white hover:bg-slate-50/80" : "bg-slate-50/90 hover:bg-slate-100/90"
                                     )}
                                 >
                                     {!n.read && (
-                                        <span className="absolute top-4 left-2 w-1.5 h-1.5 rounded-full bg-red-600" />
+                                        <span className="absolute top-4 left-2 w-2 h-2 rounded-full bg-rose-600 ring-2 ring-rose-200 animate-pulse" />
                                     )}
                                     <div className="mt-0.5">
                                         {getTypeIcon(n.type)}
                                     </div>
                                     <div className="flex-1 min-w-0 pr-6">
                                         <div className="flex items-baseline justify-between gap-2">
-                                            <h4 className={cn("text-xs font-black truncate", n.read ? "text-slate-800" : "text-slate-900 font-black")}>
+                                            <h4 className={cn("text-xs truncate", n.read ? "text-slate-700 font-semibold" : "text-slate-900 font-black")}>
                                                 {n.title}
                                             </h4>
                                             <span className="text-[9px] font-bold text-slate-400 flex-shrink-0">

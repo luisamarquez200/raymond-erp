@@ -23,14 +23,6 @@ export default function TooltipInfo({ text, formula, className = '' }: TooltipIn
             {show && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900/95 text-white text-[11px] font-medium leading-relaxed rounded-2xl shadow-2xl z-50 pointer-events-none transition-all border border-slate-700/80 backdrop-blur-md">
                     <p className="text-slate-200 font-semibold">{text}</p>
-                    {formula && (
-                        <div className="mt-2 pt-2 border-t border-slate-700/80 space-y-1">
-                            <span className="text-[9px] font-black text-red-400 uppercase tracking-wider block">Fórmula de Cálculo:</span>
-                            <div className="bg-slate-950 p-2 rounded-lg font-mono text-[10px] text-amber-300 border border-slate-800 break-words font-semibold">
-                                {formula}
-                            </div>
-                        </div>
-                    )}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
                 </div>
             )}

@@ -5,6 +5,9 @@ import { PrismaService } from '../../../database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+const flotillaCache = new Map<string, { timestamp: number, data: any }>();
+const FLOTILLA_CACHE_TTL = 60 * 1000; // 60 seconds
+
 @Injectable()
 export class FlotillaService {
     private readonly logger = new Logger(FlotillaService.name);
@@ -188,6 +191,12 @@ export class FlotillaService {
 
     async obtenerFlotilla(user?: any) {
         try {
+            const cacheKey = user ? JSON.stringify({ r: user.roles, n: user.adc_asociado_name, f: user.first_name }) : 'all';
+            const cached = flotillaCache.get(cacheKey);
+            if (cached && (Date.now() - cached.timestamp < FLOTILLA_CACHE_TTL)) {
+                return cached.data;
+            }
+
             const db = this.getDb();
             
             let whereClause = {};
@@ -242,6 +251,7 @@ export class FlotillaService {
                     fechaVencimiento: renta?.fecha_fin ? new Date(renta.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
                     plazo: renta?.condiciones?.plazo_meses || renta?.condiciones?.plazo || '-',
                     fechaRecoleccion: '-',
+                    iwarehouse: (activo.info_tecnica as any)?.iwarehouse || '-',
 
                     // SMP
                     smp: 'Sin SMP',
@@ -263,6 +273,9 @@ export class FlotillaService {
                     })) || []
                 };
             });
+
+            flotillaCache.set(cacheKey, { timestamp: Date.now(), data: result });
+            return result;
         } catch (error: any) {
             this.logger.error(`Error en obtenerFlotilla: ${error.message}`);
             throw error;

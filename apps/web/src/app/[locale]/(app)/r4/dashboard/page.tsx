@@ -73,9 +73,14 @@ export default function R4DashboardPage() {
 
   // Helpers
   const formatCurrency = (val: number) => {
-    if (val >= 1000000) return `$${(val / 1000000).toFixed(1)} M`;
-    if (val >= 1000) return `$${(val / 1000).toFixed(1)} k`;
-    return `$${val.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+    if (!val || isNaN(val)) return '$0';
+    if (Math.abs(val) >= 1000000) {
+      return `$${(val / 1000000).toLocaleString('es-MX', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M`;
+    }
+    if (Math.abs(val) >= 1000) {
+      return `$${(val / 1000).toLocaleString('es-MX', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} k`;
+    }
+    return `$${val.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   };
   
   const formatCurrencyFull = (val: number) => `$${val.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -327,23 +332,27 @@ export default function R4DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col justify-between">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Unidades estimadas</p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-1">{cuentas?.stats?.estimadoUnidades || 0} eq</h3>
+                    <h3 className="text-2xl font-bold text-slate-900 mb-1">{(cuentas?.stats?.estimadoUnidades || 0).toLocaleString('es-MX')} equipos</h3>
                     <p className="text-[10px] font-semibold text-slate-400">Meta del mes</p>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col justify-between">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Unidades pedidas</p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-1">{cuentas?.stats?.pedidoUnidades || 0} eq</h3>
+                    <h3 className="text-2xl font-bold text-slate-900 mb-1">{(cuentas?.stats?.pedidoUnidades || 0).toLocaleString('es-MX')} equipos</h3>
                     <p className="text-[10px] font-semibold text-slate-400">{((cuentas?.stats?.pedidoUnidades / (cuentas?.stats?.estimadoUnidades||1)) * 100).toFixed(0)}% de avance</p>
                 </div>
                 <div className={`${cuentas?.stats?.brechaUnidades < 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'} p-5 rounded-2xl border flex flex-col justify-between`}>
                     <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${cuentas?.stats?.brechaUnidades < 0 ? 'text-red-600' : 'text-emerald-700'}`}>Brecha en unidades</p>
-                    <h3 className={`text-2xl font-bold mb-1 ${cuentas?.stats?.brechaUnidades < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{cuentas?.stats?.brechaUnidades || 0} eq</h3>
-                    <p className={`text-[10px] font-semibold ${cuentas?.stats?.brechaUnidades < 0 ? 'text-red-500' : 'text-emerald-600'}`}>Por cerrar</p>
+                    <h3 className={`text-2xl font-bold mb-1 ${cuentas?.stats?.brechaUnidades < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                        {cuentas?.stats?.brechaUnidades > 0 ? `+${cuentas?.stats?.brechaUnidades.toLocaleString('es-MX')}` : (cuentas?.stats?.brechaUnidades || 0).toLocaleString('es-MX')} equipos
+                    </h3>
+                    <p className={`text-[10px] font-semibold ${cuentas?.stats?.brechaUnidades < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                        {cuentas?.stats?.brechaUnidades >= 0 ? 'Por encima de la meta' : 'Por cerrar'}
+                    </p>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col justify-between">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Ticket promedio</p>
                     <h3 className="text-2xl font-bold text-slate-900 mb-1">{formatCurrency(cuentas?.stats?.ticketPromedioReal || 0)}</h3>
-                    <p className="text-[10px] font-semibold text-slate-400">Estimado: {formatCurrency(cuentas?.stats?.ticketPromedioEstimado || 0)} por eq</p>
+                    <p className="text-[10px] font-semibold text-slate-400">Estimado: {formatCurrency(cuentas?.stats?.ticketPromedioEstimado || 0)} por equipo</p>
                 </div>
             </div>
 

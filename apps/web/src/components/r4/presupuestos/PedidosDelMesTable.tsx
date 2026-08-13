@@ -34,7 +34,7 @@ export default function PedidosDelMesTable({ data = [], title, moneda }: { data:
                             <TableRow className="hover:bg-transparent">
                                 <TableHead className="py-2.5 px-4 font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">Cliente</TableHead>
                                 <TableHead className="py-2.5 px-4 font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">PO / Orden</TableHead>
-                                <TableHead className="py-2.5 px-4 font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">Pedido TOVTS</TableHead>
+                                <TableHead className="py-2.5 px-4 font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">Pedido TOTVS</TableHead>
                                 <TableHead className="py-2.5 px-4 text-right font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">Importe</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -50,7 +50,7 @@ export default function PedidosDelMesTable({ data = [], title, moneda }: { data:
                                     <TableRow key={idx} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100/60">
                                         <TableCell className="py-2.5 px-4 font-medium text-slate-700 whitespace-nowrap max-w-[160px] truncate" title={row.cliente}>{row.cliente}</TableCell>
                                         <TableCell className="py-2.5 px-4 text-slate-500 font-mono text-xs whitespace-nowrap">{row.po || '-'}</TableCell>
-                                        <TableCell className="py-2.5 px-4 text-slate-600 font-mono text-xs whitespace-nowrap font-medium">{row.pedido_tovts || row.po || '-'}</TableCell>
+                                        <TableCell className="py-2.5 px-4 text-slate-600 font-mono text-xs whitespace-nowrap font-medium">{row.pedido_totvs || row.pedido_tovts || row.no_registro_totvs || row.po || '-'}</TableCell>
                                         <TableCell className="py-2.5 px-4 text-right font-medium text-slate-700 whitespace-nowrap tabular-nums">
                                             {formatCurrency(row.importe)}
                                         </TableCell>

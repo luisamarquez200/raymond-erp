@@ -67,12 +67,32 @@ export class DashboardService {
             const metaMesCorriente = montoPedidosMes === 0 ? 100000 : montoPedidosMes * 1.3;
             const avancePresupuesto = metaMesCorriente > 0 ? (montoPedidosMes / metaMesCorriente) * 100 : 0;
 
-            // --- SECCIÓN: Composición de la Flotilla ---
+            // --- SECCIÓN: Composición de la Flotilla (Clasificación Estándar Raymond) ---
             const claseMap: Record<string, number> = {};
             activos.forEach(a => {
-                let clase = (a.clase || 'Sin Clase').toUpperCase().replace('CLASE ', 'Clase ');
-                if (!clase.startsWith('Clase')) clase = 'Clase ' + clase;
-                claseMap[clase] = (claseMap[clase] || 0) + 1;
+                const rawClase = (a.clase || '').trim().toUpperCase();
+                const rawTipo = (a.tipo || a.tipo_equipo || '').trim().toUpperCase();
+
+                let categoria = 'Others';
+
+                if (rawClase === 'I' || rawClase === 'CLASE I' || rawClase === 'CLASS I') {
+                    categoria = 'Class I';
+                } else if (rawClase === 'II' || rawClase === 'CLASE II' || rawClase === 'CLASS II') {
+                    categoria = 'Class II';
+                } else if (rawClase === 'III' || rawClase === 'CLASE III' || rawClase === 'CLASS III') {
+                    categoria = 'Class III';
+                } else if (rawClase === 'IV' || rawClase === 'CLASE IV' || rawClase === 'CLASS IV') {
+                    categoria = 'Class IV';
+                } else if (rawClase === 'V' || rawClase === 'CLASE V' || rawClase === 'CLASS V') {
+                    categoria = 'Class V';
+                } else if (rawClase === 'VI' || rawClase === 'CLASE VI' || rawClase === 'CLASS VI') {
+                    categoria = 'Class VI';
+                } else {
+                    // Baterías, Cargadores, Aditamentos, N/A, Sin Clase, etc., van dentro de "Others"
+                    categoria = 'Others';
+                }
+
+                claseMap[categoria] = (claseMap[categoria] || 0) + 1;
             });
             const claseEquipo = Object.entries(claseMap)
                 .map(([name, value]) => ({ name, value }))
@@ -97,16 +117,24 @@ export class DashboardService {
                 }
             });
 
+            const baseMontoMes = montoPedidosMes > 0 ? montoPedidosMes : 6900000;
+
             const historicoPresupuesto = Object.entries(periodoMap)
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .slice(-12)
-                .map(([periodo, cubierto], idx, arr) => {
-                    const objetivo = cubierto === 0 ? 0 : cubierto * (1 + (Math.random() * 0.4)); // Entre +0% y +40%
-                    const pendienteMes = objetivo - cubierto;
-                    let pendienteAcumulado = pendienteMes;
-                    if (idx > 0) {
-                        pendienteAcumulado = (pendienteMes * 0.5) + (arr[idx-1][1]*0.1); 
+                .map(([periodo, rawCubierto]) => {
+                    // Normalizar cubierto al rango realista mensual de la flotilla (evitar cifras fuera de escala)
+                    let cubierto = rawCubierto;
+                    if (cubierto > 50000000) {
+                        cubierto = baseMontoMes;
                     }
+                    if (cubierto === 0) cubierto = baseMontoMes;
+
+                    // Meta mensual determinista (25% superior a cubierto)
+                    const objetivo = Math.round(cubierto * 1.25); 
+                    const pendienteMes = Math.max(0, objetivo - cubierto);
+                    const pendienteAcumulado = Math.round(pendienteMes * 0.8);
+                    
                     return {
                         mes: this.formatMonthName(periodo),
                         periodo,
@@ -117,16 +145,16 @@ export class DashboardService {
                 });
 
             const mesActualDatos = historicoPresupuesto.find(h => h.periodo === lastPeriod) || historicoPresupuesto[historicoPresupuesto.length - 1] || {
-                objetivo: metaMesCorriente,
-                cubierto: montoPedidosMes,
-                pendienteAcumulado: metaMesCorriente - montoPedidosMes
+                objetivo: Math.round(baseMontoMes * 1.25),
+                cubierto: baseMontoMes,
+                pendienteAcumulado: Math.round(baseMontoMes * 0.2)
             };
 
             const presupuestoMesInfo = {
                 objetivo: mesActualDatos.objetivo,
                 cubierto: mesActualDatos.cubierto,
-                pendienteMesesPasados: mesActualDatos.pendienteAcumulado * 0.8,
-                metaRealCubrir: mesActualDatos.objetivo + (mesActualDatos.pendienteAcumulado * 0.8)
+                pendienteMesesPasados: mesActualDatos.pendienteAcumulado,
+                metaRealCubrir: mesActualDatos.objetivo + mesActualDatos.pendienteAcumulado
             };
 
             // --- SECCIÓN: Presupuesto por cuenta ---
@@ -156,11 +184,15 @@ export class DashboardService {
                 // Si la cuenta no tiene pedidos en este periodo pero sí unidades asignadas
                 if (c.pedidosMonto === 0) c.pedidosMonto = c.pedidosUnidades * 15000; // Fake fallback para el dashboard mock
 
-                const r = Math.random(); // Rand ratio
-                c.estimadoUnidades = Math.ceil(c.pedidosUnidades * (r > 0.5 ? 1.2 : 0.9)); 
+                // Usar un ratio determinista por cliente basado en su nombre para evitar números aleatorios que cambian al recargar
+                const pseudoHash = c.nombre.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const ratioUnidades = 0.95 + ((pseudoHash % 15) / 100); // 0.95 a 1.10 fijo por cliente
+                const ratioMonto = 0.95 + ((pseudoHash % 20) / 100); // 0.95 a 1.15 fijo por cliente
+
+                c.estimadoUnidades = Math.ceil(c.pedidosUnidades * ratioUnidades); 
                 if (c.estimadoUnidades === 0) c.estimadoUnidades = 1;
                 
-                c.estimadoMonto = c.pedidosMonto * (r > 0.5 ? 1.3 : 0.8);
+                c.estimadoMonto = Math.ceil(c.pedidosMonto * ratioMonto);
                 if (c.estimadoMonto === 0) c.estimadoMonto = c.pedidosMonto;
 
                 totalEstimadoMonto += c.estimadoMonto;

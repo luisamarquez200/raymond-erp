@@ -15,6 +15,7 @@ import { createWorker } from 'tesseract.js';
 import { Camera, Image as ImageIcon, Loader2, QrCode, RotateCw } from 'lucide-react';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 
 
 interface NuevaEntradaModalProps {
@@ -1316,19 +1317,15 @@ export function NuevaEntradaModal({ open, onClose, onSuccess, editingEntrada }: 
                                                         <Plus className="w-3 h-3" /> Añadir nuevo
                                                     </button>
                                                 </div>
-                                                <select
-                                                    value={itemFormData.modelo}
-                                                    onChange={(e) => setItemFormData({ ...itemFormData, modelo: e.target.value })}
+                                                <SearchableSelect
+                                                    options={filteredModelos.map(m => ({ label: m.modelo || '', value: m.modelo || '' }))}
+                                                    value={itemFormData.modelo || ''}
+                                                    onChange={(val) => setItemFormData({ ...itemFormData, modelo: val })}
                                                     disabled={!itemFormData.clase}
-                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:border-red-500 transition-all outline-none disabled:opacity-50"
-                                                >
-                                                    <option value="">Seleccionar Modelo...</option>
-                                                    {filteredModelos.map((m) => (
-                                                        <option key={m.id_modelo} value={m.modelo}>
-                                                            {m.modelo}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    placeholder="Seleccionar Modelo..."
+                                                    searchPlaceholder="Buscar modelo..."
+                                                    emptyMessage="No se encontraron modelos"
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center">

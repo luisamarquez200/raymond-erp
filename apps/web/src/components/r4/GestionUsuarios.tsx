@@ -73,6 +73,7 @@ export default function GestionUsuarios() {
     const [auxiliarId, setAuxiliarId] = useState('');
     const [auxiliarName, setAuxiliarName] = useState('');
     const [selectedAdcs, setSelectedAdcs] = useState<string[]>([]);
+    const [selectedAuxiliares, setSelectedAuxiliares] = useState<string[]>([]);
 
     // Fetch Roles
     const { data: allRoles = [] } = useQuery({
@@ -121,11 +122,24 @@ export default function GestionUsuarios() {
         ...adcsList.map((a: any) => a.name)
     ])).filter(Boolean);
 
+    const allAuxiliarOptions = Array.from(new Set(
+        auxiliaresUsers.map((u: any) => `${u.firstName || ''} ${u.lastName || ''}`.trim())
+    )).filter(Boolean);
+
     const toggleAdcSelection = (adcName: string) => {
         setSelectedAdcs(prev => {
             const exists = prev.includes(adcName);
             const updated = exists ? prev.filter(a => a !== adcName) : [...prev, adcName];
             setAdcAsociadoName(updated.length > 0 ? updated.join(', ') : 'ninguno');
+            return updated;
+        });
+    };
+
+    const toggleAuxiliarSelection = (auxName: string) => {
+        setSelectedAuxiliares(prev => {
+            const exists = prev.includes(auxName);
+            const updated = exists ? prev.filter(a => a !== auxName) : [...prev, auxName];
+            setAuxiliarName(updated.length > 0 ? updated.join(', ') : '');
             return updated;
         });
     };
@@ -139,6 +153,7 @@ export default function GestionUsuarios() {
         setIsActive(true);
         setShowPassword(false);
         setSelectedAdcs([]);
+        setSelectedAuxiliares([]);
         setAdcAsociadoName('ninguno');
         setSupervisorId('');
         setSupervisorName('');
@@ -165,6 +180,13 @@ export default function GestionUsuarios() {
             ? rawAdcString.split(',').map((s: string) => s.trim()).filter(Boolean)
             : [];
         setSelectedAdcs(parsedAdcs);
+
+        const rawAuxString = user.auxiliarName || '';
+        const parsedAuxs = rawAuxString && rawAuxString !== 'ninguno'
+            ? rawAuxString.split(',').map((s: string) => s.trim()).filter(Boolean)
+            : [];
+        setSelectedAuxiliares(parsedAuxs);
+
         setAdcAsociadoName(user.adcAsociadoName || 'ninguno');
         setSupervisorId(user.supervisorId || '');
         setSupervisorName(user.supervisorName || '');
@@ -211,6 +233,8 @@ export default function GestionUsuarios() {
             return;
         }
 
+        const finalAdcAsociadoName = adcAsociadoName === 'ninguno' ? '' : adcAsociadoName;
+
         try {
             await updateUserMutation.mutateAsync({
                 id: selectedUser.id,
@@ -221,13 +245,27 @@ export default function GestionUsuarios() {
                     roleId,
                     isActive,
                     ...(password && { password }),
-                    adcAsociadoName: adcAsociadoName === 'ninguno' ? '' : adcAsociadoName,
+                    adcAsociadoName: finalAdcAsociadoName,
                     supervisorId: supervisorId || '',
                     supervisorName: supervisorName || '',
                     auxiliarId: auxiliarId || '',
                     auxiliarName: auxiliarName || '',
                 }
             });
+
+            // Si el usuario editado es el usuario actualmente logueado,
+            // actualizar el store para que los ADCs se apliquen de inmediato sin re-login
+            if (currentUser && selectedUser.id === currentUser.id) {
+                const { setUser } = useAuthStore.getState();
+                setUser({
+                    ...currentUser,
+                    firstName,
+                    lastName,
+                    email,
+                    adc_asociado_name: finalAdcAsociadoName,
+                } as any);
+            }
+
             setIsEditOpen(false);
             refetch();
         } catch (error) {}
@@ -531,7 +569,6 @@ export default function GestionUsuarios() {
                                         </SelectTrigger>
                                         <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
                                             <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
-                                            <SelectItem value="Salma Salgado" className="text-slate-900 font-bold cursor-pointer">Salma Salgado (Becario / Auxiliar)</SelectItem>
                                             {auxiliaresUsers.map((aux) => (
                                                 <SelectItem key={aux.id} value={`${aux.firstName} ${aux.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
                                                     {aux.firstName} {aux.lastName}
@@ -543,6 +580,7 @@ export default function GestionUsuarios() {
                             </>
                         )}
 
+                        {/* 1. Si el rol es Auxiliar -> Selector simple "Asociar a ADC *" */}
                         {activeSelectedRoleName === 'auxiliar' && (
                             <div className="space-y-1.5">
                                 <Label htmlFor="c-adcForAux" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a ADC *</Label>
@@ -574,7 +612,8 @@ export default function GestionUsuarios() {
                             </div>
                         )}
 
-                        {activeSelectedRoleName !== 'adc' && activeSelectedRoleName !== 'auxiliar' && (
+                        {/* 2. Si el rol es Administrador -> "Asociar ADCs a Cargo (Selección Múltiple)" */}
+                        {['administrador', 'admin', 'coordinador', 'coordinacion'].some(r => activeSelectedRoleName.includes(r)) && (
                             <div className="space-y-1.5">
                                 <Label className="text-slate-800 font-bold text-xs uppercase tracking-wider block">
                                     Asociar ADCs a Cargo (Selección Múltiple)
@@ -624,6 +663,63 @@ export default function GestionUsuarios() {
                                     ) : (
                                         <div className="pt-1 text-[11px] text-slate-400 font-medium italic">
                                             Ningún ADC seleccionado.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. Si el rol es ADC -> "Asociar Auxiliares a Cargo (Selección Múltiple)" */}
+                        {activeSelectedRoleName === 'adc' && (
+                            <div className="space-y-1.5">
+                                <Label className="text-slate-800 font-bold text-xs uppercase tracking-wider block">
+                                    Asociar Auxiliares a Cargo (Selección Múltiple)
+                                </Label>
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                                    <div className="text-[11px] font-semibold text-slate-500">
+                                        Selecciona uno o más Auxiliares / Becarios asignados a este ADC:
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                                        {allAuxiliarOptions.map((auxName) => {
+                                            const isSelected = selectedAuxiliares.includes(auxName);
+                                            return (
+                                                <button
+                                                    key={auxName}
+                                                    type="button"
+                                                    onClick={() => toggleAuxiliarSelection(auxName)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                                                        isSelected
+                                                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                                                    }`}
+                                                >
+                                                    <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] ${
+                                                        isSelected ? 'bg-white text-slate-900 border-white font-extrabold' : 'border-slate-300'
+                                                    }`}>
+                                                        {isSelected ? '✓' : ''}
+                                                    </span>
+                                                    {auxName}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedAuxiliares.length > 0 ? (
+                                        <div className="pt-2 border-t border-slate-200/80 text-[11px] font-bold text-slate-600 flex items-center justify-between">
+                                            <span>Seleccionados ({selectedAuxiliares.length}): <strong className="text-slate-900">{selectedAuxiliares.join(', ')}</strong></span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedAuxiliares([]);
+                                                    setAuxiliarName('');
+                                                }}
+                                                className="text-[10px] text-red-600 hover:underline font-bold uppercase"
+                                            >
+                                                Limpiar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="pt-1 text-[11px] text-slate-400 font-medium italic">
+                                            Ningún Auxiliar seleccionado.
                                         </div>
                                     )}
                                 </div>
@@ -747,7 +843,6 @@ export default function GestionUsuarios() {
                                         </SelectTrigger>
                                         <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
                                             <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
-                                            <SelectItem value="Salma Salgado" className="text-slate-900 font-bold cursor-pointer">Salma Salgado (Becario / Auxiliar)</SelectItem>
                                             {auxiliaresUsers.map((aux) => (
                                                 <SelectItem key={aux.id} value={`${aux.firstName} ${aux.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
                                                     {aux.firstName} {aux.lastName}
@@ -759,6 +854,7 @@ export default function GestionUsuarios() {
                             </>
                         )}
 
+                        {/* 1. Si el rol es Auxiliar -> Selector simple "Asociar a ADC" */}
                         {activeSelectedRoleName === 'auxiliar' && (
                             <div className="space-y-1.5">
                                 <Label htmlFor="e-adcForAux" className="text-slate-800 font-bold text-xs uppercase tracking-wider block">Asociar a ADC</Label>
@@ -790,7 +886,8 @@ export default function GestionUsuarios() {
                             </div>
                         )}
 
-                        {activeSelectedRoleName !== 'adc' && activeSelectedRoleName !== 'auxiliar' && (
+                        {/* 2. Si el rol es Administrador -> "Asociar ADCs a Cargo (Selección Múltiple)" */}
+                        {['administrador', 'admin', 'coordinador', 'coordinacion'].some(r => activeSelectedRoleName.includes(r)) && (
                             <div className="space-y-1.5">
                                 <Label className="text-slate-800 font-bold text-xs uppercase tracking-wider block">
                                     Asociar ADCs a Cargo (Selección Múltiple)
@@ -840,6 +937,63 @@ export default function GestionUsuarios() {
                                     ) : (
                                         <div className="pt-1 text-[11px] text-slate-400 font-medium italic">
                                             Ningún ADC seleccionado.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. Si el rol es ADC -> "Asociar Auxiliares a Cargo (Selección Múltiple)" */}
+                        {activeSelectedRoleName === 'adc' && (
+                            <div className="space-y-1.5">
+                                <Label className="text-slate-800 font-bold text-xs uppercase tracking-wider block">
+                                    Asociar Auxiliares a Cargo (Selección Múltiple)
+                                </Label>
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                                    <div className="text-[11px] font-semibold text-slate-500">
+                                        Selecciona uno o más Auxiliares / Becarios asignados a este ADC:
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                                        {allAuxiliarOptions.map((auxName) => {
+                                            const isSelected = selectedAuxiliares.includes(auxName);
+                                            return (
+                                                <button
+                                                    key={auxName}
+                                                    type="button"
+                                                    onClick={() => toggleAuxiliarSelection(auxName)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                                                        isSelected
+                                                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                                                    }`}
+                                                >
+                                                    <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center text-[10px] ${
+                                                        isSelected ? 'bg-white text-slate-900 border-white font-extrabold' : 'border-slate-300'
+                                                    }`}>
+                                                        {isSelected ? '✓' : ''}
+                                                    </span>
+                                                    {auxName}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedAuxiliares.length > 0 ? (
+                                        <div className="pt-2 border-t border-slate-200/80 text-[11px] font-bold text-slate-600 flex items-center justify-between">
+                                            <span>Seleccionados ({selectedAuxiliares.length}): <strong className="text-slate-900">{selectedAuxiliares.join(', ')}</strong></span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedAuxiliares([]);
+                                                    setAuxiliarName('');
+                                                }}
+                                                className="text-[10px] text-red-600 hover:underline font-bold uppercase"
+                                            >
+                                                Limpiar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="pt-1 text-[11px] text-slate-400 font-medium italic">
+                                            Ningún Auxiliar seleccionado.
                                         </div>
                                     )}
                                 </div>

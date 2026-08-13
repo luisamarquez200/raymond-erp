@@ -10,8 +10,9 @@ import {
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import { equiposApi, Equipo } from '@/services/taller-r1/equipos.service';
 import { modelosApi, Modelo } from '@/services/taller-r1/modelos.service';
+import { SearchableSelect, SearchableSelectOption } from '@/components/ui/SearchableSelect';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Tag, Info, AlertCircle } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Tag, Info, AlertCircle, Hash, Layers } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 import {
@@ -47,7 +48,10 @@ export default function EquiposPage() {
   const initialFormState: Partial<Equipo> = {
     marca: 'Raymond',
     clase: 'Clase I',
-    modelo: ''
+    modelo: '',
+    numero_serie: '',
+    descripcion: '',
+    estado: 'Por Ubicar'
   };
 
   const [formData, setFormData] = useState<Partial<Equipo>>(initialFormState);
@@ -76,27 +80,37 @@ export default function EquiposPage() {
   };
 
   const filteredData = data.filter(i => {
-    const searchMatch = (i.modelo || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const searchMatch =
+      (i.modelo || '').toLowerCase().includes(term) ||
+      (i.numero_serie || '').toLowerCase().includes(term) ||
+      (i.marca || '').toLowerCase().includes(term) ||
+      (i.clase || '').toLowerCase().includes(term);
     const tabMatch = activeTab === 'Todos' || i.clase === activeTab;
     return searchMatch && tabMatch;
   });
 
-  const availableModelosForSelectedClass = modelos.filter(m => m.clase_id === formData.clase);
+  // Filter models by selected class. If no class is selected or no models exist for that class, show all models.
+  const classModels = modelos.filter(m => !formData.clase || m.clase_id === formData.clase);
+  const displayModels = classModels.length > 0 ? classModels : modelos;
 
-  // Auto-select first model if the class changes and the previous model doesn't exist in the new class
+  const modelOptions: SearchableSelectOption[] = displayModels.map(m => ({
+    label: m.modelo || '',
+    value: m.modelo || '',
+    description: m.clase_id ? `Clase: ${m.clase_id}` : undefined
+  }));
+
+  // Auto-select first model only when creating a new equipment (not editing existing)
   useEffect(() => {
-    if (formData.clase && showModal) {
+    if (formData.clase && showModal && !editingItem) {
       const validModels = modelos.filter(m => m.clase_id === formData.clase);
       if (validModels.length > 0) {
-        // Only override if the current formData.modelo is not in the validModels list
         if (!validModels.find(m => m.modelo === formData.modelo)) {
-          setFormData(prev => ({ ...prev, modelo: validModels[0].modelo }));
+          setFormData(prev => ({ ...prev, modelo: validModels[0].modelo || '' }));
         }
-      } else {
-        setFormData(prev => ({ ...prev, modelo: '' }));
       }
     }
-  }, [formData.clase, modelos, showModal]);
+  }, [formData.clase, modelos, showModal, editingItem]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +142,26 @@ export default function EquiposPage() {
     }
   };
 
+  const handleOpenEdit = (item: Equipo) => {
+    setEditingItem(item);
+    setFormData({
+      id_equipos: item.id_equipos,
+      marca: item.marca || 'Raymond',
+      clase: item.clase || 'Clase I',
+      modelo: item.modelo || '',
+      numero_serie: item.numero_serie || '',
+      descripcion: item.descripcion || '',
+      estado: item.estado || 'Por Ubicar',
+    });
+    setShowModal(true);
+  };
+
+  const handleOpenNew = () => {
+    setEditingItem(null);
+    setFormData(initialFormState);
+    setShowModal(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
       <div className="mb-6">
@@ -138,7 +172,7 @@ export default function EquiposPage() {
           </div>
           {!isVisitante && (
             <button
-              onClick={() => { setEditingItem(null); setFormData(initialFormState); setShowModal(true); }}
+              onClick={handleOpenNew}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-red-600 text-white rounded-xl shadow-lg shadow-red-500/20 hover:bg-red-700 transition-colors font-brand font-black tracking-tighter"
             >
               <Plus className="w-5 h-5" />
@@ -167,7 +201,7 @@ export default function EquiposPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por Modelo..."
+              placeholder="Buscar por Modelo, Serie, Marca o Clase..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-100 focus:border-red-400 outline-none transition-all font-medium text-sm"
@@ -181,27 +215,47 @@ export default function EquiposPage() {
           <div key={item.id_equipos} className="bg-white rounded-[24px] p-5 shadow-sm border border-gray-100 hover:border-red-100 hover:shadow-md transition-all flex flex-col relative">
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 shrink-0 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 shadow-inner">
+                <div className="w-12 h-12 shrink-0 bg-red-50 rounded-xl flex items-center justify-center text-red-600 shadow-inner font-bold">
                   <Tag className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-black text-gray-900 tracking-tighter text-lg">{item.modelo || 'Sin Modelo'}</h3>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{item.marca}</p>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{item.marca || 'Raymond'}</p>
                 </div>
               </div>
+              {item.estado && (
+                <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg bg-gray-100 text-gray-600 border border-gray-200">
+                  {item.estado}
+                </span>
+              )}
             </div>
 
             <div className="space-y-2 mb-4">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-400 font-medium">Clase:</span>
+                <span className="text-gray-400 font-medium flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-gray-400" /> Clase:
+                </span>
                 <span className="font-bold text-gray-900">{item.clase}</span>
               </div>
+              {item.numero_serie && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400 font-medium flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5 text-gray-400" /> Nº Serie:
+                  </span>
+                  <span className="font-bold text-gray-900">{item.numero_serie}</span>
+                </div>
+              )}
+              {item.descripcion && (
+                <p className="text-xs text-gray-500 line-clamp-2 pt-1 border-t border-gray-50">
+                  {item.descripcion}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-2 mt-auto pt-4 border-t border-gray-100">
               {!isVisitante && (
                 <button
-                  onClick={() => { setEditingItem(item); setFormData(item); setShowModal(true); }}
+                  onClick={() => handleOpenEdit(item)}
                   className="flex-1 py-2 text-sm font-bold text-gray-600 bg-gray-50 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <Edit className="w-4 h-4" /> Editar
@@ -245,23 +299,33 @@ export default function EquiposPage() {
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[10px] font-black text-gray-400 tracking-widest block mb-1 uppercase">Marca</label>
                 <input
                   type="text"
                   value={formData.marca || ''}
                   onChange={e => setFormData({ ...formData, marca: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-red-100 focus:bg-white transition-all font-bold text-gray-900"
+                  className="w-full px-4 py-2.5 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-red-100 focus:bg-white transition-all font-bold text-gray-900 text-sm"
                   placeholder="Raymond"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 tracking-widest block mb-1 uppercase">Nº de Serie</label>
+                <input
+                  type="text"
+                  value={formData.numero_serie || ''}
+                  onChange={e => setFormData({ ...formData, numero_serie: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-red-100 focus:bg-white transition-all font-bold text-gray-900 text-sm"
+                  placeholder="SN-12345"
                 />
               </div>
             </div>
 
             <div>
               <label className="text-[10px] font-black text-gray-400 tracking-widest block mb-2 uppercase">Clase de Equipo</label>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {CLASSES.map(c => (
                   <button
                     key={c}
@@ -281,42 +345,61 @@ export default function EquiposPage() {
             <div>
               <label className="text-[10px] font-black text-gray-400 tracking-widest block mb-1 uppercase flex items-center justify-between">
                 <span>Modelo</span>
-                {availableModelosForSelectedClass.length === 0 && formData.clase && (
-                  <span className="text-amber-500 font-bold normal-case tracking-normal flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> Sin modelos en esta clase
+                {classModels.length === 0 && formData.clase && (
+                  <span className="text-amber-500 font-bold normal-case tracking-normal flex items-center gap-1 text-[10px]">
+                    <AlertCircle className="w-3 h-3" /> Mostrando todos los modelos
                   </span>
                 )}
               </label>
 
-              <select
+              <SearchableSelect
+                options={modelOptions}
                 value={formData.modelo || ''}
-                onChange={e => setFormData({ ...formData, modelo: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-red-100 focus:bg-white transition-all font-bold text-gray-900 disabled:opacity-50"
-                disabled={availableModelosForSelectedClass.length === 0}
+                onChange={(val) => setFormData({ ...formData, modelo: val })}
+                placeholder="Buscar o seleccionar modelo..."
+                searchPlaceholder="Escribe el modelo para buscar..."
+                emptyMessage="No se encontraron modelos"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 tracking-widest block mb-1 uppercase">Estado</label>
+              <select
+                value={formData.estado || 'Por Ubicar'}
+                onChange={e => setFormData({ ...formData, estado: e.target.value })}
+                className="w-full px-4 py-2.5 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-red-100 focus:bg-white transition-all font-bold text-gray-900 text-sm"
               >
-                <option value="" disabled>Seleccione un modelo</option>
-                {availableModelosForSelectedClass.map(m => (
-                  <option key={m.id_modelo} value={m.modelo || ''}>{m.modelo}</option>
+                {ESTADOS.map(st => (
+                  <option key={st} value={st}>{st}</option>
                 ))}
               </select>
             </div>
 
-
+            <div>
+              <label className="text-[10px] font-black text-gray-400 tracking-widest block mb-1 uppercase">Descripción (Opcional)</label>
+              <textarea
+                value={formData.descripcion || ''}
+                onChange={e => setFormData({ ...formData, descripcion: e.target.value })}
+                rows={2}
+                className="w-full px-4 py-2 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-red-100 focus:bg-white transition-all font-medium text-gray-900 text-xs resize-none"
+                placeholder="Detalles adicionales del equipo..."
+              />
+            </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
               <button
                 type="button"
                 onClick={() => setShowConfirmCancel(true)}
-                className="px-6 py-2 text-gray-400 font-bold hover:text-red-500 transition-colors"
+                className="px-6 py-2 text-gray-400 font-bold hover:text-red-500 transition-colors text-sm"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-6 py-2 bg-red-600 text-white rounded-xl font-black transition-all hover:bg-black tracking-tighter shadow-lg shadow-red-500/20"
+                className="px-6 py-2 bg-red-600 text-white rounded-xl font-black transition-all hover:bg-black tracking-tighter shadow-lg shadow-red-500/20 text-sm"
               >
-                Guardar Equipo
+                {editingItem ? 'Guardar Cambios' : 'Guardar Equipo'}
               </button>
             </div>
           </form>

@@ -137,6 +137,8 @@ model Activo {
   @@index([cliente_id])
   @@index([sitio_id])
   @@index([estatus])
+  @@index([estatus, estatus_operativo])
+  @@index([adc])
   @@map("activos")
 }
 
@@ -207,6 +209,8 @@ model Renta {
   @@index([sitio_id])
   @@index([activo_id])
   @@index([contrato_id])
+  @@index([estado, origen])
+  @@index([adc])
   @@map("rentas")
 }
 
@@ -265,7 +269,7 @@ model OrdenMensual {
   @@index([contrato_id])
   @@index([renta_id])
   @@index([activo_id])
-  // Evitar duplicados: mismo activo + mismo periodo + misma PO
+  @@index([activo_id, periodo])
   @@unique([activo_id, periodo, po])
   @@map("ordenes_mensuales")
 }

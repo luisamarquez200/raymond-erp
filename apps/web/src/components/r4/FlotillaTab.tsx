@@ -8,14 +8,16 @@ import {
 import { Link } from '@/i18n/routing';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
 import { useConfigStore } from '@/store/config.store';
+import { useUser } from '@/hooks/useUsers';
 import PageLoader from '@/components/ui/PageLoader';
 import TooltipInfo from '@/components/ui/TooltipInfo';
+import { SearchableSelect, SearchableSelectOption } from '@/components/ui/SearchableSelect';
 import * as XLSX from 'xlsx';
 
 const statusColors = {
@@ -129,6 +131,8 @@ export default function FlotillaTab({
   setAdminAdcScope: externalSetAdminAdcScope 
 }: FlotillaTabProps = {}) {
   const { user } = useAuthStore();
+  // Cargar perfil fresco del usuario logueado desde la API (para tener adc_asociado_name actualizado)
+  const { data: freshUserProfile } = useUser(user?.id || '');
   const { roleColors } = useConfigStore();
   const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -219,6 +223,75 @@ export default function FlotillaTab({
       setNewAssetAdc(loggedInAdcName);
     }
   }, [isNewAssetModalOpen, isAdc, loggedInAdcName]);
+
+  // Auto-calculate Fecha Vencimiento in Datos de Renta (Opcional) when Fecha Entregado or Plazo changes
+  useEffect(() => {
+    if (newRentaFechaInicio && newRentaPlazo) {
+      const months = parseInt(newRentaPlazo, 10);
+      if (!isNaN(months) && months > 0) {
+        const parts = newRentaFechaInicio.split('-');
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10);
+          const d = parseInt(parts[2], 10);
+          if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+            const dt = new Date(y, m - 1 + months, d);
+            const yyyy = dt.getFullYear();
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            setNewRentaFechaFin(`${yyyy}-${mm}-${dd}`);
+          }
+        }
+      }
+    }
+  }, [newRentaFechaInicio, newRentaPlazo]);
+
+  const defaultModelosCatalog: SearchableSelectOption[] = [
+    { label: 'Raymond 7400', value: 'Raymond 7400', description: 'Reach Truck (Clase II)' },
+    { label: 'Raymond 7500', value: 'Raymond 7500', description: 'Deep Reach Truck (Clase II)' },
+    { label: 'Raymond 7700', value: 'Raymond 7700', description: 'Reach Truck (Clase II)' },
+    { label: 'Raymond 4150', value: 'Raymond 4150', description: '3-Wheel Counterbalance (Clase I)' },
+    { label: 'Raymond 4250', value: 'Raymond 4250', description: 'Counterbalance (Clase I)' },
+    { label: 'Raymond 4460', value: 'Raymond 4460', description: 'Sit-Down Counterbalance (Clase I)' },
+    { label: 'Raymond 4750', value: 'Raymond 4750', description: '4-Wheel Counterbalance (Clase I)' },
+    { label: 'Raymond 5200', value: 'Raymond 5200', description: 'Orderpicker (Clase II)' },
+    { label: 'Raymond 5300', value: 'Raymond 5300', description: 'Orderpicker (Clase II)' },
+    { label: 'Raymond 5400', value: 'Raymond 5400', description: 'Orderpicker (Clase II)' },
+    { label: 'Raymond 5500', value: 'Raymond 5500', description: 'Orderpicker (Clase II)' },
+    { label: 'Raymond 5600', value: 'Raymond 5600', description: 'Orderpicker (Clase II)' },
+    { label: 'Raymond 8210', value: 'Raymond 8210', description: 'Walkie Pallet Truck (Clase III)' },
+    { label: 'Raymond 8410', value: 'Raymond 8410', description: 'End Rider Pallet Truck (Clase III)' },
+    { label: 'Raymond 8510', value: 'Raymond 8510', description: 'Center Rider Pallet Truck (Clase III)' },
+    { label: 'Raymond 8610', value: 'Raymond 8610', description: 'Tow Tractor (Clase VI)' },
+    { label: 'Raymond 8900', value: 'Raymond 8900', description: 'Rider Pallet Truck (Clase III)' },
+    { label: 'Raymond 6210', value: 'Raymond 6210', description: 'Walkie Stacker (Clase III)' },
+    { label: 'Raymond 7200', value: 'Raymond 7200', description: 'Reach Truck (Clase II)' },
+    { label: 'Raymond 9600', value: 'Raymond 9600', description: 'Swing Reach (Clase II)' },
+    { label: 'Raymond 9700', value: 'Raymond 9700', description: 'Swing Reach (Clase II)' },
+    { label: '8FG50', value: '8FG50', description: 'Toyota Gas Counterbalance (Clase V)' },
+    { label: '8FBN25', value: '8FBN25', description: 'Toyota Electric Counterbalance (Clase I)' },
+  ];
+
+  const modeloOptions = useMemo<SearchableSelectOption[]>(() => {
+    const map = new Map<string, SearchableSelectOption>();
+    defaultModelosCatalog.forEach(m => map.set(m.value.toLowerCase(), m));
+    
+    (fleetAssets || []).forEach((a: any) => {
+      if (a.modelo && a.modelo.trim()) {
+        const val = a.modelo.trim();
+        const key = val.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, {
+            label: val,
+            value: val,
+            description: a.clase ? `Clase ${a.clase}` : 'Modelo Registrado'
+          });
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [fleetAssets]);
 
   const fetchFlotilla = async () => {
     try {
@@ -577,20 +650,35 @@ export default function FlotillaTab({
                emailLower.includes(adcLower);
     });
   } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
-    const currentUserNameLower = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
+    // Leer ADCs asignados: primero del perfil fresco de la API, luego del store
+    const rawAdcAsociado = 
+      freshUserProfile?.adcAsociadoName ||
+      (user as any)?.adc_asociado_name || 
+      (user as any)?.adcAsociadoName || '';
+
     let assignedAdcKeywords: string[] = [];
-    if (currentUserNameLower.includes('cecilia')) {
-      assignedAdcKeywords = ['montserrat', 'andrea'];
-    } else if (currentUserNameLower.includes('paola')) {
-      assignedAdcKeywords = ['angélica', 'angelica', 'alejandra', 'daniel'];
-    } else {
-      assignedAdcKeywords = [(user?.firstName || '').toLowerCase()];
+
+    if (rawAdcAsociado && rawAdcAsociado !== 'ninguno') {
+      // El campo puede contener múltiples ADCs separados por coma: "Andrea Esquivel, Montserrat Covarrubias"
+      assignedAdcKeywords = rawAdcAsociado
+        .split(',')
+        .map((s: string) => s.trim().toLowerCase())
+        .filter(Boolean);
     }
 
-    baseAssets = fleetAssets.filter(a => {
-      const adcLower = (a.adc || '').toLowerCase();
-      return assignedAdcKeywords.some(kw => adcLower.includes(kw));
-    });
+    if (assignedAdcKeywords.length === 0) {
+      // Si no tiene ADCs asignados, mostrar vacío con mensaje informativo
+      baseAssets = [];
+    } else {
+      baseAssets = fleetAssets.filter(a => {
+        const adcLower = (a.adc || '').toLowerCase().trim();
+        return assignedAdcKeywords.some(kw => 
+          adcLower === kw || 
+          adcLower.includes(kw) || 
+          kw.includes(adcLower)
+        );
+      });
+    }
   }
 
   const normalizedAssets = baseAssets.map(a => {
@@ -736,6 +824,7 @@ export default function FlotillaTab({
         'CLASE': asset.clase || '',
         'MODELO': asset.modelo || '',
         'SERIE': asset.serie || '',
+        'IWAREHOUSE': asset.iwarehouse || '-',
         'OACH': asset.oach || '',
         'ALTURA': asset.altura || '',
         'BC': asset.bc || '',
@@ -786,10 +875,14 @@ export default function FlotillaTab({
     try {
       const formData = new FormData();
       formData.append('file', file);
-      await api.post('/r4/carga-masiva', formData, {
+      // Full bulk load: admin/gerente use /r4/carga-masiva
+      // Partial load: ADC use /r4/carga-masiva/parcial (backend filters rows by the ADC's name)
+      const endpoint = isAdc ? '/r4/carga-masiva/parcial' : '/r4/carga-masiva';
+      await api.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       fetchFlotilla();
+      toast.success(isAdc ? 'Cargue parcial procesado exitosamente.' : 'Carga masiva procesada exitosamente.');
     } catch (error) {
       console.error('Error uploading file:', error);
       toast.error('Error al procesar el archivo');
@@ -800,6 +893,13 @@ export default function FlotillaTab({
   const uniqueADCs = Array.from(new Set(fleetAssets.map((a: any) => a.adc).filter(Boolean))).sort() as string[];
   const uniqueDistribuidores = Array.from(new Set(fleetAssets.map((a: any) => a.distribuidor).filter(Boolean))).sort() as string[];
   const uniqueClases = Array.from(new Set(fleetAssets.map((a: any) => a.clase).filter(Boolean))).sort() as string[];
+
+  const renderIwarehouseBadge = (val: string) => {
+    if (!val || val === '-') return <span className="text-slate-400">-</span>;
+    const isYes = val.toUpperCase().trim() === 'SI' || val.toUpperCase().trim() === 'SÍ' || val.toUpperCase().trim() === 'YES';
+    if (isYes) return <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 border border-emerald-200">Sí</span>;
+    return <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200">No</span>;
+  };
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] p-4 sm:p-6 lg:p-8 space-y-6">
@@ -1068,7 +1168,7 @@ export default function FlotillaTab({
               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap"
             >
               <Upload className="w-3.5 h-3.5 text-slate-500" />
-              <span>Carga Masiva</span>
+              <span>{isAdc ? 'Cargue Parcial' : 'Carga Masiva'}</span>
             </button>
             <button
               onClick={handleDownloadExcel}
@@ -1120,6 +1220,7 @@ export default function FlotillaTab({
                   <th className="px-4 py-4">{renderFilter('clase', 'Clase', 'CLASE')}</th>
                   <th className="px-4 py-4">{renderFilter('modelo', 'Modelo', 'MODELO')}</th>
                   <th className="px-4 py-4">{renderFilter('serie', 'Serie', 'SERIE')}</th>
+                  <th className="px-4 py-4">{renderFilter('iwarehouse', 'iWarehouse', 'IWAREHOUSE')}</th>
                   <th className="px-4 py-4">{renderFilter('oach', 'OACH', 'OACH')}</th>
                   <th className="px-4 py-4">{renderFilter('altura', 'Altura', 'ALTURA')}</th>
                   <th className="px-4 py-4">{renderFilter('bc', 'BC', 'BC')}</th>
@@ -1165,10 +1266,11 @@ export default function FlotillaTab({
                     <td className="px-4 py-3.5 font-mono text-[11px]">{asset.clase}</td>
                     <td className="px-4 py-3.5 font-bold text-slate-800">{asset.modelo}</td>
                     <td className="px-4 py-3.5">
-                      <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-slate-900 hover:text-red-600 hover:underline">
+                      <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-slate-900 hover:text-red-600 hover:underline" onClick={(e) => e.stopPropagation()}>
                         {asset.serie}
                       </Link>
                     </td>
+                    <td className="px-4 py-3.5 text-center">{renderIwarehouseBadge(asset.iwarehouse)}</td>
                     <td className="px-4 py-3.5 text-slate-500">{asset.oach || '-'}</td>
                     <td className="px-4 py-3.5 text-slate-500">{asset.altura || '-'}</td>
                     <td className="px-4 py-3.5 text-slate-500">{asset.bc || '-'}</td>
@@ -1331,8 +1433,8 @@ export default function FlotillaTab({
             >
               <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
-                  <HardDrive className="w-5 h-5 text-red-600" />
-                  Carga Masiva de Flotilla
+                  <HardDrive className="w-5 h-5" style={{ color: isAdc ? '#6366f1' : '#dc2626' }} />
+                  {isAdc ? 'Cargue Parcial de Flotilla' : 'Carga Masiva de Flotilla'}
                 </h3>
                 <button onClick={() => setIsUploadModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                   <X className="w-5 h-5" />
@@ -1341,7 +1443,10 @@ export default function FlotillaTab({
               
               <div className="p-6 space-y-6">
                 <p className="text-xs text-slate-500 leading-relaxed font-semibold">
-                  Sube un archivo <span className="font-black text-slate-900">.xlsx</span> o <span className="font-black text-slate-900">.csv</span> para importar y actualizar múltiples equipos, incluyendo sus fechas de mantenimiento.
+                  {isAdc 
+                    ? <>Sube un archivo <span className="font-black text-slate-900">.xlsx</span> con tus equipos. Solo se importarán los registros asociados a <span className="font-black text-indigo-600">tu ADC</span>. Los registros de otros ADCs en el archivo serán ignorados.</>
+                    : <>Sube un archivo <span className="font-black text-slate-900">.xlsx</span> o <span className="font-black text-slate-900">.csv</span> para importar y actualizar múltiples equipos, incluyendo sus fechas de mantenimiento.</>
+                  }
                 </p>
                 <div className="p-2">
                   {isUploading ? (
@@ -1398,8 +1503,8 @@ export default function FlotillaTab({
                 <button onClick={() => { setIsUploadModalOpen(false); setFile(null); }} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors" disabled={isUploading}>
                   Cancelar
                 </button>
-                <button onClick={handleUpload} disabled={isUploading || !file} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors disabled:opacity-50 flex items-center gap-2">
-                  Importar Datos
+                <button onClick={handleUpload} disabled={isUploading || !file} className={`px-6 py-2.5 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${isAdc ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-red-600 hover:bg-red-700 shadow-red-100'}`}>
+                  {isAdc ? 'Importar mis datos' : 'Importar Datos'}
                 </button>
               </div>
             </motion.div>
@@ -1435,8 +1540,15 @@ export default function FlotillaTab({
                     <input type="text" value={newAssetSerie} onChange={(e) => setNewAssetSerie(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 12345" />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Modelo *</label>
-                    <input type="text" value={newAssetModelo} onChange={(e) => setNewAssetModelo(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: Raymond 7400" />
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Modelo *</label>
+                    <SearchableSelect
+                      options={modeloOptions}
+                      value={newAssetModelo}
+                      onChange={(val) => setNewAssetModelo(val)}
+                      placeholder="Buscar o seleccionar modelo..."
+                      searchPlaceholder="Escribe el modelo para buscar (ej. 7400, 8210)..."
+                      emptyMessage="No se encontraron coincidencias"
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Tipo de Activo *</label>
@@ -1594,8 +1706,16 @@ export default function FlotillaTab({
                         <input type="number" value={newRentaPlazo} onChange={(e) => setNewRentaPlazo(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 36" />
                       </div>
                       <div>
-                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Fecha Vencimiento</label>
-                        <input type="date" value={newRentaFechaFin} onChange={(e) => setNewRentaFechaFin(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700 font-bold flex items-center justify-between">
+                          <span>Fecha Vencimiento</span>
+                          <span className="text-[9px] font-semibold text-red-500">Auto-calculada</span>
+                        </label>
+                        <input 
+                          type="date" 
+                          value={newRentaFechaFin} 
+                          onChange={(e) => setNewRentaFechaFin(e.target.value)} 
+                          className="w-full px-3.5 py-2.5 bg-red-50/50 border border-red-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-red-500" 
+                        />
                       </div>
                     </div>
                   )}
@@ -1639,42 +1759,112 @@ export default function FlotillaTab({
               <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto font-bold text-xs text-slate-600">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Clase</label>
-                    <input type="text" value={editingData.clase || ''} readOnly className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 focus:outline-none cursor-not-allowed" />
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Número de Serie *</label>
+                    <input type="text" value={editingData.serie || ''} onChange={(e) => setEditingData({...editingData, serie: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 font-bold" />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Modelo</label>
-                    <input type="text" value={editingData.modelo || ''} onChange={(e) => setEditingData({...editingData, modelo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Modelo *</label>
+                    <SearchableSelect
+                      options={modeloOptions}
+                      value={editingData.modelo || ''}
+                      onChange={(val) => setEditingData({...editingData, modelo: val})}
+                      placeholder="Buscar o seleccionar modelo..."
+                      searchPlaceholder="Escribe el modelo para buscar..."
+                    />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Cuenta</label>
-                    <input type="text" value={editingData.cuenta || ''} onChange={(e) => setEditingData({...editingData, cuenta: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Clase *</label>
+                    <select 
+                      value={editingData.clase || ''} 
+                      onChange={(e) => setEditingData({...editingData, clase: e.target.value})} 
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer font-bold"
+                    >
+                      <option value="">Seleccionar Clase</option>
+                      <option value="I">Clase I - Eléctricos de Pasajero</option>
+                      <option value="II">Clase II - Pasillo Angosto (Reach / Orderpicker)</option>
+                      <option value="III">Clase III - Manuales / Walkie</option>
+                      <option value="IV">Clase IV - Combustión Cojín</option>
+                      <option value="V">Clase V - Combustión Neumático</option>
+                      <option value="VI">Clase VI - Tractores / Arrastre</option>
+                      <option value="N/A">N/A - Accesorios / Baterías</option>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>
-                    <select value={editingData.distribuidor || ''} onChange={(e) => setEditingData({...editingData, distribuidor: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Tipo de Activo *</label>
+                    <select 
+                      value={editingData.tipo || editingData.tipo_equipo || 'Contrabalanceado'} 
+                      onChange={(e) => setEditingData({...editingData, tipo: e.target.value, tipo_equipo: e.target.value})} 
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer font-bold"
+                    >
+                      <option>Contrabalanceado</option>
+                      <option>Reach</option>
+                      <option>Walkie</option>
+                      <option>Stacker</option>
+                      <option>Orderpicker</option>
+                      <option>Deep Reach</option>
+                      <option>Swing Reach</option>
+                      <option>Tugger</option>
+                      <option>Plataforma</option>
+                      <option>Barredora</option>
+                      <option>Intercambiador</option>
+                      <option>Battery Stand</option>
+                      <option>Aditamento</option>
+                      <option>Baterías</option>
+                      <option>Cargador</option>
+                      <option>Otros</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Marca</label>
+                    <input type="text" value={editingData.marca || 'Raymond'} onChange={(e) => setEditingData({...editingData, marca: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Capacidad (LB)</label>
+                    <input type="text" value={editingData.capacidad || editingData.capacidad_lb || ''} onChange={(e) => setEditingData({...editingData, capacidad: e.target.value, capacidad_lb: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" placeholder="Ej: 4500" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">OACH</label>
+                    <input type="text" value={editingData.oach || ''} onChange={(e) => setEditingData({...editingData, oach: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Altura</label>
+                    <input type="text" value={editingData.altura || ''} onChange={(e) => setEditingData({...editingData, altura: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">BC</label>
+                    <input type="text" value={editingData.bc || ''} onChange={(e) => setEditingData({...editingData, bc: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Cuenta / Cliente</label>
+                    <input type="text" value={editingData.cuenta || ''} onChange={(e) => setEditingData({...editingData, cuenta: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Distribuidor</label>
+                    <select value={editingData.distribuidor || ''} onChange={(e) => setEditingData({...editingData, distribuidor: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer font-bold">
                       <option value="">Seleccionar Distribuidor</option>
                       {uniqueDistribuidores.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Propietario</label>
-                    <input type="text" value={editingData.propietario || ''} onChange={(e) => setEditingData({...editingData, propietario: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none" />
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Propietario</label>
+                    <input type="text" value={editingData.propietario || ''} onChange={(e) => setEditingData({...editingData, propietario: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1">Estatus Operativo</label>
-                    <select value={editingData.estatus || ''} onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Estatus Operativo</label>
+                    <select value={editingData.estatus || ''} onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer font-bold">
                       <option value="Activo">Activo</option>
                       <option value="Inactivo">Inactivo</option>
                       <option value="Comodato">Comodato</option>
                       <option value="Back Up">Back Up</option>
                       <option value="Inactivo con Cliente">Inactivo con Cliente</option>
+                      <option value="Por Entregar">Por Entregar</option>
+                      <option value="Por Retirar">Por Retirar</option>
                     </select>
                   </div>
                   {!isAdc && (
                     <div>
-                      <label className="block text-[10px] uppercase tracking-wider mb-1">Administrador (ADC)</label>
-                      <select value={editingData.adc || ''} onChange={(e) => setEditingData({...editingData, adc: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                      <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Administrador (ADC)</label>
+                      <select value={editingData.adc || ''} onChange={(e) => setEditingData({...editingData, adc: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer font-bold">
                         <option value="">Seleccionar ADC</option>
                         {uniqueADCs.map(adc => <option key={adc} value={adc}>{adc}</option>)}
                       </select>

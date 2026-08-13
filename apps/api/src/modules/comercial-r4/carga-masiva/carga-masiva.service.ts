@@ -38,7 +38,7 @@ export class CargaMasivaService {
 
     constructor(private readonly prismaService: PrismaDynamicService) {}
 
-    async procesarArchivo(file: Express.Multer.File, userId: string) {
+    async procesarArchivo(file: Express.Multer.File, userId: string, adcFilter?: string) {
         try {
             const db = PrismaDynamicService.clients.r4;
             if (!db) {
@@ -465,6 +465,16 @@ export class CargaMasivaService {
                     let sitio = sitioCache.get(sitioCacheKey);
                     
                     const adc = normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC'));
+                    
+                    // CARGA PARCIAL: si se especificó un ADC filter, ignorar filas de otros ADCs
+                    if (adcFilter) {
+                        const rowAdcNorm = (adc || '').toLowerCase().trim();
+                        const filterNorm = adcFilter.toLowerCase().trim();
+                        if (rowAdcNorm && rowAdcNorm !== filterNorm) {
+                            this.logger.log(`Fila ${rowNumber}: ADC "${adc}" omitido (carga parcial para "${adcFilter}")`);
+                            continue;
+                        }
+                    }
                     const distribuidor = getVal(row, 'DISTRIBUIDOR') || getVal(row, 'DISTRIBUIDOR AUTORIZADO');
                     const sitioData = {
                         ciudad: getVal(row, 'MUNICIPIO') || getVal(row, 'CIUDAD'),
@@ -521,6 +531,9 @@ export class CargaMasivaService {
                             adc: normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC')),
                             distribuidor: getVal(row, 'DISTRIBUIDOR'),
                             propietario: getVal(row, 'PROPIETARIO'),
+                            info_tecnica: {
+                                iwarehouse: getVal(row, 'IWAREHOUSE S/N') || getVal(row, 'IWAREHOUSE') || null
+                            },
                         };
                         activo = await db.activo.upsert({
                             where: { id: serie },

@@ -8,6 +8,9 @@ export interface Equipo {
     clase: string;
     modelo?: string;
     marca?: string;
+    numero_serie?: string;
+    descripcion?: string;
+    estado?: string;
 }
 
 export const equiposApi = {

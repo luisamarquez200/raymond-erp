@@ -11,6 +11,9 @@ interface DashboardFilters {
     adc?: string;
 }
 
+const dashboardCache = new Map<string, { timestamp: number, data: any }>();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
 @Injectable()
 export class PresupuestosService {
     private readonly logger = new Logger(PresupuestosService.name);
@@ -24,6 +27,12 @@ export class PresupuestosService {
     }
 
     async getDashboardStats(filters: DashboardFilters) {
+        const cacheKey = JSON.stringify(filters);
+        const cached = dashboardCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+            return cached.data;
+        }
+
         const db = this.getDb();
         const { year, months = [], cliente_id, sitio_id, moneda, adc } = filters;
 
@@ -58,7 +67,14 @@ export class PresupuestosService {
         let rentasWhere: any = {};
         if (cliente_id) rentasWhere.cliente_id = cliente_id;
         if (sitio_id) rentasWhere.sitio_id = sitio_id;
-        if (adc) rentasWhere.adc = { contains: adc }; // or exact match? let's do exact if it's from a dropdown, but contains is safer for text fields. Let's just use exact match for now if we can, or contains. We'll use contains for flexibility.
+        
+        const adcKeywords = adc ? adc.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+        if (adcKeywords.length > 0) {
+            rentasWhere.OR = [
+                { adc: { in: adcKeywords.map(k => k) } }, // Fallback to memory filter if exact doesn't match perfectly
+            ];
+            // We'll rely primarily on the robust manual memory filter since the schema data could be nested
+        }
 
         const allRentas = await db.renta.findMany({
             where: rentasWhere,
@@ -112,7 +128,12 @@ export class PresupuestosService {
 
         for (const r of allRentas) {
             // Apply ADC and Sitio filters manually if they were not fully applied
-            if (adc && r.adc !== adc && r.sitio?.adc !== adc) continue;
+            if (adcKeywords.length > 0) {
+                const rAdc = (r.adc || '').toLowerCase();
+                const sAdc = (r.sitio?.adc || '').toLowerCase();
+                const matches = adcKeywords.some(kw => rAdc.includes(kw) || sAdc.includes(kw));
+                if (!matches) continue;
+            }
             
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
@@ -326,7 +347,12 @@ export class PresupuestosService {
         }>();
 
         for (const r of allRentas) {
-            if (adc && r.adc !== adc && r.sitio?.adc !== adc) continue;
+            if (adcKeywords.length > 0) {
+                const rAdc = (r.adc || '').toLowerCase();
+                const sAdc = (r.sitio?.adc || '').toLowerCase();
+                const matches = adcKeywords.some(kw => rAdc.includes(kw) || sAdc.includes(kw));
+                if (!matches) continue;
+            }
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
 
@@ -472,7 +498,7 @@ export class PresupuestosService {
             ]
         };
 
-        return {
+        const finalResult = {
             tipo_cambio: exchangeRate,
             stats,
             tabla_maestra,
@@ -486,6 +512,10 @@ export class PresupuestosService {
             // Send the raw facturacion_mensual records so the frontend knows what's stored
             facturado_registros: facturacionMensual,
         };
+
+        const cacheKey = JSON.stringify(filters);
+        dashboardCache.set(cacheKey, { timestamp: Date.now(), data: finalResult });
+        return finalResult;
     }
 
     private initCurrencyStats() {

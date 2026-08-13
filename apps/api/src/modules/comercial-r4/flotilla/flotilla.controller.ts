@@ -91,11 +91,21 @@ export class FlotillaController {
             data: {
                 ...(dto.clase !== undefined && { clase: dto.clase }),
                 ...(dto.modelo !== undefined && { modelo: dto.modelo }),
+                ...(dto.serie !== undefined && { serie: dto.serie }),
+                ...(dto.tipo !== undefined && { tipo: dto.tipo }),
+                ...(dto.tipo_equipo !== undefined && { tipo_equipo: dto.tipo_equipo }),
                 ...(dto.cuenta !== undefined && { cuenta: dto.cuenta }),
+                ...(dto.propietario !== undefined && { propietario: dto.propietario }),
+                ...(dto.oach !== undefined && { oach: dto.oach }),
+                ...(dto.altura !== undefined && { altura: dto.altura }),
+                ...(dto.bc !== undefined && { bc: dto.bc }),
+                ...(dto.marca !== undefined && { marca: dto.marca }),
+                ...(dto.capacidad !== undefined && { capacidad: dto.capacidad }),
+                ...(dto.capacidad_lb !== undefined && { capacidad_lb: dto.capacidad_lb }),
                 ...(dto.adc !== undefined && { adc: dto.adc }),
                 ...(dto.distribuidor !== undefined && { distribuidor: dto.distribuidor }),
                 ...(dto.sitio_id !== undefined && { sitio_id: dto.sitio_id }),
-                ...(statusLimpio && { estatus_operativo: statusLimpio }),
+                ...(statusLimpio && { estatus: statusLimpio, estatus_operativo: statusLimpio }),
             }
         });
 

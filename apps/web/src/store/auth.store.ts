@@ -146,6 +146,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         isSuperadmin: rawUser.isSuperadmin,
                         avatarUrl: rawUser.avatarUrl,
                         sitio: rawUser.sitio,
+                        adc_asociado_id: rawUser.adc_asociado_id,
+                        adc_asociado_name: rawUser.adc_asociado_name,
                     };
                 } catch (e) {
                     set({ user: null, accessToken: null, refreshToken: null, isLoading: false });
