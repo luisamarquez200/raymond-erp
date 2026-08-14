@@ -104,6 +104,9 @@ export async function seedEnterprisePermissions(prisma: PrismaClient, organizati
     const permissionMatrix: Record<string, string[]> = {
         // Superadmin: ALL permissions
         'Superadmin': ['*:*'],
+        
+        // Administrador: Full system access
+        'Administrador': ['*:*'],
 
         // CEO: All except system admin
         'CEO': [

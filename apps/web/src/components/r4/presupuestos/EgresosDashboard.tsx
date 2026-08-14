@@ -57,7 +57,7 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
     const [selectedClienteFilter, setSelectedClienteFilter] = useState<string>('TODOS');
     const [expandedDistribuidores, setExpandedDistribuidores] = useState<Record<string, boolean>>({});
     const [activeTab, setActiveTab] = useState<'graficos' | 'desglose' | 'renta_terceros' | 'preventivos'>('graficos');
-    const [resumenMonedaFilter, setResumenMonedaFilter] = useState<'TODOS' | 'USD' | 'MXN'>('TODOS');
+    const [resumenMonedaFilter, setResumenMonedaFilter] = useState<'USD' | 'MXN'>('MXN');
 
     const formatCurrency = (val: number, cur: string = 'MXN') => {
         if (val === 0) return '-';
@@ -945,17 +945,6 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
                     {/* Selector de Moneda en la Cabecera */}
                     <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
                         <button
-                            onClick={() => setResumenMonedaFilter('TODOS')}
-                            className={cn(
-                                "px-3 py-1 rounded-lg text-xs font-bold transition-all",
-                                resumenMonedaFilter === 'TODOS'
-                                    ? "bg-white text-slate-900 shadow-xs"
-                                    : "text-slate-500 hover:text-slate-900"
-                            )}
-                        >
-                            Todas las Monedas
-                        </button>
-                        <button
                             onClick={() => setResumenMonedaFilter('USD')}
                             className={cn(
                                 "px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
@@ -994,7 +983,7 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
                         </TableHeader>
                         <TableBody>
                             {/* Render USD Records */}
-                            {(resumenMonedaFilter === 'TODOS' || resumenMonedaFilter === 'USD') && pagos_usd.map((row: any, idx: number) => (
+                            {resumenMonedaFilter === 'USD' && pagos_usd.map((row: any, idx: number) => (
                                 <TableRow key={`usd-${idx}`} className="hover:bg-slate-50/70 transition-colors border-b border-slate-100/60">
                                     <TableCell className="py-3 px-4 font-bold text-slate-900">{row.distribuidor}</TableCell>
                                     <TableCell className="py-3 px-3 text-center">
@@ -1010,7 +999,7 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
                             ))}
 
                             {/* Render MXN Records */}
-                            {(resumenMonedaFilter === 'TODOS' || resumenMonedaFilter === 'MXN') && pagos_mxn.map((row: any, idx: number) => (
+                            {resumenMonedaFilter === 'MXN' && pagos_mxn.map((row: any, idx: number) => (
                                 <TableRow key={`mxn-${idx}`} className="hover:bg-slate-50/70 transition-colors border-b border-slate-100/60">
                                     <TableCell className="py-3 px-4 font-bold text-slate-900">{row.distribuidor}</TableCell>
                                     <TableCell className="py-3 px-3 text-center">
