@@ -32,6 +32,20 @@ const normalizeADCName = (name: string | null | undefined): string | null => {
     return cleanName;
 };
 
+/**
+ * Normaliza un nombre de cliente para comparación fuzzy.
+ * Elimina espacios, acentos, puntuación y convierte a mayúsculas.
+ * Ejemplo: "Mercado Libre" → "MERCADOLIBRE"
+ *          "MERCADO LIBRE S.A. DE C.V." → "MERCADOLIBREDECV"
+ */
+const normalizeClientName = (name: string | null | undefined): string => {
+    if (!name) return '';
+    return name
+        .toUpperCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // quitar acentos
+        .replace(/[^A-Z0-9]/g, '');  // quitar espacios, puntos, comas, S.A., etc.
+};
+
 @Injectable()
 export class CargaMasivaService {
     private readonly logger = new Logger(CargaMasivaService.name);
@@ -136,8 +150,21 @@ export class CargaMasivaService {
                 if (idx < 0) idx = headers.findIndex(h => h && h.includes(upperName));
                 if (idx > 0) {
                     const cell = row.getCell(idx);
-                    const val = cell.value;
+                    let val = cell.value;
                     if (val === null || val === undefined) return null;
+                    if (val instanceof Date) {
+                        return val.toISOString().split('T')[0];
+                    }
+                    if (typeof val === 'object') {
+                        if ('result' in val && val.result !== undefined && val.result !== null) {
+                            val = val.result;
+                            if (val instanceof Date) return val.toISOString().split('T')[0];
+                        } else if ('text' in val && typeof (val as any).text === 'string') {
+                            val = (val as any).text;
+                        } else if ('richText' in val && Array.isArray((val as any).richText)) {
+                            val = (val as any).richText.map((rt: any) => rt.text).join('');
+                        }
+                    }
                     return val.toString().trim() || null;
                 }
                 return null;
@@ -256,7 +283,22 @@ export class CargaMasivaService {
                     if (idx < 0) idx = dirHeaders.findIndex(h => h && h.includes(upperName));
                     if (idx > 0) {
                         const cell = row.getCell(idx);
-                        return cell.value ? cell.value.toString().trim() : null;
+                        let val = cell.value;
+                        if (val === null || val === undefined) return null;
+                        if (val instanceof Date) {
+                            return val.toISOString().split('T')[0];
+                        }
+                        if (typeof val === 'object') {
+                            if ('result' in val && val.result !== undefined && val.result !== null) {
+                                val = val.result;
+                                if (val instanceof Date) return val.toISOString().split('T')[0];
+                            } else if ('text' in val && typeof (val as any).text === 'string') {
+                                val = (val as any).text;
+                            } else if ('richText' in val && Array.isArray((val as any).richText)) {
+                                val = (val as any).richText.map((rt: any) => rt.text).join('');
+                            }
+                        }
+                        return val.toString().trim() || null;
                     }
                     return null;
                 };
@@ -264,12 +306,19 @@ export class CargaMasivaService {
                 let dirConsecutiveEmpty = 0;
                 for (let i = dirHeaderRowIndex + 1; i <= directorioSheet.rowCount; i++) {
                     const row = directorioSheet.getRow(i);
-                    let isEmpty = true;
-                    row.eachCell({ includeEmpty: false }, () => { isEmpty = false; });
+                    let hasData = false;
+                    row.eachCell({ includeEmpty: false }, (cell) => { 
+                        if (cell.value && cell.value.toString().trim() !== '') {
+                            hasData = true;
+                        }
+                    });
                     
-                    if (isEmpty) {
+                    if (!hasData) {
                         dirConsecutiveEmpty++;
-                        if (dirConsecutiveEmpty >= 20) break;
+                        if (dirConsecutiveEmpty >= 20) {
+                            this.logger.log('Se detectaron 20 filas sin datos consecutivas en el Directorio, terminando lectura.');
+                            break;
+                        }
                         continue;
                     }
                     dirConsecutiveEmpty = 0;
@@ -284,9 +333,12 @@ export class CargaMasivaService {
                         const contactoCliente = getDirVal(row, 'CONTACTO CLIENTE') || getDirVal(row, 'CONTACTO');
                         const direccionCliente = getDirVal(row, 'DIRECCION CLIENTE') || getDirVal(row, 'DIRECCIÓN CLIENTE') || getDirVal(row, 'DOMICILIO CLIENTE');
 
-                        let cliente = clienteCache.get(clientName);
+                        let cliente = clienteCache.get(normalizeClientName(clientName));
                         if (!cliente) {
-                            cliente = await db.cliente.findFirst({ where: { razon_social: clientName } });
+                            // Búsqueda fuzzy: traemos todos y comparamos normalizado
+                            const allClientes = await db.cliente.findMany({ select: { id: true, razon_social: true, rfc: true, datos_comerciales: true } });
+                            const normalizedInput = normalizeClientName(clientName);
+                            cliente = allClientes.find(c => normalizeClientName(c.razon_social) === normalizedInput) || null;
                             if (!cliente) {
                                 cliente = await db.cliente.create({ 
                                     data: { 
@@ -316,7 +368,7 @@ export class CargaMasivaService {
                                     }
                                 });
                             }
-                            clienteCache.set(clientName, cliente);
+                            clienteCache.set(normalizeClientName(clientName), cliente);
                         }
                         
                         if (siteName) {
@@ -393,13 +445,17 @@ export class CargaMasivaService {
             for (let rowNumber = headerRowIndex + 1; rowNumber <= worksheet.rowCount; rowNumber++) {
                 const row = worksheet.getRow(rowNumber);
 
-                let isEmpty = true;
-                row.eachCell({ includeEmpty: false }, () => { isEmpty = false; });
+                let hasData = false;
+                row.eachCell({ includeEmpty: false }, (cell) => { 
+                    if (cell.value && cell.value.toString().trim() !== '') {
+                        hasData = true;
+                    }
+                });
                 
-                if (isEmpty) {
+                if (!hasData) {
                     consecutiveEmpty++;
                     if (consecutiveEmpty >= 20) {
-                        this.logger.log('Se detectaron 20 filas vacías consecutivas, terminando lectura.');
+                        this.logger.log('Se detectaron 20 filas sin datos consecutivas, terminando lectura.');
                         break;
                     }
                     continue;
@@ -412,14 +468,16 @@ export class CargaMasivaService {
                     const serie = getVal(row, 'SERIE');
 
                     if (!clienteName || !serie) {
-                        this.logger.warn(`Fila ${rowNumber}: Faltan campos (CLIENTE o SERIE).`);
+                        // Se omite el logger para no saturar la consola en caso de filas mal formateadas
                         continue;
                     }
 
-                    // A: CLIENTE
-                    let cliente = clienteCache.get(clienteName);
+                    // A: CLIENTE (con búsqueda fuzzy para evitar duplicados como "MERCADO LIBRE" vs "MERCADOLIBRE")
+                    let cliente = clienteCache.get(normalizeClientName(clienteName));
                     if (!cliente) {
-                        cliente = await db.cliente.findFirst({ where: { razon_social: clienteName } });
+                        const allClientes = await db.cliente.findMany({ select: { id: true, razon_social: true, rfc: true, datos_comerciales: true } });
+                        const normalizedInput = normalizeClientName(clienteName);
+                        cliente = allClientes.find(c => normalizeClientName(c.razon_social) === normalizedInput) || null;
                         const rfc = getVal(row, 'RFC') || getVal(row, 'RFC CLIENTE');
                         const correoCliente = getVal(row, 'CORREO CLIENTE') || getVal(row, 'MAIL CLIENTE') || getVal(row, 'EMAIL CLIENTE');
                         const telefonoCliente = getVal(row, 'TELEFONO CLIENTE') || getVal(row, 'TELÉFONO CLIENTE');
@@ -456,7 +514,7 @@ export class CargaMasivaService {
                                 }
                             });
                         }
-                        clienteCache.set(clienteName, cliente);
+                        clienteCache.set(normalizeClientName(clienteName), cliente);
                     }
 
                     // B: SITIO
@@ -517,20 +575,21 @@ export class CargaMasivaService {
                     let activo = activoCache.get(serie);
                     if (!activo) {
                         const activoData = {
-                            id: serie,
-                            clase: getVal(row, 'CLASE'),
-                            modelo: getVal(row, 'MODELO'),
-                            oach: getVal(row, 'OACH'),
-                            altura: getVal(row, 'ALTURA'),
-                            bc: getVal(row, 'BC'),
-                            estatus: getVal(row, 'ESTATUS') || 'Activo',
-                            estatus_operativo: getVal(row, 'ESTATUS') || 'OPERATIVO',
+                            id: serie.substring(0, 50),
+                            tipo: getVal(row, 'TIPO')?.substring(0, 100) || null,
+                            clase: getVal(row, 'CLASE')?.substring(0, 100) || null,
+                            modelo: getVal(row, 'MODELO')?.substring(0, 100) || null,
+                            oach: getVal(row, 'OACH')?.substring(0, 100) || null,
+                            altura: getVal(row, 'ALTURA')?.substring(0, 50) || null,
+                            bc: getVal(row, 'BC')?.substring(0, 50) || null,
+                            estatus: getVal(row, 'ESTATUS')?.substring(0, 100) || 'Activo',
+                            estatus_operativo: getVal(row, 'ESTATUS')?.substring(0, 50) || 'OPERATIVO',
                             cliente_id: cliente.id,
                             sitio_id: sitio.id,
-                            cuenta: getVal(row, 'CUENTA'),
-                            adc: normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC')),
-                            distribuidor: getVal(row, 'DISTRIBUIDOR'),
-                            propietario: getVal(row, 'PROPIETARIO'),
+                            cuenta: getVal(row, 'CUENTA')?.substring(0, 100) || null,
+                            adc: normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC'))?.substring(0, 100) || null,
+                            distribuidor: getVal(row, 'DISTRIBUIDOR')?.substring(0, 100) || null,
+                            propietario: getVal(row, 'PROPIETARIO')?.substring(0, 100) || null,
                             info_tecnica: {
                                 iwarehouse: getVal(row, 'IWAREHOUSE S/N') || getVal(row, 'IWAREHOUSE') || null
                             },

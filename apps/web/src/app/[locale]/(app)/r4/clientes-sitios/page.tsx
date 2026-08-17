@@ -2,7 +2,7 @@
 
 import { 
   Search, FileSpreadsheet, Building2, MapPin, Truck, ChevronRight,
-  Filter, Plus, User, Phone, Mail, FileText, Settings, Shield, X, Map, Trash, Download
+  Filter, Plus, User, Phone, Mail, FileText, Settings, Shield, X, Map, Trash, Download, GitMerge, AlertTriangle
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
@@ -51,6 +51,12 @@ export default function ClientesSitios() {
   // Modal Eliminar
   const [deleteModalConfig, setDeleteModalConfig] = useState<{ isOpen: boolean, type: 'cliente' | 'sitio', id: string, name: string, sitiosCount?: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Modal Fusionar
+  const [fusionarModal, setFusionarModal] = useState<{ isOpen: boolean, sourceId: string, sourceName: string } | null>(null);
+  const [fusionarSearch, setFusionarSearch] = useState('');
+  const [fusionarTargetId, setFusionarTargetId] = useState<string | null>(null);
+  const [isFusionando, setIsFusionando] = useState(false);
 
   // Pagination for Directory
   const [currentPage, setCurrentPage] = useState(1);
@@ -245,6 +251,25 @@ export default function ClientesSitios() {
       toast.error(error.response?.data?.message || `Error al eliminar ${deleteModalConfig.type}`);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleFusionarClientes = async () => {
+    if (!fusionarModal || !fusionarTargetId) return;
+    try {
+      setIsFusionando(true);
+      const res = await api.post(`/r4/clientes/${fusionarModal.sourceId}/fusionar/${fusionarTargetId}`);
+      const result = res.data?.data;
+      toast.success(result?.message || 'Clientes fusionados exitosamente');
+      setFusionarModal(null);
+      setFusionarTargetId(null);
+      setFusionarSearch('');
+      if (selectedClienteId === fusionarModal.sourceId) setSelectedClienteId(fusionarTargetId);
+      fetchClientes();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al fusionar clientes');
+    } finally {
+      setIsFusionando(false);
     }
   };
 
@@ -455,16 +480,29 @@ export default function ClientesSitios() {
 
               <div className="flex flex-col gap-3">
                 {loading ? (
-                  <div className="py-16 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
-                    <div className="relative w-12 h-12">
-                       <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
-                       <div className="absolute inset-0 border-4 rounded-full border-t-transparent animate-spin" style={{ borderColor: `${currentColor} transparent` }}></div>
-                       <Building2 className="absolute inset-0 m-auto w-5 h-5 animate-pulse" style={{ color: currentColor }} />
-                    </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando directorio...</p>
+                  <div className="flex flex-col gap-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs space-y-3 animate-pulse">
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-1.5 w-3/4">
+                            <div className="h-4 bg-slate-200 rounded w-2/3" />
+                            <div className="h-3 bg-slate-100 rounded w-1/3" />
+                          </div>
+                          <div className="h-4 w-12 bg-slate-100 rounded" />
+                        </div>
+                        <div className="pt-2 border-t border-slate-50 flex justify-between">
+                          <div className="h-3 w-16 bg-slate-100 rounded" />
+                          <div className="h-3 w-8 bg-slate-100 rounded" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : paginatedClientes.length === 0 ? (
-                   <div className="py-12 text-center text-slate-400 font-bold text-sm">No hay clientes.</div>
+                  <div className="py-12 px-4 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center gap-2">
+                    <Building2 className="w-8 h-8 text-slate-300" />
+                    <p className="text-slate-600 font-bold text-xs">No se encontraron clientes</p>
+                    <p className="text-slate-400 text-[11px] max-w-[200px]">Prueba con otro término de búsqueda o agrega un nuevo cliente con el botón superior.</p>
+                  </div>
                 ) : paginatedClientes.map((cliente) => (
                   <div 
                     key={cliente.id} 
@@ -550,13 +588,24 @@ export default function ClientesSitios() {
                       </div>
                     </div>
                     {!isReadOnly && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <button 
                           onClick={() => requestDeleteCliente(selectedCliente.id, selectedCliente.razonSocial, selectedCliente.sitiosCount)}
                           className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-red-100 hover:border-red-200 hover:bg-red-50 text-red-600 rounded-xl font-bold text-xs transition-all shadow-sm"
                         >
                           <Trash className="w-3.5 h-3.5" />
                           Eliminar
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setFusionarSearch('');
+                            setFusionarTargetId(null);
+                            setFusionarModal({ isOpen: true, sourceId: selectedCliente.id, sourceName: selectedCliente.razonSocial });
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-amber-100 hover:border-amber-200 hover:bg-amber-50 text-amber-700 rounded-xl font-bold text-xs transition-all shadow-sm"
+                        >
+                          <GitMerge className="w-3.5 h-3.5" />
+                          Fusionar con...
                         </button>
                         <button 
                           onClick={() => openEditClientModal(selectedCliente)}
@@ -710,26 +759,46 @@ export default function ClientesSitios() {
                       No se encontraron sitios o distribuidores registrados.
                     </td>
                   </tr>
-                ) : paginatedAllSites.map((site: any) => (
+                ) : paginatedAllSites.map((site: any) => {
+                  const safeStr = (v: any) => {
+                    if (v === null || v === undefined) return '-';
+                    if (typeof v === 'object') {
+                      if ('text' in v && typeof v.text === 'string') return v.text.trim();
+                      if ('hyperlink' in v && typeof v.hyperlink === 'string') return v.hyperlink.replace(/^mailto:/i, '').trim();
+                      return '-';
+                    }
+                    const s = String(v).trim();
+                    if (s === '[object Object]' || s === '' || s === 'null' || s === 'undefined') return '-';
+                    return s;
+                  };
+
+                  const adcTel = safeStr(site.contacto_operativo?.adc_telefono);
+                  const adcMail = safeStr(site.contacto_operativo?.adc_correo);
+                  const distNombre = safeStr(site.distribuidor);
+                  const cNombre = safeStr(site.distribuidor_contacto_nombre);
+                  const cTel = safeStr(site.distribuidor_contacto_telefono);
+                  const cMail = safeStr(site.distribuidor_contacto_correo);
+
+                  return (
                   <tr key={site.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-900">{site.clienteRazonSocial}</span>
-                        <span className="text-xs text-slate-400">{site.clienteRfc}</span>
+                        <span className="text-xs text-slate-400">{safeStr(site.clienteRfc)}</span>
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-800">{site.nombre}</span>
-                        <span className="text-xs text-slate-500 truncate max-w-[200px]" title={site.direccion}>{site.direccion || '-'}</span>
+                        <span className="text-xs text-slate-500 truncate max-w-[200px]" title={site.direccion}>{safeStr(site.direccion)}</span>
                       </div>
                     </td>
                     <td className="p-4">
                       {site.adc && site.adc !== '-' && site.adc !== 'Sin ADC' ? (
                         <div className="flex flex-col text-xs">
                           <span className="font-bold text-slate-800">{site.adc}</span>
-                          {site.contacto_operativo?.adc_telefono && <span className="text-slate-500">{site.contacto_operativo.adc_telefono}</span>}
-                          {site.contacto_operativo?.adc_correo && <span style={{ color: currentColor }}>{site.contacto_operativo.adc_correo}</span>}
+                          {adcTel !== '-' && <span className="text-slate-500">{adcTel}</span>}
+                          {adcMail !== '-' && <span style={{ color: currentColor }}>{adcMail}</span>}
                         </div>
                       ) : (
                         <span className="text-slate-400 text-xs italic">Sin ADC</span>
@@ -738,19 +807,15 @@ export default function ClientesSitios() {
                     <td className="p-4">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 border rounded-xl text-xs font-bold" style={{ color: currentColor, borderColor: `${currentColor}30`, backgroundColor: `${currentColor}10` }}>
                         <Truck className="w-3.5 h-3.5"/>
-                        {site.distribuidor && String(site.distribuidor) !== '[object Object]' && String(site.distribuidor) !== '-' ? site.distribuidor : 'No asignado'}
+                        {distNombre !== '-' ? distNombre : 'No asignado'}
                       </span>
                     </td>
                     <td className="p-4">
-                      {site.distribuidor_contacto_nombre && site.distribuidor_contacto_nombre !== '-' && String(site.distribuidor_contacto_nombre) !== '[object Object]' ? (
+                      {cNombre !== '-' ? (
                         <div className="flex flex-col text-xs">
-                          <span className="font-bold text-slate-800">
-                            {typeof site.distribuidor_contacto_nombre === 'object'
-                              ? (site.distribuidor_contacto_nombre.nombre || site.distribuidor_contacto_nombre.contacto_nombre || JSON.stringify(site.distribuidor_contacto_nombre))
-                              : String(site.distribuidor_contacto_nombre)}
-                          </span>
-                          <span className="text-slate-500">{typeof site.distribuidor_contacto_telefono === 'object' ? '-' : (site.distribuidor_contacto_telefono || '-')}</span>
-                          <span style={{ color: currentColor }}>{typeof site.distribuidor_contacto_correo === 'object' ? '-' : (site.distribuidor_contacto_correo || '-')}</span>
+                          <span className="font-bold text-slate-800">{cNombre}</span>
+                          {cTel !== '-' && <span className="text-slate-500">{cTel}</span>}
+                          {cMail !== '-' && <span style={{ color: currentColor }}>{cMail}</span>}
                         </div>
                       ) : (
                         <span className="text-slate-400 text-xs italic">Sin contacto registrado</span>
@@ -764,7 +829,8 @@ export default function ClientesSitios() {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1109,6 +1175,108 @@ export default function ClientesSitios() {
                 style={{ backgroundColor: currentColor, boxShadow: `0 4px 14px 0 ${currentColor}40` }}
               >
                 {isDeleting ? 'Eliminando...' : 'Sí, Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FUSIONAR CLIENTES */}
+      {fusionarModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center">
+                  <GitMerge className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Fusionar Cliente</h2>
+                  <p className="text-xs text-slate-500 font-medium">Selecciona el cliente destino</p>
+                </div>
+              </div>
+              <button onClick={() => setFusionarModal(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Source info */}
+            <div className="px-6 pt-4 pb-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-1">Cliente a eliminar (duplicado)</p>
+                <p className="font-black text-slate-900">{fusionarModal.sourceName}</p>
+                <p className="text-xs text-amber-700 mt-2 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Sus sitios, activos y rentas serán migrados al cliente destino y este será eliminado.
+                </p>
+              </div>
+
+              {/* Search target */}
+              <p className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Fusionar en...</p>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar cliente destino..."
+                  value={fusionarSearch}
+                  onChange={(e) => { setFusionarSearch(e.target.value); setFusionarTargetId(null); }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium focus:border-amber-200 focus:bg-white focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Client list */}
+            <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-2">
+              {clientes
+                .filter(c => c.id !== fusionarModal.sourceId)
+                .filter(c => !fusionarSearch || c.razonSocial?.toLowerCase().includes(fusionarSearch.toLowerCase()) || c.rfc?.toLowerCase().includes(fusionarSearch.toLowerCase()))
+                .slice(0, 20)
+                .map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setFusionarTargetId(c.id)}
+                    className={`w-full text-left p-3.5 rounded-2xl border-2 transition-all ${
+                      fusionarTargetId === c.id
+                        ? 'border-amber-400 bg-amber-50'
+                        : 'border-slate-100 hover:border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-black text-slate-900 text-sm">{c.razonSocial}</p>
+                        <p className="text-xs text-slate-500">{c.rfc && c.rfc !== '-' ? c.rfc : 'Sin RFC'}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] font-bold text-slate-400">{c.sitiosCount || 0} sitios</span>
+                        {fusionarTargetId === c.id && (
+                          <span className="text-[9px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-widest">Seleccionado</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              {clientes.filter(c => c.id !== fusionarModal.sourceId && (!fusionarSearch || c.razonSocial?.toLowerCase().includes(fusionarSearch.toLowerCase()) || c.rfc?.toLowerCase().includes(fusionarSearch.toLowerCase()))).length === 0 && (
+                <p className="text-center text-slate-400 font-medium text-sm py-8">No se encontraron clientes</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-6 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setFusionarModal(null)}
+                className="flex-1 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleFusionarClientes}
+                disabled={!fusionarTargetId || isFusionando}
+                className="flex-1 py-3 text-white rounded-xl font-black text-sm transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                style={{ backgroundColor: '#D97706' }}
+              >
+                <GitMerge className="w-4 h-4" />
+                {isFusionando ? 'Fusionando...' : 'Confirmar Fusión'}
               </button>
             </div>
           </div>

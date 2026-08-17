@@ -76,27 +76,25 @@ export class ClientesService {
                         const siteActivoAdc = s.activos?.find((a: any) => a.adc && a.adc !== '-' && a.adc !== 'Sin ADC')?.adc;
                         const siteAdc = s.adc || contacto.adc || siteActivoAdc || comercial.adc || '-';
 
+                        const cleanStr = (val: any): string => {
+                            if (val === null || val === undefined) return '-';
+                            if (typeof val === 'object') {
+                                if ('text' in val && typeof val.text === 'string') return val.text.trim();
+                                if ('hyperlink' in val && typeof val.hyperlink === 'string') return val.hyperlink.replace(/^mailto:/i, '').trim();
+                                return '-';
+                            }
+                            const str = String(val).trim();
+                            if (str === '[object Object]' || str === '' || str === 'null' || str === 'undefined') return '-';
+                            return str;
+                        };
+
                         // Extract distribuidor string safely
-                        let distName = '-';
-                        if (typeof s.distribuidor === 'string') {
-                            distName = s.distribuidor;
-                        } else if (typeof s.distribuidor === 'object' && s.distribuidor !== null) {
-                            distName = (s.distribuidor as any).nombre || (s.distribuidor as any).razon_social || '-';
-                        }
+                        let distName = cleanStr(s.distribuidor);
 
                         // Extract contact info
-                        const cNombre = typeof contacto.distribuidor_contacto_nombre === 'string' ? contacto.distribuidor_contacto_nombre
-                            : (typeof contacto.contacto_nombre === 'string' ? contacto.contacto_nombre
-                            : (typeof contacto.nombre === 'string' ? contacto.nombre
-                            : (typeof contacto.tecnico === 'string' ? contacto.tecnico : '-')));
-
-                        const cTelefono = typeof contacto.distribuidor_contacto_telefono === 'string' ? contacto.distribuidor_contacto_telefono
-                            : (typeof contacto.telefono === 'string' ? contacto.telefono
-                            : (typeof contacto.tel === 'string' ? contacto.tel : '-'));
-
-                        const cCorreo = typeof contacto.distribuidor_contacto_correo === 'string' ? contacto.distribuidor_contacto_correo
-                            : (typeof contacto.correo === 'string' ? contacto.correo
-                            : (typeof contacto.email === 'string' ? contacto.email : '-'));
+                        const cNombre = cleanStr(contacto.distribuidor_contacto_nombre || contacto.contacto_nombre || contacto.nombre || contacto.tecnico);
+                        const cTelefono = cleanStr(contacto.distribuidor_contacto_telefono || contacto.telefono || contacto.tel);
+                        const cCorreo = cleanStr(contacto.distribuidor_contacto_correo || contacto.correo || contacto.email);
 
                         return {
                             id: s.id,
@@ -106,14 +104,21 @@ export class ClientesService {
                             ciudad: s.ciudad,
                             direccion: s.direccion,
                             no_totvs: s.no_totvs,
-                            adc: siteAdc,
-                            region: contacto.region || '-',
-                            responsable: contacto.responsable || '-',
+                            adc: cleanStr(siteAdc),
+                            region: cleanStr(contacto.region),
+                            responsable: cleanStr(contacto.responsable),
                             distribuidor: distName,
                             distribuidor_contacto_nombre: cNombre,
                             distribuidor_contacto_telefono: cTelefono,
                             distribuidor_contacto_correo: cCorreo,
-                            contacto_operativo: contacto,
+                            contacto_operativo: {
+                                ...contacto,
+                                adc_correo: cleanStr(contacto.adc_correo),
+                                adc_telefono: cleanStr(contacto.adc_telefono),
+                                distribuidor_contacto_correo: cCorreo,
+                                distribuidor_contacto_telefono: cTelefono,
+                                distribuidor_contacto_nombre: cNombre
+                            },
                             activosCount: s.activos?.length || 0
                         };
                     })
@@ -402,6 +407,61 @@ export class ClientesService {
             this.logger.error(`Error en actualizarSitio: ${error.message}`);
             throw error;
         }
+    }
+
+    async fusionarClientes(sourceId: string, targetId: string) {
+        const db = this.getDb();
+
+        if (sourceId === targetId) {
+            throw new ConflictException('No puedes fusionar un cliente consigo mismo');
+        }
+
+        const [source, target] = await Promise.all([
+            db.cliente.findUnique({ where: { id: sourceId }, include: { sitios: true, activos: true } }),
+            db.cliente.findUnique({ where: { id: targetId } }),
+        ]);
+
+        if (!source) throw new NotFoundException(`Cliente origen ${sourceId} no encontrado`);
+        if (!target) throw new NotFoundException(`Cliente destino ${targetId} no encontrado`);
+
+        this.logger.log(`[Fusión] Migrando "${source.razon_social}" → "${target.razon_social}"`);
+
+        // 1. Mover sitios: renombrar si ya existe uno igual en el destino
+        for (const sitio of source.sitios) {
+            const existe = await db.sitio.findFirst({ where: { cliente_id: targetId, nombre: sitio.nombre } });
+            const nombreFinal = existe ? `${sitio.nombre} (fusionado)` : sitio.nombre;
+            await db.sitio.update({ where: { id: sitio.id }, data: { cliente_id: targetId, nombre: nombreFinal } });
+        }
+
+        // 2. Mover activos
+        await db.activo.updateMany({ where: { cliente_id: sourceId }, data: { cliente_id: targetId } });
+
+        // 3. Mover rentas
+        await db.renta.updateMany({ where: { cliente_id: sourceId }, data: { cliente_id: targetId } });
+
+        // 4. Mover contratos
+        await db.contrato.updateMany({ where: { cliente_id: sourceId }, data: { cliente_id: targetId } });
+
+        // 5. Mover ordenes
+        await db.ordenMensual.updateMany({ where: { cliente_id: sourceId }, data: { cliente_id: targetId } });
+
+        // 6. Mover tarifas (si existen)
+        try {
+            await db.tarifa.updateMany({ where: { cliente_id: sourceId }, data: { cliente_id: targetId } });
+        } catch (_) { /* tabla puede no tener este campo */ }
+
+        // 7. Eliminar cliente origen (ya sin relaciones)
+        await db.cliente.delete({ where: { id: sourceId } });
+
+        this.logger.log(`[Fusión] Completada. Cliente "${source.razon_social}" fusionado en "${target.razon_social}"`);
+
+        return {
+            success: true,
+            message: `"${source.razon_social}" fusionado exitosamente en "${target.razon_social}"`,
+            targetId,
+            sitiosMigrados: source.sitios.length,
+            activosMigrados: source.activos.length,
+        };
     }
 
     async eliminarCliente(id: string) {

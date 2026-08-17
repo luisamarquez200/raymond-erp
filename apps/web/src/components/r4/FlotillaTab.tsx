@@ -17,7 +17,7 @@ import { useConfigStore } from '@/store/config.store';
 import { useUser } from '@/hooks/useUsers';
 import PageLoader from '@/components/ui/PageLoader';
 import TooltipInfo from '@/components/ui/TooltipInfo';
-import { SearchableSelect, SearchableSelectOption } from '@/components/ui/SearchableSelect';
+import { TableSkeleton } from '@/components/ui/TableSkeleton';
 import * as XLSX from 'xlsx';
 
 const statusColors = {
@@ -136,6 +136,7 @@ export default function FlotillaTab({
   const { roleColors } = useConfigStore();
   const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [density, setDensity] = useState<'comfortable' | 'compact'>('compact');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [fleetAssets, setFleetAssets] = useState<any[]>([]);
@@ -772,16 +773,25 @@ export default function FlotillaTab({
     const claseStr = (a.clase || '').toString().toLowerCase().trim();
     const tipoStr = (a.tipo || '').toString().toLowerCase().trim();
 
+    // CLASE "Others" = todos los accesorios/periféricos del Excel (baterías, cargadores, etc.)
+    if (claseStr === 'others' || claseStr === 'other') {
+      return true;
+    }
+
     // Clase includes 'bater' (baterias/bateria)
     if (claseStr.includes('bater')) {
       return true;
     }
 
-    // Tipo includes 'accesorio', 'bater', 'cargador'
+    // Tipo includes any accessory keyword
     if (
       tipoStr.includes('accesorio') || 
       tipoStr.includes('bater') || 
-      tipoStr.includes('cargador')
+      tipoStr.includes('cargador') ||
+      tipoStr.includes('intercambiador') ||
+      tipoStr.includes('battery stand') ||
+      tipoStr.includes('aditamento') ||
+      tipoStr === 'otros'
     ) {
       return true;
     }
@@ -936,10 +946,10 @@ export default function FlotillaTab({
 
       {/* Global Tab Loader */}
       {loading && fleetAssets.length === 0 ? (
-        <PageLoader title="Cargando base instalada..." color={currentColor} />
+        <PageLoader title="Cargando base instalada..." subtitle="Calculando métricas ejecutivas..." color={currentColor} />
       ) : (
         <>
-          {/* Compact Differentiated Indicators Row */}
+          {/* Differentiated Indicators Row */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
             
             {/* GROUP 1: EQUIPOS (3 Columns) */}
@@ -1178,119 +1188,87 @@ export default function FlotillaTab({
               <span>Exportar</span>
             </button>
           </div>
-
-          {/* View Switcher */}
-          <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/80">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Vista de Tabla"
-            >
-              <List className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tabla</span>
-            </button>
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'cards' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Vista de Tarjetas"
-            >
-              <Grid3x3 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tarjetas</span>
-            </button>
-          </div>
         </div>
       </div>
 
-
       {/* MAIN CONTENT AREA */}
-      {viewMode === 'table' && (
-        <div className="bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm overflow-hidden animate-in fade-in duration-300">
-          <div className="overflow-x-auto overflow-y-auto max-h-[65vh] relative scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+      <div className="bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm overflow-hidden animate-in fade-in duration-300">
+        <div className="overflow-x-auto overflow-y-auto max-h-[65vh] relative scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+          {loading ? (
+            <div className="p-4">
+              <TableSkeleton rows={12} columns={14} />
+            </div>
+          ) : (
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="sticky top-0 z-20 bg-slate-50 text-[10px] text-slate-500 uppercase tracking-widest border-b-2 border-slate-100 shadow-sm">
                 <tr>
-                  <th className="px-4 py-4">{renderFilter('cliente', 'Cliente', 'CLIENTE')}</th>
-                  <th className="px-4 py-4">{renderFilter('cuenta', 'Cuenta', 'CUENTA')}</th>
-                  <th className="px-4 py-4">{renderFilter('site', 'Site', 'SITE')}</th>
-                  <th className="px-4 py-4">{renderFilter('tipo', 'Tipo', 'TIPO')}</th>
-                  <th className="px-4 py-4">{renderFilter('clase', 'Clase', 'CLASE')}</th>
-                  <th className="px-4 py-4">{renderFilter('modelo', 'Modelo', 'MODELO')}</th>
-                  <th className="px-4 py-4">{renderFilter('serie', 'Serie', 'SERIE')}</th>
-                  <th className="px-4 py-4">{renderFilter('iwarehouse', 'iWarehouse', 'IWAREHOUSE')}</th>
-                  <th className="px-4 py-4">{renderFilter('oach', 'OACH', 'OACH')}</th>
-                  <th className="px-4 py-4">{renderFilter('altura', 'Altura', 'ALTURA')}</th>
-                  <th className="px-4 py-4">{renderFilter('bc', 'BC', 'BC')}</th>
-                  <th className="px-4 py-4">{renderFilter('fechaIngreso', 'F. Entregado', 'F. ENTREGADO')}</th>
-                  <th className="px-4 py-4">{renderFilter('plazo', 'Plazo (meses)', 'PLAZO')}</th>
-                  <th className="px-4 py-4">{renderFilter('fechaVencimiento', 'F. Vencimiento', 'VENCIMIENTO')}</th>
-                  <th className="px-4 py-4 text-right">{renderFilter('renta_precio', 'Precio Renta', 'PRECIO')}</th>
-                  <th className="px-4 py-4">{renderFilter('renta_moneda', 'Moneda', 'MONEDA')}</th>
-                  <th className="px-4 py-4">{renderFilter('tipo_poliza', 'Tipo Póliza', 'PÓLIZA')}</th>
-                  <th className="px-4 py-4">{renderFilter('distribuidor', 'Distribuidor', 'DISTRIBUIDOR')}</th>
-                  <th className="px-4 py-4 text-right">{renderFilter('costo_poliza_distribuidor', 'Costo Póliza', 'COSTO')}</th>
-                  <th className="px-4 py-4">{renderFilter('moneda_pago_distribuidor', 'Moneda Pago', 'MONEDA PAGO')}</th>
-                  <th className="px-4 py-4">{renderFilter('estatus', 'Estatus', 'ESTATUS')}</th>
-                  <th className="px-4 py-4">{renderFilter('propietario', 'Propietario', 'PROPIETARIO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('cliente', 'Cliente', 'CLIENTE')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('cuenta', 'Cuenta', 'CUENTA')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('site', 'Site', 'SITE')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('tipo', 'Tipo', 'TIPO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('clase', 'Clase', 'CLASE')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('modelo', 'Modelo', 'MODELO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('serie', 'Serie', 'SERIE')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('iwarehouse', 'iWarehouse', 'IWAREHOUSE')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('oach', 'OACH', 'OACH')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('altura', 'Altura', 'ALTURA')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('bc', 'BC', 'BC')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('fechaIngreso', 'F. Entregado', 'F. ENTREGADO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('plazo', 'Plazo (meses)', 'PLAZO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('fechaVencimiento', 'F. Vencimiento', 'VENCIMIENTO')}</th>
+                  <th className="px-4 py-3.5 text-right">{renderFilter('renta_precio', 'Precio Renta', 'PRECIO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('renta_moneda', 'Moneda', 'MONEDA')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('tipo_poliza', 'Tipo Póliza', 'PÓLIZA')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('distribuidor', 'Distribuidor', 'DISTRIBUIDOR')}</th>
+                  <th className="px-4 py-3.5 text-right">{renderFilter('costo_poliza_distribuidor', 'Costo Póliza', 'COSTO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('moneda_pago_distribuidor', 'Moneda Pago', 'MONEDA PAGO')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('estatus', 'Estatus', 'ESTATUS')}</th>
+                  <th className="px-4 py-3.5">{renderFilter('propietario', 'Propietario', 'PROPIETARIO')}</th>
                   {!isAdc ? (
-                    <th className="px-4 py-4">{renderFilter('adc', 'Ejecutivo (ADC)', 'ADC')}</th>
+                    <th className="px-4 py-3.5">{renderFilter('adc', 'Ejecutivo (ADC)', 'ADC')}</th>
                   ) : null}
-                  <th className="px-4 py-4 font-black text-right">Acciones</th>
+                  <th className="px-4 py-3.5 font-black text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={15}>
-                      <div className="py-24 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
-                        <div className="relative w-16 h-16">
-                          <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
-                          <div className="absolute inset-0 border-4 rounded-full border-t-transparent animate-spin" style={{ borderColor: `${currentColor} transparent` }}></div>
-                          <Truck className="absolute inset-0 m-auto w-6 h-6 animate-pulse" style={{ color: currentColor }} />
-                        </div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cargando flotilla...</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : filteredAssets.length === 0 ? (
-                  <tr><td colSpan={15} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron activos.</td></tr>
-                ) : paginatedAssets.map((asset) => (
+                {filteredAssets.length === 0 ? (
+                  <tr><td colSpan={24} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron activos con los filtros seleccionados.</td></tr>
+                ) : paginatedAssets.map((asset) => {
+                  const cellPy = density === 'compact' ? 'py-2' : 'py-3.5';
+                  return (
                   <tr key={asset.serie} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={(e) => startEditing(e, asset)}>
-                    <td className="px-4 py-3.5 font-bold text-slate-800">{asset.cliente}</td>
-                    <td className="px-4 py-3.5 text-slate-800 font-bold">{asset.cuenta}</td>
-                    <td className="px-4 py-3.5">{asset.site}</td>
-                    <td className="px-4 py-3.5">{asset.tipo}</td>
-                    <td className="px-4 py-3.5 font-mono text-[11px]">{asset.clase}</td>
-                    <td className="px-4 py-3.5 font-bold text-slate-800">{asset.modelo}</td>
-                    <td className="px-4 py-3.5">
+                    <td className={`px-4 ${cellPy} font-bold text-slate-800`}>{asset.cliente}</td>
+                    <td className={`px-4 ${cellPy} text-slate-800 font-bold`}>{asset.cuenta}</td>
+                    <td className={`px-4 ${cellPy}`}>{asset.site}</td>
+                    <td className={`px-4 ${cellPy}`}>{asset.tipo}</td>
+                    <td className={`px-4 ${cellPy} font-mono text-[11px]`}>{asset.clase}</td>
+                    <td className={`px-4 ${cellPy} font-bold text-slate-800`}>{asset.modelo}</td>
+                    <td className={`px-4 ${cellPy}`}>
                       <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-slate-900 hover:text-red-600 hover:underline" onClick={(e) => e.stopPropagation()}>
                         {asset.serie}
                       </Link>
                     </td>
-                    <td className="px-4 py-3.5 text-center">{renderIwarehouseBadge(asset.iwarehouse)}</td>
-                    <td className="px-4 py-3.5 text-slate-500">{asset.oach || '-'}</td>
-                    <td className="px-4 py-3.5 text-slate-500">{asset.altura || '-'}</td>
-                    <td className="px-4 py-3.5 text-slate-500">{asset.bc || '-'}</td>
-                    <td className="px-4 py-3.5 text-slate-500">{asset.fechaIngreso || '-'}</td>
-                    <td className="px-4 py-3.5 text-slate-500">{asset.plazo || '-'}</td>
-                    <td className="px-4 py-3.5 text-slate-500">{asset.fechaVencimiento || '-'}</td>
-                    <td className="px-4 py-3.5 text-right font-black text-slate-950">${Number(asset.renta_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3.5">{asset.renta_moneda}</td>
-                    <td className="px-4 py-3.5 font-bold">{asset.tipo_poliza}</td>
-                    <td className="px-4 py-3.5">{asset.distribuidor}</td>
-                    <td className="px-4 py-3.5 text-right font-black text-slate-900">${Number(asset.costo_poliza_distribuidor).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3.5">{asset.moneda_pago_distribuidor}</td>
-                    <td className="px-4 py-3.5">
+                    <td className={`px-4 ${cellPy} text-center`}>{renderIwarehouseBadge(asset.iwarehouse)}</td>
+                    <td className={`px-4 ${cellPy} text-slate-500`}>{asset.oach || '-'}</td>
+                    <td className={`px-4 ${cellPy} text-slate-500`}>{asset.altura || '-'}</td>
+                    <td className={`px-4 ${cellPy} text-slate-500`}>{asset.bc || '-'}</td>
+                    <td className={`px-4 ${cellPy} text-slate-500`}>{asset.fechaIngreso || '-'}</td>
+                    <td className={`px-4 ${cellPy} text-slate-500`}>{asset.plazo || '-'}</td>
+                    <td className={`px-4 ${cellPy} text-slate-500`}>{asset.fechaVencimiento || '-'}</td>
+                    <td className={`px-4 ${cellPy} text-right font-black text-slate-950`}>${Number(asset.renta_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                    <td className={`px-4 ${cellPy}`}>{asset.renta_moneda}</td>
+                    <td className={`px-4 ${cellPy} font-bold`}>{asset.tipo_poliza}</td>
+                    <td className={`px-4 ${cellPy}`}>{asset.distribuidor}</td>
+                    <td className={`px-4 ${cellPy} text-right font-black text-slate-900`}>${Number(asset.costo_poliza_distribuidor).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                    <td className={`px-4 ${cellPy}`}>{asset.moneda_pago_distribuidor}</td>
+                    <td className={`px-4 ${cellPy}`}>
                       <span className={`inline-flex items-center px-2 py-0.5 text-[9px] font-black uppercase rounded border tracking-wider ${statusColors[asset.estatus as keyof typeof statusColors] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                         {asset.estatus}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 font-bold">{asset.propietario}</td>
-                    {!isAdc && <td className="px-4 py-3.5 font-bold text-slate-500">{asset.adc}</td>}
-                    <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td className={`px-4 ${cellPy} font-bold`}>{asset.propietario}</td>
+                    {!isAdc && <td className={`px-4 ${cellPy} font-bold text-slate-500`}>{asset.adc}</td>}
+                    <td className={`px-4 ${cellPy} text-right`} onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
                         <Link href={`/r4/flotilla/${asset.serie}`} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors">
                           <Eye className="w-3.5 h-3.5" />
@@ -1304,9 +1282,11 @@ export default function FlotillaTab({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
+            )}
           </div>
           
           {/* Table Pagination */}
@@ -1334,89 +1314,6 @@ export default function FlotillaTab({
             </div>
           )}
         </div>
-      )}
-
-      {/* VISTA DE CARDS */}
-      {viewMode === 'cards' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-in fade-in duration-300">
-          {paginatedAssets.map((asset) => (
-            <div key={asset.serie} className="bg-white border border-slate-200 rounded-3xl shadow-sm hover:shadow-md transition-all flex flex-col h-full overflow-hidden">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
-                <div>
-                  <Link href={`/r4/flotilla/${asset.serie}`} className="font-black text-lg text-slate-900 hover:text-red-600 hover:underline">
-                    {asset.serie}
-                  </Link>
-                  <div className="flex gap-2 items-center mt-1">
-                    <span className={`inline-flex px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusColors[asset.estatus as keyof typeof statusColors] || 'bg-slate-50 border-slate-200'}`}>
-                      {asset.estatus}
-                    </span>
-                    <span className="text-xs text-slate-400 font-bold">{asset.tipo} • Clase {asset.clase}</span>
-                  </div>
-                </div>
-                <div className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-slate-500">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-              </div>
-              
-              <div className="p-5 flex-1 space-y-4 text-xs font-bold text-slate-600">
-                <div>
-                  <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Ubicación</p>
-                  <p className="font-black text-sm text-slate-900">{asset.cliente}</p>
-                  <p className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400"/> {asset.site}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-[11px]">
-                  <div>
-                    <span className="text-[9px] text-slate-400 uppercase">Cuenta:</span>
-                    <p className="font-black text-slate-800">{asset.cuenta}</p>
-                  </div>
-                  <div>
-                    <span className="text-[9px] text-slate-400 uppercase">Distribuidor:</span>
-                    <p className="font-black text-slate-800">{asset.distribuidor}</p>
-                  </div>
-                  <div>
-                    <span className="text-[9px] text-slate-400 uppercase">Modelo:</span>
-                    <p className="font-black text-slate-800">{asset.modelo}</p>
-                  </div>
-                  <div>
-                    <span className="text-[9px] text-slate-400 uppercase">Precio Renta:</span>
-                    <p className="font-black text-slate-950">${Number(asset.renta_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })} {asset.renta_moneda}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 bg-slate-50/50 p-3 rounded-2xl">
-                  <div>
-                    <span className="text-[8px] text-slate-400 uppercase font-black block">Entregado</span>
-                    <p className="font-black text-[10.5px] text-slate-800">{asset.fechaIngreso}</p>
-                  </div>
-                  <div>
-                    <span className="text-[8px] text-slate-400 uppercase font-black block">Plazo (Meses)</span>
-                    <p className="font-black text-[10.5px] text-slate-800">{asset.plazo}</p>
-                  </div>
-                  <div>
-                    <span className="text-[8px] text-slate-400 uppercase font-black block">Vencimiento</span>
-                    <p className="font-black text-[10.5px] text-red-600">{asset.fechaVencimiento}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <button onClick={(e) => startEditing(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded-xl transition-all" title="Editar">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button onClick={(e) => openTransferModal(e, asset)} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded-xl transition-all" title="Transferir equipo">
-                    <MapPin className="w-4 h-4" />
-                  </button>
-                </div>
-                <Link href={`/r4/flotilla/${asset.serie}`} className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm">
-                  <Eye className="w-3.5 h-3.5" /> Detalle
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
       </>
       )}
 

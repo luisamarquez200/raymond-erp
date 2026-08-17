@@ -98,6 +98,22 @@ export class ClientesController {
         }
     }
 
+    @Post(':id/fusionar/:targetId')
+    @UseGuards(JwtAuthGuard)
+    async fusionarClientes(@Param('id') id: string, @Param('targetId') targetId: string, @Req() req: any, @Res() res: Response) {
+        try {
+            const role = req.user?.roles;
+            if (role?.toUpperCase() === 'ADMINISTRADOR') {
+                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
+            }
+            const data = await this.clientesService.fusionarClientes(id, targetId);
+            return res.status(HttpStatus.OK).json({ success: true, data });
+        } catch (error: any) {
+            const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            return res.status(status).json({ success: false, message: error.message });
+        }
+    }
+
     @Delete(':id')
     @UseGuards(JwtAuthGuard)
     async eliminarCliente(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
