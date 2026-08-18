@@ -11,8 +11,24 @@ interface DashboardFilters {
     adc?: string;
 }
 
+function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: string[]): boolean {
+    if (keywords.length === 0) return true;
+    for (const raw of candidates) {
+        if (!raw) continue;
+        const norm = raw.trim().toLowerCase();
+        if (!norm) continue;
+        for (const kw of keywords) {
+            if (!kw) continue;
+            if (norm === kw || norm.includes(kw) || kw.includes(norm)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 const dashboardCache = new Map<string, { timestamp: number, data: any }>();
-const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 @Injectable()
 export class PresupuestosService {
@@ -27,7 +43,14 @@ export class PresupuestosService {
     }
 
     async getDashboardStats(filters: DashboardFilters) {
-        const cacheKey = JSON.stringify(filters);
+        const cacheKey = JSON.stringify({
+            year: filters.year,
+            months: filters.months,
+            cliente_id: filters.cliente_id || null,
+            sitio_id: filters.sitio_id || null,
+            moneda: filters.moneda || null,
+            adc: filters.adc ? filters.adc.trim().toLowerCase() : null,
+        });
         const cached = dashboardCache.get(cacheKey);
         if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
             return cached.data;
@@ -123,15 +146,9 @@ export class PresupuestosService {
         for (const r of allRentas) {
             // Apply ADC and Sitio filters manually
             if (adcKeywords.length > 0) {
-                const rAdc = (r.adc || '').toLowerCase();
-                const sAdc = (r.sitio?.adc || '').toLowerCase();
-                const clientAdc = ((r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase();
-                const matches = adcKeywords.some(kw => 
-                    rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc) ||
-                    sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc) ||
-                    clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)
-                );
-                if (!matches) continue;
+                if (!matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                    continue;
+                }
             }
             
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
@@ -175,15 +192,9 @@ export class PresupuestosService {
         // Processing Orders
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
-                const rAdc = (r.adc || '').toLowerCase();
-                const sAdc = (r.sitio?.adc || '').toLowerCase();
-                const clientAdc = ((r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase();
-                const matches = adcKeywords.some(kw => 
-                    rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc) ||
-                    sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc) ||
-                    clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)
-                );
-                if (!matches) continue;
+                if (!matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                    continue;
+                }
             }
 
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
@@ -236,9 +247,9 @@ export class PresupuestosService {
 
             const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
             if (adcKeywords.length > 0) {
-                const oAdc = adcName.toLowerCase();
-                const matches = adcKeywords.some(kw => oAdc === kw || oAdc.includes(kw) || kw.includes(oAdc));
-                if (!matches) continue;
+                if (!matchAdcKeywords([adcName, o.renta?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                    continue;
+                }
             }
 
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
@@ -313,9 +324,10 @@ export class PresupuestosService {
             const createdM = dayjs(o.created_at).format('YYYY-MM');
             if (!currentPeriodStrs.includes(createdM)) return false;
             if (adcKeywords.length > 0) {
-                const adcName = (o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC').toLowerCase();
-                const matches = adcKeywords.some(kw => adcName === kw || adcName.includes(kw) || kw.includes(adcName));
-                if (!matches) return false;
+                const adcCandidates = [o.renta?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc];
+                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
+                    return false;
+                }
             }
             return true;
         }).map(o => ({
@@ -369,15 +381,9 @@ export class PresupuestosService {
 
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
-                const rAdc = (r.adc || '').toLowerCase();
-                const sAdc = (r.sitio?.adc || '').toLowerCase();
-                const clientAdc = ((r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase();
-                const matches = adcKeywords.some(kw => 
-                    rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc) ||
-                    sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc) ||
-                    clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)
-                );
-                if (!matches) continue;
+                if (!matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                    continue;
+                }
             }
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
@@ -438,9 +444,9 @@ export class PresupuestosService {
 
             const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
             if (adcKeywords.length > 0) {
-                const oAdc = adcName.toLowerCase();
-                const matches = adcKeywords.some(kw => oAdc === kw || oAdc.includes(kw) || kw.includes(oAdc));
-                if (!matches) continue;
+                if (!matchAdcKeywords([adcName, o.renta?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                    continue;
+                }
             }
 
             const clientName = o.cliente?.razon_social || '';
@@ -485,49 +491,143 @@ export class PresupuestosService {
             return b.total_facturar - a.total_facturar;
         });
 
+        // Dynamically compute Egresos & SMP based on the scoped rentas for this ADC / filter
+        const scopedRentas = allRentas.filter(r => {
+            if (adcKeywords.length > 0) {
+                return matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords);
+            }
+            return true;
+        });
+
+        const pagos_renta_terceros = scopedRentas
+            .filter(r => {
+                const prop = (r.propietario || r.activo?.propietario || '').toUpperCase();
+                const cond = (r.condiciones as any) || {};
+                return prop.includes('TERCERO') || cond.renta_terceros === true || (r.distribuidor && r.distribuidor !== '-');
+            })
+            .map(r => {
+                const cond = (r.condiciones as any) || {};
+                const distName = r.distribuidor || r.activo?.distribuidor || 'Distribuidor';
+                const clientName = r.cliente?.razon_social || 'Cliente';
+                const cur = r.detalles?.moneda?.toUpperCase() || cond.moneda || 'MXN';
+                const amount = Number(cond.renta_terceros_monto || r.detalles?.renta_base || r.tarifa || 0);
+                return {
+                    distribuidor: distName,
+                    cliente: clientName,
+                    activo_serie: r.activo?.serie || '-',
+                    activo_modelo: r.activo?.modelo || '-',
+                    importe: amount,
+                    moneda: cur,
+                    estatus: r.estado || 'VIGENTE'
+                };
+            });
+
+        const pagos_mantenimiento_preventivo = scopedRentas
+            .filter(r => {
+                const cond = (r.condiciones as any) || {};
+                const cost = Number(cond.costo_poliza_distribuidor || 0);
+                const polType = (cond.tipo_poliza || '').toUpperCase();
+                return cost > 0 || polType.includes('SMP') || polType.includes('PREVENTIVO');
+            })
+            .map(r => {
+                const cond = (r.condiciones as any) || {};
+                const distName = r.distribuidor || r.activo?.distribuidor || 'Distribuidor';
+                const clientName = r.cliente?.razon_social || 'Cliente';
+                const cost = Number(cond.costo_poliza_distribuidor || 0);
+                const cur = cond.moneda_pago_distribuidor?.toUpperCase() || r.detalles?.moneda?.toUpperCase() || 'MXN';
+                return {
+                    distribuidor: distName,
+                    cliente: clientName,
+                    equipo_serie: r.activo?.serie || '-',
+                    equipo_modelo: r.activo?.modelo || '-',
+                    servicio: cond.tipo_poliza || 'SMP Preventivo',
+                    costo_poliza: cost,
+                    moneda: cur,
+                    estatus: 'EJECUTADO'
+                };
+            });
+
+        const distMap = new Map<string, { distribuidor: string; aplica_smp: number; ejecutados: number }>();
+        for (const r of scopedRentas) {
+            const dist = (r.distribuidor || r.activo?.distribuidor || 'SIN DISTRIBUIDOR').trim().toUpperCase();
+            if (dist === '-' || dist === 'SIN DISTRIBUIDOR') continue;
+            if (!distMap.has(dist)) {
+                distMap.set(dist, { distribuidor: dist, aplica_smp: 0, ejecutados: 0 });
+            }
+            const dObj = distMap.get(dist)!;
+            dObj.aplica_smp += 1;
+            const isDetenido = (r.activo?.estatus || '').toUpperCase().includes('DETENIDO');
+            if (!isDetenido) {
+                dObj.ejecutados += 1;
+            }
+        }
+
+        const cumplimiento_distribuidores = Array.from(distMap.values()).map(d => {
+            const brecha = Math.max(0, d.aplica_smp - d.ejecutados);
+            const cumplimiento = d.aplica_smp > 0 ? (d.ejecutados / d.aplica_smp) * 100 : 100;
+            let estatus = 'EN META';
+            if (cumplimiento < 80) estatus = 'CRÍTICO';
+            else if (cumplimiento < 90) estatus = 'ATENCIÓN';
+            return {
+                distribuidor: d.distribuidor,
+                aplica_smp: d.aplica_smp,
+                ejecutados: d.ejecutados,
+                brecha,
+                cumplimiento: Math.round(cumplimiento * 10) / 10,
+                estatus
+            };
+        }).sort((a, b) => a.cumplimiento - b.cumplimiento);
+
+        const buildPagosSummary = (targetCur: 'USD' | 'MXN') => {
+            const pMap = new Map<string, { distribuidor: string; preventivos: number; renta_terceros: number }>();
+            for (const p of pagos_mantenimiento_preventivo.filter(x => x.moneda === targetCur)) {
+                const key = p.distribuidor.toUpperCase();
+                if (!pMap.has(key)) pMap.set(key, { distribuidor: p.distribuidor, preventivos: 0, renta_terceros: 0 });
+                pMap.get(key)!.preventivos += p.costo_poliza;
+            }
+            for (const p of pagos_renta_terceros.filter(x => x.moneda === targetCur)) {
+                const key = p.distribuidor.toUpperCase();
+                if (!pMap.has(key)) pMap.set(key, { distribuidor: p.distribuidor, preventivos: 0, renta_terceros: 0 });
+                pMap.get(key)!.renta_terceros += p.importe;
+            }
+            const list = Array.from(pMap.values()).map(item => {
+                const total = item.preventivos + item.renta_terceros;
+                return {
+                    ...item,
+                    total
+                };
+            });
+            const grandTotal = list.reduce((sum, i) => sum + i.total, 0);
+            return list.map(i => ({
+                ...i,
+                porcentaje: grandTotal > 0 ? Math.round((i.total / grandTotal) * 1000) / 10 : 0
+            })).sort((a, b) => b.total - a.total);
+        };
+
+        const totalAplicables = cumplimiento_distribuidores.reduce((sum, d) => sum + d.aplica_smp, 0);
+        const totalEjecutados = cumplimiento_distribuidores.reduce((sum, d) => sum + d.ejecutados, 0);
+        const totalBrecha = Math.max(0, totalAplicables - totalEjecutados);
+        const consolidado = totalAplicables > 0 ? Math.round((totalEjecutados / totalAplicables) * 1000) / 10 : 100;
+
+        const lectura_ejecutiva = totalAplicables > 0
+            ? `Cumplimiento de servicios SMP en equipos de la cartera: ${consolidado}%, con ${totalEjecutados} servicios ejecutados de ${totalAplicables} aplicables (brecha de ${totalBrecha}).`
+            : `Sin registros de egresos/SMP asignados para la cartera del asesor en el periodo seleccionado.`;
+
         const egresos = {
-            lectura_ejecutiva: "El cumplimiento consolidado de SMP es 91.7%, con 2,904 servicios ejecutados de 3,168 aplicables y una brecha de 264. El equipo PS alcanza 94.1% y CS 89.4%. La prioridad es recuperar cumplimiento en los distribuidores por debajo de 90%, especialmente MOTSA, JV, MOBINSA y SIMAC.",
+            lectura_ejecutiva,
             indicadores_clave: {
-                consolidado: 91.7,
-                equipo_ps: 94.1,
-                equipo_cs: 89.4,
-                ejecutados: 2904,
-                aplicables: 3168,
-                brecha: 264
+                consolidado,
+                equipo_ps: consolidado,
+                equipo_cs: consolidado,
+                ejecutados: totalEjecutados,
+                aplicables: totalAplicables,
+                brecha: totalBrecha
             },
-            cumplimiento_distribuidores: [
-                { distribuidor: 'MOBINSA', aplica_smp: 8, ejecutados: 6, brecha: 2, cumplimiento: 75.0, estatus: 'CRÍTICO' },
-                { distribuidor: 'SIMAC', aplica_smp: 8, ejecutados: 6, brecha: 2, cumplimiento: 75.0, estatus: 'CRÍTICO' },
-                { distribuidor: 'JV', aplica_smp: 20, ejecutados: 16, brecha: 4, cumplimiento: 80.0, estatus: 'CRÍTICO' },
-                { distribuidor: 'MOTSA', aplica_smp: 412, ejecutados: 342, brecha: 70, cumplimiento: 83.0, estatus: 'CRÍTICO' },
-                { distribuidor: 'MMH', aplica_smp: 72, ejecutados: 62, brecha: 10, cumplimiento: 86.1, estatus: 'CRÍTICO' },
-                { distribuidor: 'DIMCSA', aplica_smp: 1068, ejecutados: 962, brecha: 106, cumplimiento: 90.1, estatus: 'ATENCIÓN' },
-                { distribuidor: 'DIMOSA', aplica_smp: 624, ejecutados: 590, brecha: 34, cumplimiento: 94.6, estatus: 'ATENCIÓN' },
-                { distribuidor: 'M.COM', aplica_smp: 298, ejecutados: 284, brecha: 14, cumplimiento: 95.3, estatus: 'EN META' },
-                { distribuidor: 'MAC', aplica_smp: 646, ejecutados: 624, brecha: 22, cumplimiento: 96.6, estatus: 'EN META' },
-                { distribuidor: 'RAYMOND WEST', aplica_smp: 12, ejecutados: 12, brecha: 0, cumplimiento: 100.0, estatus: 'EN META' },
-            ],
-            pagos_usd: [
-                { distribuidor: 'MOTSA INDUSTRIAL', preventivos: 8822.00, renta_terceros: 163600.00, total: 172422.00, porcentaje: 45.2 },
-                { distribuidor: 'MONTACARGAS AC', preventivos: 49865.36, renta_terceros: 3010.00, total: 52875.36, porcentaje: 13.9 },
-                { distribuidor: 'J.V. ABASTECEDORA DE MONTACARGAS', preventivos: 705.28, renta_terceros: 61242.00, total: 61947.28, porcentaje: 16.3 },
-                { distribuidor: 'MONTACARGAS.COM', preventivos: 5640.00, renta_terceros: 7518.00, total: 13158.00, porcentaje: 3.5 },
-                { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', preventivos: 15546.03, renta_terceros: 2734.30, total: 18280.33, porcentaje: 4.8 },
-                { distribuidor: 'MEX MATERIAL HANDLING', preventivos: 11314.80, renta_terceros: 6200.00, total: 17514.80, porcentaje: 4.6 },
-                { distribuidor: 'ENERSYS DE MEXICO II S DE RL DE CV', preventivos: 0.00, renta_terceros: 37866.00, total: 37866.00, porcentaje: 9.9 },
-                { distribuidor: 'DISTRIBUCIONES MOLINA', preventivos: 3370.00, renta_terceros: 1586.50, total: 4956.50, porcentaje: 1.3 },
-                { distribuidor: 'RW BAJA', preventivos: 2100.00, renta_terceros: 0.00, total: 2100.00, porcentaje: 0.6 }
-            ],
-            pagos_mxn: [
-                { distribuidor: 'MOTSA INDUSTRIAL', preventivos: 266760.00, renta_terceros: 0.00, total: 266760.00, porcentaje: 3.9 },
-                { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', preventivos: 1723714.88, renta_terceros: 168379.87, total: 1892094.75, porcentaje: 27.8 },
-                { distribuidor: 'DISTRIBUCIONES MOLINA', preventivos: 2499291.00, renta_terceros: 0.00, total: 2499291.00, porcentaje: 36.7 },
-                { distribuidor: 'MONTACARGAS AC', preventivos: 1203495.86, renta_terceros: 0.00, total: 1203495.86, porcentaje: 17.7 },
-                { distribuidor: 'MONTACARGAS.COM', preventivos: 581457.70, renta_terceros: 0.00, total: 581457.70, porcentaje: 8.5 },
-                { distribuidor: 'ENCINAS LIFT', preventivos: 0.00, renta_terceros: 228500.00, total: 228500.00, porcentaje: 3.4 },
-                { distribuidor: 'SISTEMAS INTEGRALES PARA EL MANEJO DE CARGA', preventivos: 14380.00, renta_terceros: 22360.00, total: 36740.00, porcentaje: 0.5 },
-                { distribuidor: 'MEX MATERIAL HANDLING', preventivos: 2400.00, renta_terceros: 81000.00, total: 83400.00, porcentaje: 1.2 }
-            ]
+            cumplimiento_distribuidores,
+            pagos_usd: buildPagosSummary('USD'),
+            pagos_mxn: buildPagosSummary('MXN'),
+            pagos_renta_terceros,
+            pagos_mantenimiento_preventivo
         };
 
         const finalResult = {

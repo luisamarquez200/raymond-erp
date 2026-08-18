@@ -89,51 +89,14 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
         }
     };
 
-    // 1. Enriched Default Data for Renta Terceros if missing from backend
+    // 1. Scoped Data for Renta Terceros
     const rentaTercerosList = useMemo(() => {
-        if (rawRentaTerceros && rawRentaTerceros.length > 0) return rawRentaTerceros;
-        
-        return [
-            { distribuidor: 'MOTSA INDUSTRIAL', cliente: 'WALMART DE MEXICO (CEDIS TEPOTZOTLAN)', activo_serie: 'MOT-78901', activo_modelo: '8410-END', importe: 120000.00, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'MOTSA INDUSTRIAL', cliente: 'DHL SUPPLY CHAIN (QUERÉTARO)', activo_serie: 'MOT-45612', activo_modelo: '7400-REACH', importe: 43600.00, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'J.V. ABASTECEDORA DE MONTACARGAS', cliente: 'PEPSICO / SABRITAS (GUADALAJARA)', activo_serie: 'JV-99012', activo_modelo: '4250-C40T', importe: 61242.00, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'ENERSYS DE MEXICO II', cliente: 'HOME DEPOT MÉXICO (MONTERREY)', activo_serie: 'ENR-33120', activo_modelo: 'BATERÍA 48V', importe: 37866.00, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'MONTACARGAS.COM', cliente: 'COPPEL S.A. DE C.V. (CULIACÁN)', activo_serie: 'MC-10023', activo_modelo: '7500-DR30TT', importe: 7518.00, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'MEX MATERIAL HANDLING', cliente: 'NESTLÉ MÉXICO (GUADALAJARA)', activo_serie: 'MMH-88219', activo_modelo: '4750-C60', importe: 6200.00, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'MONTACARGAS AC', cliente: 'CORONA / AB INBEV (CDMX)', activo_serie: 'MAC-11203', activo_modelo: '8210-WALKIE', importe: 3010.00, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', cliente: 'SAMSUNG ELECTRONICS (QUERÉTARO)', activo_serie: 'DIM-55410', activo_modelo: '7400-R40TT', importe: 2734.30, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'DISTRIBUCIONES MOLINA', cliente: 'LIVERPOOL LOGÍSTICA (ARCO NORTE)', activo_serie: 'MOL-00912', activo_modelo: '8410-END', importe: 1586.50, moneda: 'USD', estatus: 'VIGENTE' },
-            { distribuidor: 'ENCINAS LIFT', cliente: 'MABE MÉXICO (CEDIS CELAYA)', activo_serie: 'ENC-77012', activo_modelo: '4450-C30T', importe: 228500.00, moneda: 'MXN', estatus: 'VIGENTE' },
-            { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', cliente: 'BIMBO S.A. DE C.V. (AZCAPOTZALCO)', activo_serie: 'DIM-99812', activo_modelo: '7500-REACH', importe: 168379.87, moneda: 'MXN', estatus: 'VIGENTE' },
-            { distribuidor: 'MEX MATERIAL HANDLING', cliente: 'ARCA CONTINENTAL (MONTERREY)', activo_serie: 'MMH-33201', activo_modelo: '8210-PALLET', importe: 81000.00, moneda: 'MXN', estatus: 'VIGENTE' },
-            { distribuidor: 'SISTEMAS INTEGRALES MANEJO DE CARGA', cliente: 'ESTAFETA MEXICANA (LOGÍSTICA)', activo_serie: 'SIM-10923', activo_modelo: '4250-C35T', importe: 22360.00, moneda: 'MXN', estatus: 'VIGENTE' }
-        ];
+        return rawRentaTerceros || [];
     }, [rawRentaTerceros]);
 
-    // 2. Enriched Default Data for Preventivos (SMP) if missing from backend
+    // 2. Scoped Data for Preventivos (SMP)
     const preventivosList = useMemo(() => {
-        if (rawPreventivos && rawPreventivos.length > 0) return rawPreventivos;
-
-        return [
-            { distribuidor: 'MONTACARGAS AC', cliente: 'CORONA / AB INBEV (CDMX)', equipo_serie: 'MAC-11203', equipo_modelo: '8210-WALKIE', servicio: 'SMP Póliza Trimestral', costo_poliza: 49865.36, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', cliente: 'SAMSUNG ELECTRONICS (QUERÉTARO)', equipo_serie: 'DIM-55410', equipo_modelo: '7400-R40TT', servicio: 'SMP Mantenimiento Programado', costo_poliza: 15546.03, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'MEX MATERIAL HANDLING', cliente: 'NESTLÉ MÉXICO (GUADALAJARA)', equipo_serie: 'MMH-88219', equipo_modelo: '4750-C60', servicio: 'SMP Póliza Mensual', costo_poliza: 11314.80, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'MOTSA INDUSTRIAL', cliente: 'WALMART DE MEXICO (TEPOTZOTLAN)', equipo_serie: 'MOT-78901', equipo_modelo: '8410-END', servicio: 'SMP Mantenimiento Preventivo', costo_poliza: 8822.00, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'MONTACARGAS.COM', cliente: 'COPPEL S.A. DE C.V. (CULIACÁN)', equipo_serie: 'MC-10023', equipo_modelo: '7500-DR30TT', servicio: 'SMP Póliza Mensual', costo_poliza: 5640.00, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'DISTRIBUCIONES MOLINA', cliente: 'LIVERPOOL LOGÍSTICA (ARCO NORTE)', equipo_serie: 'MOL-00912', equipo_modelo: '8410-END', servicio: 'SMP Mantenimiento Preventivo', costo_poliza: 3370.00, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'RW BAJA', cliente: 'HAEMONETICS DE MÉXICO (TIJUANA)', equipo_serie: 'RWB-44102', equipo_modelo: '4250-C30T', servicio: 'SMP Póliza Mensual', costo_poliza: 2100.00, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'J.V. ABASTECEDORA DE MONTACARGAS', cliente: 'PEPSICO / SABRITAS (GUADALAJARA)', equipo_serie: 'JV-99012', equipo_modelo: '4250-C40T', servicio: 'SMP Mantenimiento Preventivo', costo_poliza: 705.28, moneda: 'USD', estatus: 'EJECUTADO' },
-            { distribuidor: 'DISTRIBUCIONES MOLINA', cliente: 'NESTLÉ MÉXICO (TOLUCA)', equipo_serie: 'MOL-99120', equipo_modelo: '8410-END', servicio: 'SMP Cobertura Flotilla MXN', costo_poliza: 1499291.00, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'DISTRIBUCIONES MOLINA', cliente: 'FEMSA LOGÍSTICA (MONTERREY)', equipo_serie: 'MOL-88310', equipo_modelo: '7500-DR30TT', servicio: 'SMP Cobertura Flotilla MXN', costo_poliza: 1000000.00, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', cliente: 'BIMBO S.A. DE C.V. (AZCAPOTZALCO)', equipo_serie: 'DIM-99812', equipo_modelo: '7500-REACH', servicio: 'SMP Póliza Flotilla MXN', costo_poliza: 923714.88, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'DISTRIBUIDORA DE MONTACARGAS DEL CENTRO', cliente: 'SAMSUNG ELECTRONICS (QUERÉTARO)', equipo_serie: 'DIM-55410', equipo_modelo: '7400-R40TT', servicio: 'SMP Póliza Flotilla MXN', costo_poliza: 800000.00, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'MONTACARGAS AC', cliente: 'CORONA / AB INBEV (CDMX)', equipo_serie: 'MAC-11203', equipo_modelo: '8210-WALKIE', servicio: 'SMP Póliza Flotilla MXN', costo_poliza: 703495.86, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'MONTACARGAS AC', cliente: 'LIVERPOOL LOGÍSTICA (ARCO NORTE)', equipo_serie: 'MAC-22019', equipo_modelo: '8410-END', servicio: 'SMP Póliza Flotilla MXN', costo_poliza: 500000.00, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'MONTACARGAS.COM', cliente: 'COPPEL S.A. DE C.V. (CULIACÁN)', equipo_serie: 'MC-10023', equipo_modelo: '7500-DR30TT', servicio: 'SMP Póliza Flotilla MXN', costo_poliza: 581457.70, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'MOTSA INDUSTRIAL', cliente: 'WALMART DE MEXICO (TEPOTZOTLAN)', equipo_serie: 'MOT-78901', equipo_modelo: '8410-END', servicio: 'SMP Póliza Flotilla MXN', costo_poliza: 266760.00, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'SISTEMAS INTEGRALES MANEJO DE CARGA', cliente: 'ESTAFETA MEXICANA (LOGÍSTICA)', equipo_serie: 'SIM-10923', equipo_modelo: '4250-C35T', servicio: 'SMP Póliza Mensual', costo_poliza: 14380.00, moneda: 'MXN', estatus: 'EJECUTADO' },
-            { distribuidor: 'MEX MATERIAL HANDLING', cliente: 'ARCA CONTINENTAL (MONTERREY)', equipo_serie: 'MMH-33201', equipo_modelo: '8210-PALLET', servicio: 'SMP Póliza Mensual', costo_poliza: 2400.00, moneda: 'MXN', estatus: 'EJECUTADO' }
-        ];
+        return rawPreventivos || [];
     }, [rawPreventivos]);
 
     // Unique lists for Filter dropdowns
