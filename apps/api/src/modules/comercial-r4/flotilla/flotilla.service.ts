@@ -191,7 +191,11 @@ export class FlotillaService {
 
     async obtenerFlotilla(user?: any) {
         try {
-            const cacheKey = user ? JSON.stringify({ r: user.roles, n: user.adc_asociado_name, f: user.first_name }) : 'all';
+            const roleStr = String(user?.roles || user?.role || '').toLowerCase();
+            const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleStr.includes(r));
+            const isAdc = !isAdministrator && !!user;
+
+            const cacheKey = user ? JSON.stringify({ r: roleStr, n: user.adc_asociado_name || user.adcAsociadoName, f: user.first_name || user.firstName }) : 'all';
             const cached = flotillaCache.get(cacheKey);
             if (cached && (Date.now() - cached.timestamp < FLOTILLA_CACHE_TTL)) {
                 return cached.data;
@@ -199,14 +203,7 @@ export class FlotillaService {
 
             const db = this.getDb();
             
-            let whereClause = {};
-            if ((user?.roles === 'ADC' || user?.roles === 'AUXILIAR') && (user?.first_name || user?.adc_asociado_name)) {
-                const target = user?.adc_asociado_name || user?.first_name;
-                whereClause = { adc: { contains: target } };
-            }
-            
             const activos = await db.activo.findMany({
-                where: whereClause,
                 include: {
                     cliente: true,
                     sitio: true,
@@ -225,7 +222,26 @@ export class FlotillaService {
                 }
             });
 
-            const result = activos.map(activo => {
+            let mappedActivos = activos;
+            if (isAdc) {
+                const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
+                const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+
+                mappedActivos = activos.filter(activo => {
+                    const aAdc = (activo.adc || '').toLowerCase();
+                    const sAdc = (activo.sitio?.adc || '').toLowerCase();
+                    const clientComercial = (activo.cliente?.datos_comerciales as any) || {};
+                    const cAdc = (clientComercial.adc || '').toLowerCase();
+                    return adcKeywords.some(kw => 
+                        aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc) ||
+                        sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc) ||
+                        cAdc === kw || cAdc.includes(kw) || kw.includes(cAdc)
+                    ) || (firstName && (aAdc.includes(firstName) || sAdc.includes(firstName) || cAdc.includes(firstName)));
+                });
+            }
+
+            const result = mappedActivos.map(activo => {
                 const renta = activo.rentas?.[0];
 
                 return {

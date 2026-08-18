@@ -103,14 +103,25 @@ export class RentasService {
             
             let mapped = rentas.map(r => this.mapRenta(r));
 
-            if ((user?.roles === 'ADC' || user?.roles === 'AUXILIAR') && (user?.first_name || user?.adc_asociado_name)) {
-                const target = (user?.adc_asociado_name || user?.first_name).toLowerCase();
+            const roleStr = String(user?.roles || user?.role || '').toLowerCase();
+            const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleStr.includes(r));
+            const isAdc = !isAdministrator && !!user;
+
+            if (isAdc) {
+                const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
+                const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+
                 mapped = mapped.filter(r => {
                     const rAdc = (r.adc || '').toLowerCase();
                     const clientComercial = (r.cliente?.datos_comerciales as any) || {};
                     const clientAdc = (clientComercial.adc || '').toLowerCase();
                     const siteAdc = (r.sitio?.adc || '').toLowerCase();
-                    return rAdc.includes(target) || clientAdc.includes(target) || siteAdc.includes(target);
+                    return adcKeywords.some(kw => 
+                        rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc) ||
+                        clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc) ||
+                        siteAdc === kw || siteAdc.includes(kw) || kw.includes(siteAdc)
+                    ) || (firstName && (rAdc.includes(firstName) || clientAdc.includes(firstName) || siteAdc.includes(firstName)));
                 });
             }
 

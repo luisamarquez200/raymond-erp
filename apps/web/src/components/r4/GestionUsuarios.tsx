@@ -103,28 +103,24 @@ export default function GestionUsuarios() {
         )
     );
 
-    // Filtered lists of users for selects
+    // Filtered lists of users for selects (100% dynamic from database)
     const auxiliaresUsers = users.filter(u => (u.role?.name || '').toLowerCase() === 'auxiliar');
     const adcsUsers = users.filter(u => (u.role?.name || '').toLowerCase() === 'adc');
-    const administradoresUsers = users.filter(u => ['administrador', 'gerente', 'coordinador'].includes((u.role?.name || '').toLowerCase()));
+    const administradoresUsers = users.filter(u => ['administrador', 'admin', 'gerente', 'coordinador', 'coordinacion'].some(r => (u.role?.name || '').toLowerCase().includes(r)));
 
-    const defaultAdcNames = [
-        'Montserrat Covarrubias',
-        'Andrea Esquivel',
-        'Angélica Simalú',
-        'Alejandra Arellanes',
-        'Daniel Romero'
-    ];
-
+    // Generate options dynamically from database
     const allAdcOptions = Array.from(new Set([
-        ...defaultAdcNames,
         ...adcsUsers.map((u: any) => `${u.firstName || ''} ${u.lastName || ''}`.trim()),
-        ...adcsList.map((a: any) => a.name)
-    ])).filter(Boolean);
+        ...adcsList.map((a: any) => (a.name || '').trim())
+    ])).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+    const allSupervisorOptions = Array.from(new Set(
+        administradoresUsers.map((adm: any) => `${adm.firstName || ''} ${adm.lastName || ''}`.trim())
+    )).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
     const allAuxiliarOptions = Array.from(new Set(
         auxiliaresUsers.map((u: any) => `${u.firstName || ''} ${u.lastName || ''}`.trim())
-    )).filter(Boolean);
+    )).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
     const toggleAdcSelection = (adcName: string) => {
         setSelectedAdcs(prev => {
@@ -540,14 +536,12 @@ export default function GestionUsuarios() {
                                         }}
                                     >
                                         <SelectTrigger className="rounded-xl bg-slate-50 border-slate-200 text-slate-900 font-bold focus:bg-white">
-                                            <SelectValue placeholder="Seleccionar Coordinadora (ej. Cecilia Sosa, Paola Silva)" />
+                                            <SelectValue placeholder="Seleccionar Coordinadora / Administrador" />
                                         </SelectTrigger>
                                         <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
-                                            <SelectItem value="Cecilia Sosa" className="text-slate-900 font-bold cursor-pointer">Cecilia Sosa (Coordinadora)</SelectItem>
-                                            <SelectItem value="Paola Silva" className="text-slate-900 font-bold cursor-pointer">Paola Silva (Coordinadora)</SelectItem>
-                                            {administradoresUsers.map((adm) => (
-                                                <SelectItem key={adm.id} value={`${adm.firstName} ${adm.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
-                                                    {adm.firstName} {adm.lastName}
+                                            {allSupervisorOptions.map((supName) => (
+                                                <SelectItem key={supName} value={supName} className="text-slate-900 font-bold cursor-pointer">
+                                                    {supName}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -569,9 +563,9 @@ export default function GestionUsuarios() {
                                         </SelectTrigger>
                                         <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
                                             <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
-                                            {auxiliaresUsers.map((aux) => (
-                                                <SelectItem key={aux.id} value={`${aux.firstName} ${aux.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
-                                                    {aux.firstName} {aux.lastName}
+                                            {allAuxiliarOptions.map((auxName) => (
+                                                <SelectItem key={auxName} value={auxName} className="text-slate-900 font-bold cursor-pointer">
+                                                    {auxName}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -599,13 +593,10 @@ export default function GestionUsuarios() {
                                         <SelectValue placeholder="Selecciona el ADC asignado" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
-                                        <SelectItem value="Andrea Esquivel" className="text-slate-900 font-bold cursor-pointer">Andrea Esquivel</SelectItem>
-                                        <SelectItem value="Montserrat Covarrubias" className="text-slate-900 font-bold cursor-pointer">Montserrat Covarrubias</SelectItem>
-                                        <SelectItem value="Angélica Simalú" className="text-slate-900 font-bold cursor-pointer">Angélica Simalú</SelectItem>
-                                        <SelectItem value="Alejandra Arellanes" className="text-slate-900 font-bold cursor-pointer">Alejandra Arellanes</SelectItem>
-                                        <SelectItem value="Daniel Romero" className="text-slate-900 font-bold cursor-pointer">Daniel Romero</SelectItem>
-                                        {adcsList.map((adc: any, idx: number) => (
-                                            <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
+                                        {allAdcOptions.map((adcName) => (
+                                            <SelectItem key={adcName} value={adcName} className="text-slate-900 font-bold cursor-pointer">
+                                                {adcName}
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -817,11 +808,9 @@ export default function GestionUsuarios() {
                                             <SelectValue placeholder="Seleccionar Coordinadora" />
                                         </SelectTrigger>
                                         <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
-                                            <SelectItem value="Cecilia Sosa" className="text-slate-900 font-bold cursor-pointer">Cecilia Sosa (Coordinadora)</SelectItem>
-                                            <SelectItem value="Paola Silva" className="text-slate-900 font-bold cursor-pointer">Paola Silva (Coordinadora)</SelectItem>
-                                            {administradoresUsers.map((adm) => (
-                                                <SelectItem key={adm.id} value={`${adm.firstName} ${adm.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
-                                                    {adm.firstName} {adm.lastName}
+                                            {allSupervisorOptions.map((supName) => (
+                                                <SelectItem key={supName} value={supName} className="text-slate-900 font-bold cursor-pointer">
+                                                    {supName}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -843,9 +832,9 @@ export default function GestionUsuarios() {
                                         </SelectTrigger>
                                         <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
                                             <SelectItem value="ninguno" className="text-slate-900 font-bold cursor-pointer">Ninguno</SelectItem>
-                                            {auxiliaresUsers.map((aux) => (
-                                                <SelectItem key={aux.id} value={`${aux.firstName} ${aux.lastName}`.trim()} className="text-slate-900 font-bold cursor-pointer">
-                                                    {aux.firstName} {aux.lastName}
+                                            {allAuxiliarOptions.map((auxName) => (
+                                                <SelectItem key={auxName} value={auxName} className="text-slate-900 font-bold cursor-pointer">
+                                                    {auxName}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -873,13 +862,10 @@ export default function GestionUsuarios() {
                                         <SelectValue placeholder="Selecciona el ADC asignado" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl bg-white border-slate-200 text-slate-900">
-                                        <SelectItem value="Andrea Esquivel" className="text-slate-900 font-bold cursor-pointer">Andrea Esquivel</SelectItem>
-                                        <SelectItem value="Montserrat Covarrubias" className="text-slate-900 font-bold cursor-pointer">Montserrat Covarrubias</SelectItem>
-                                        <SelectItem value="Angélica Simalú" className="text-slate-900 font-bold cursor-pointer">Angélica Simalú</SelectItem>
-                                        <SelectItem value="Alejandra Arellanes" className="text-slate-900 font-bold cursor-pointer">Alejandra Arellanes</SelectItem>
-                                        <SelectItem value="Daniel Romero" className="text-slate-900 font-bold cursor-pointer">Daniel Romero</SelectItem>
-                                        {adcsList.map((adc: any, idx: number) => (
-                                            <SelectItem key={idx} value={adc.name} className="text-slate-900 font-bold cursor-pointer">{adc.name}</SelectItem>
+                                        {allAdcOptions.map((adcName) => (
+                                            <SelectItem key={adcName} value={adcName} className="text-slate-900 font-bold cursor-pointer">
+                                                {adcName}
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>

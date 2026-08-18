@@ -36,17 +36,33 @@ export class AdcsService {
             // Convert to array
             const uniqueAdcs = Array.from(adcNames).sort();
 
-            // Fetch users with role 'ADC' to check status
-            const adcRole = await this.prismaService.roles.findFirst({
-                where: { name: 'ADC' }
+            // Fetch all users to check status
+            const allUsers = await this.prismaService.users.findMany({
+                where: { is_active: true },
+                select: {
+                    id: true,
+                    first_name: true,
+                    last_name: true,
+                    adc_asociado_name: true,
+                    email: true,
+                    roles: { select: { name: true } }
+                }
             });
-            const adcUsers = adcRole ? await this.prismaService.users.findMany({
-                where: { role_id: adcRole.id }
-            }) : [];
-            const adcUserNames = adcUsers.map(u => u.first_name);
 
             return uniqueAdcs.map(adcName => {
-                const userExists = adcUserNames.includes(adcName);
+                const target = adcName.trim().toLowerCase();
+                const userExists = allUsers.some(u => {
+                    const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
+                    const firstName = (u.first_name || '').trim().toLowerCase();
+                    const adcAsoc = (u.adc_asociado_name || '').trim().toLowerCase();
+                    const email = (u.email || '').trim().toLowerCase();
+
+                    return fullName === target ||
+                           firstName === target ||
+                           (adcAsoc && (adcAsoc === target || adcAsoc.includes(target) || target.includes(adcAsoc))) ||
+                           (firstName && target.startsWith(firstName)) ||
+                           email === target;
+                });
                 return {
                     name: adcName,
                     status: userExists ? 'Usuario Creado' : 'Sin Usuario'
@@ -62,16 +78,32 @@ export class AdcsService {
         try {
             const db = this.getDb();
             
-            // 1. Get user details from main database
-            const user = await this.prismaService.users.findFirst({
-                where: { 
-                    first_name: name,
-                    roles: { name: 'ADC' }
-                },
+            // 1. Get user details from main database with flexible matching
+            const allUsers = await this.prismaService.users.findMany({
+                where: { is_active: true },
                 select: {
+                    id: true,
                     email: true,
-                    last_login_at: true
+                    first_name: true,
+                    last_name: true,
+                    adc_asociado_name: true,
+                    last_login_at: true,
+                    roles: { select: { name: true } }
                 }
+            });
+
+            const target = name.trim().toLowerCase();
+            const user = allUsers.find(u => {
+                const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
+                const firstName = (u.first_name || '').trim().toLowerCase();
+                const adcAsoc = (u.adc_asociado_name || '').trim().toLowerCase();
+                const email = (u.email || '').trim().toLowerCase();
+
+                return fullName === target || 
+                       firstName === target ||
+                       (adcAsoc && (adcAsoc === target || adcAsoc.includes(target) || target.includes(adcAsoc))) ||
+                       (firstName && target.startsWith(firstName)) ||
+                       email === target;
             });
 
             // 2. Get unique clients associated with this ADC from R4 database (from sitios and activos)

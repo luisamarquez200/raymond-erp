@@ -6,6 +6,7 @@ import FlotillaTab from '@/components/r4/FlotillaTab';
 import RentasTab from '@/components/r4/RentasTab';
 import { useConfigStore } from '@/store/config.store';
 import { useAuthStore } from '@/store/auth.store';
+import { useUser } from '@/hooks/useUsers';
 import { PackageSearch, ReceiptText } from 'lucide-react';
 
 export default function FlotillaRentasPage() {
@@ -13,12 +14,21 @@ export default function FlotillaRentasPage() {
   const [adminAdcScope, setAdminAdcScope] = useState<'todos' | 'mis_adcs'>('todos');
   
   const { user } = useAuthStore();
+  const { data: freshUserProfile } = useUser(user?.id || '');
   let rawRole: any = user?.role;
   if (Array.isArray(rawRole)) rawRole = rawRole[0]?.name || rawRole[0]?.rol || rawRole[0];
   if (typeof rawRole === 'object' && rawRole !== null) rawRole = rawRole?.name || rawRole?.rol;
-  const userRole = String(rawRole || 'administrador').toLowerCase();
+  const userRole = String(rawRole || '').toLowerCase();
 
-  const isAdministrator = userRole === 'administrador' || userRole.includes('geren') || userRole.includes('coordinaci');
+  const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => userRole.includes(r));
+  const rawAdcAsociado = 
+    freshUserProfile?.adcAsociadoName ||
+    (user as any)?.adc_asociado_name || 
+    (user as any)?.adcAsociadoName || '';
+  const resolvedAdcName = rawAdcAsociado && rawAdcAsociado !== 'ninguno'
+    ? rawAdcAsociado
+    : `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || (user as any)?.name || '';
+
   const { roleColors } = useConfigStore();
   const currentColor = roleColors[userRole] || roleColors.administrador;
 
@@ -55,8 +65,8 @@ export default function FlotillaRentasPage() {
           </button>
         </div>
 
-        {/* Right: Global ADC Scope Toggle (Preserved across both Flotilla and Rentas) */}
-        {isAdministrator && (
+        {/* Right: Scope toggle for Admins / Badge for ADC */}
+        {isAdministrator ? (
           <div className="mb-2 self-end sm:self-auto flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200 shadow-inner">
             <button
               type="button"
@@ -76,6 +86,11 @@ export default function FlotillaRentasPage() {
             >
               Solo mis ADC
             </button>
+          </div>
+        ) : (
+          <div className="mb-2 self-end sm:self-auto flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ejecutivo:</span>
+            <span className="text-xs font-black text-slate-800">{resolvedAdcName || user?.email || 'Mi Usuario'}</span>
           </div>
         )}
       </div>

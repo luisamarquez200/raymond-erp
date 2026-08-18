@@ -119,6 +119,12 @@ export class AuthService {
         const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
         await this.sessionService.updateSessionToken(session.id, hashedRefreshToken);
 
+        const now = new Date();
+        await this.prisma.users.update({
+            where: { id: user.id },
+            data: { last_login_at: now }
+        }).catch(err => this.logger.error(`Error updating last_login_at for user ${user.id}: ${err.message}`));
+
         await this.auditService.log(user.id, 'LOGIN_SUCCESS', 'AUTH', { sessionId: session.id }, ipAddress, userAgent);
 
         return {

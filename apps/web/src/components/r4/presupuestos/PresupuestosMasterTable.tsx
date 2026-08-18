@@ -84,6 +84,9 @@ export default function PresupuestosMasterTable({ data = [], moneda = 'MXN' }: P
                                     Presupuesto
                                 </TableHead>
                                 <TableHead className="py-2.5 px-4 text-right font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">
+                                    Pedidos Enviados
+                                </TableHead>
+                                <TableHead className="py-2.5 px-4 text-right font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">
                                     Equipos Detenidos
                                 </TableHead>
                                 <TableHead className="py-2.5 px-4 text-right font-semibold text-slate-400 uppercase text-[11px] tracking-wider whitespace-nowrap">
@@ -100,7 +103,7 @@ export default function PresupuestosMasterTable({ data = [], moneda = 'MXN' }: P
                         <TableBody>
                             {sortedData.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center text-slate-400 py-12">
+                                    <TableCell colSpan={8} className="text-center text-slate-400 py-12">
                                         No hay información disponible para este periodo
                                     </TableCell>
                                 </TableRow>
@@ -134,6 +137,11 @@ export default function PresupuestosMasterTable({ data = [], moneda = 'MXN' }: P
                                             {/* Presupuesto */}
                                             <TableCell className="py-2.5 px-4 text-right font-normal text-slate-500 whitespace-nowrap tabular-nums">
                                                 {formatCurrency(row.presupuesto)}
+                                            </TableCell>
+
+                                            {/* Pedidos Enviados */}
+                                            <TableCell className="py-2.5 px-4 text-right font-semibold text-slate-700 whitespace-nowrap tabular-nums">
+                                                {formatCurrency(row.enviado)}
                                             </TableCell>
 
                                             {/* Equipos Detenidos */}
@@ -188,6 +196,9 @@ export default function PresupuestosMasterTable({ data = [], moneda = 'MXN' }: P
                                     </TableCell>
                                     <TableCell className="py-3 px-4 text-right font-semibold text-slate-700 tabular-nums">
                                         {formatCurrency(totals.presupuesto)}
+                                    </TableCell>
+                                    <TableCell className="py-3 px-4 text-right font-semibold text-slate-700 tabular-nums">
+                                        {formatCurrency(totals.enviado)}
                                     </TableCell>
                                     <TableCell className="py-3 px-4 text-right font-semibold text-slate-700 tabular-nums">
                                         {totals.equipos_detenidos.toLocaleString('es-MX')}

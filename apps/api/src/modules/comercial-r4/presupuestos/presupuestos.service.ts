@@ -69,12 +69,6 @@ export class PresupuestosService {
         if (sitio_id) rentasWhere.sitio_id = sitio_id;
         
         const adcKeywords = adc ? adc.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
-        if (adcKeywords.length > 0) {
-            rentasWhere.OR = [
-                { adc: { in: adcKeywords.map(k => k) } }, // Fallback to memory filter if exact doesn't match perfectly
-            ];
-            // We'll rely primarily on the robust manual memory filter since the schema data could be nested
-        }
 
         const allRentas = await db.renta.findMany({
             where: rentasWhere,
@@ -82,13 +76,13 @@ export class PresupuestosService {
                 detalles: true,
                 activo: true,
                 cliente: true,
+                sitio: true,
             }
         });
 
         // 2. Fetch all orders (OrdenMensual)
         let ordersWhere: any = {};
         if (cliente_id) ordersWhere.cliente_id = cliente_id;
-        // OrdenMensual does not have sitio_id, adc directly, we might need to filter them in memory based on the renta.
         
         const allOrders = await db.ordenMensual.findMany({
             where: ordersWhere,
@@ -127,11 +121,16 @@ export class PresupuestosService {
         const clientTotals = new Map<string, { presupuesto: number, pendiente: number }>();
 
         for (const r of allRentas) {
-            // Apply ADC and Sitio filters manually if they were not fully applied
+            // Apply ADC and Sitio filters manually
             if (adcKeywords.length > 0) {
                 const rAdc = (r.adc || '').toLowerCase();
                 const sAdc = (r.sitio?.adc || '').toLowerCase();
-                const matches = adcKeywords.some(kw => rAdc.includes(kw) || sAdc.includes(kw));
+                const clientAdc = ((r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase();
+                const matches = adcKeywords.some(kw => 
+                    rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc) ||
+                    sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc) ||
+                    clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)
+                );
                 if (!matches) continue;
             }
             
@@ -158,7 +157,7 @@ export class PresupuestosService {
                     currencyStat.presupuesto_mes += budgetAmount * months.length;
 
                     // ADC Compliance tracking
-                    const adcName = r.adc || r.sitio?.adc || 'Sin ADC';
+                    const adcName = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
                     const clientName = r.cliente.razon_social;
                     const adcKey = `${adcName}___${clientName}___${rMoneda}`;
                     if (!adcsMap.has(adcKey)) {
@@ -175,6 +174,18 @@ export class PresupuestosService {
 
         // Processing Orders
         for (const r of allRentas) {
+            if (adcKeywords.length > 0) {
+                const rAdc = (r.adc || '').toLowerCase();
+                const sAdc = (r.sitio?.adc || '').toLowerCase();
+                const clientAdc = ((r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase();
+                const matches = adcKeywords.some(kw => 
+                    rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc) ||
+                    sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc) ||
+                    clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)
+                );
+                if (!matches) continue;
+            }
+
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
             const currencyStat = stats[rMoneda as keyof typeof stats];
@@ -201,7 +212,7 @@ export class PresupuestosService {
                 currencyStat.acumulado += pending;
                 
                 const clientName = r.cliente.razon_social;
-                const adcName = r.adc || r.sitio?.adc || 'Sin ADC';
+                const adcName = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
                 
                 pendingByClientAdc.push({
                     cliente: clientName,
@@ -223,6 +234,13 @@ export class PresupuestosService {
             // Check filters
             if (sitio_id && o.renta?.sitio_id !== sitio_id) continue;
 
+            const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            if (adcKeywords.length > 0) {
+                const oAdc = adcName.toLowerCase();
+                const matches = adcKeywords.some(kw => oAdc === kw || oAdc.includes(kw) || kw.includes(oAdc));
+                if (!matches) continue;
+            }
+
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
 
@@ -232,7 +250,6 @@ export class PresupuestosService {
                 currencyStat.pedidos_enviados += amount;
                 
                 // Add to ADC compliance
-                const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
                 const clientName = o.cliente?.razon_social || '';
                 const adcKey = `${adcName}___${clientName}___${oMoneda}`;
                 
@@ -264,11 +281,12 @@ export class PresupuestosService {
         }
 
         // Calculate totals
+        const isAdcFiltered = adcKeywords.length > 0;
         for (const key of ['MXN', 'USD'] as const) {
             const s = stats[key];
             s.total_a_facturar = s.presupuesto_mes + s.acumulado;
-            // Use manually entered facturado value from Gerente; fallback to pedidos_enviados if not set
-            s.facturado = facturadoByMoneda[key] > 0 ? facturadoByMoneda[key] : s.pedidos_enviados;
+            // Use manually entered facturado value from Gerente when not filtered by ADC; fallback to pedidos_enviados
+            s.facturado = (!isAdcFiltered && facturadoByMoneda[key] > 0) ? facturadoByMoneda[key] : s.pedidos_enviados;
             s.faltante = s.total_a_facturar - s.pedidos_enviados;
             s.cumplimiento_general = s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0;
         }
@@ -289,14 +307,17 @@ export class PresupuestosService {
             total_facturar: data.presupuesto + data.pendiente
         }));
 
-        // Recuperacion de meses anteriores (orders in current month but belong to previous periods?)
-        // The user says "Órdenes de compra recuperadas de meses anteriores".
-        // In our model `OrdenMensual` has `periodo` (the period it belongs to) and `created_at` (when it was added).
-        // If `created_at` is in any of the selected months, but `periodo < earliestPeriodStr`, it's a recovery!
+        // Recuperacion de meses anteriores
         const recuperados = allOrders.filter(o => {
             if (o.periodo >= earliestPeriodStr) return false;
             const createdM = dayjs(o.created_at).format('YYYY-MM');
-            return currentPeriodStrs.includes(createdM);
+            if (!currentPeriodStrs.includes(createdM)) return false;
+            if (adcKeywords.length > 0) {
+                const adcName = (o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC').toLowerCase();
+                const matches = adcKeywords.some(kw => adcName === kw || adcName.includes(kw) || kw.includes(adcName));
+                if (!matches) return false;
+            }
+            return true;
         }).map(o => ({
             adc: o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC',
             cliente: o.cliente.razon_social,
@@ -335,7 +356,7 @@ export class PresupuestosService {
             observaciones.push({ tipo: 'Info', mensaje: 'Reporte generado automáticamente. Todos los indicadores en orden.' });
         }
 
-        // Master Consolidated Table (Matching Excel columns: % CUMPLIMIENTO | ADC | CLIENTE | PRESUPUESTO | EQUIPOS DETENIDOS | PENDIENTE ACUMULADO | TOTAL A FACTURAR)
+        // Master Consolidated Table
         const masterMap = new Map<string, {
             adc: string;
             cliente: string;
@@ -350,7 +371,12 @@ export class PresupuestosService {
             if (adcKeywords.length > 0) {
                 const rAdc = (r.adc || '').toLowerCase();
                 const sAdc = (r.sitio?.adc || '').toLowerCase();
-                const matches = adcKeywords.some(kw => rAdc.includes(kw) || sAdc.includes(kw));
+                const clientAdc = ((r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase();
+                const matches = adcKeywords.some(kw => 
+                    rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc) ||
+                    sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc) ||
+                    clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)
+                );
                 if (!matches) continue;
             }
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
@@ -411,6 +437,12 @@ export class PresupuestosService {
             if (moneda && moneda !== oMoneda) continue;
 
             const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            if (adcKeywords.length > 0) {
+                const oAdc = adcName.toLowerCase();
+                const matches = adcKeywords.some(kw => oAdc === kw || oAdc.includes(kw) || kw.includes(oAdc));
+                if (!matches) continue;
+            }
+
             const clientName = o.cliente?.razon_social || '';
             const key = `${adcName}___${clientName}___${oMoneda}`;
 

@@ -11,6 +11,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth.store";
 import { useConfigStore } from "@/store/config.store";
+import { useUser } from "@/hooks/useUsers";
 import PageLoader from "@/components/ui/PageLoader";
 import { motion, AnimatePresence } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
@@ -118,17 +119,24 @@ export default function RentasTab({
   setAdminAdcScope: externalSetAdminAdcScope 
 }: RentasTabProps = {}) {
   const { user } = useAuthStore();
+  const { data: freshUserProfile } = useUser(user?.id || '');
   let rawRole: any = user?.role;
   if (Array.isArray(rawRole)) rawRole = rawRole[0]?.name || rawRole[0]?.rol || rawRole[0];
   if (typeof rawRole === 'object' && rawRole !== null) rawRole = rawRole?.name || rawRole?.rol;
-  const userRole = String(rawRole || 'administrador').toLowerCase();
+  const userRole = String(rawRole || '').toLowerCase();
   
-  const isAdc = userRole !== 'administrador' && !userRole.includes('geren') && !userRole.includes('coordinaci');
-  const loggedInAdcName = user 
-    ? (userRole === 'auxiliar' || userRole.includes('auxiliar'))
-      ? (user.adc_asociado_name || '')
-      : `${user.firstName} ${user.lastName || ''}`.trim()
-    : '';
+  const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => userRole.includes(r));
+  const isAdc = !isAdministrator && userRole !== '';
+
+  const rawAdcAsociado = 
+    freshUserProfile?.adcAsociadoName ||
+    (user as any)?.adc_asociado_name || 
+    (user as any)?.adcAsociadoName || '';
+
+  const loggedInAdcName = 
+    rawAdcAsociado && rawAdcAsociado !== 'ninguno'
+      ? rawAdcAsociado
+      : `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || (user as any)?.name || user?.email || '';
 
   const { roleColors } = useConfigStore();
   const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
@@ -346,9 +354,15 @@ export default function RentasTab({
   // ADC Visual Filtering Logic for Clientes
   const filteredClientesDisponibles = isAdc
     ? clientesDisponibles.filter((c: any) => {
-        const adcLower = c.adc?.toLowerCase() || '';
-        const userLower = loggedInAdcName.toLowerCase();
-        return adcLower === userLower || userLower.includes(adcLower) || adcLower.includes(user?.firstName?.toLowerCase() || '');
+        const adcLower = (c.adc || '').toLowerCase().trim();
+        const adcKeywords = loggedInAdcName.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        const userFirstName = (user?.firstName || '').toLowerCase().trim();
+        const hasMatchingSitio = (c.sitios || []).some((s: any) => {
+          const sAdc = (s.adc || '').toLowerCase();
+          return adcKeywords.some((kw: string) => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (userFirstName && sAdc.includes(userFirstName));
+        });
+        return adcKeywords.some((kw: string) => adcLower === kw || adcLower.includes(kw) || kw.includes(adcLower)) ||
+          (userFirstName && adcLower.includes(userFirstName)) || hasMatchingSitio;
       })
     : clientesDisponibles;
 
@@ -361,6 +375,17 @@ export default function RentasTab({
   )).sort((a: string, b: string) => a.localeCompare(b));
 
   const openEditModal = (renta: any) => {
+    if (isAdc) {
+      const rAdc = (renta.adc || renta.sitio?.adc || (renta.cliente as any)?.datos_comerciales?.adc || '').toLowerCase().trim();
+      const adcKeywords = loggedInAdcName.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+      const userFirstName = (user?.firstName || '').toLowerCase().trim();
+      const isOwner = adcKeywords.some((kw: string) => rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc)) ||
+        (userFirstName && rAdc.includes(userFirstName));
+      if (!isOwner) {
+        toast.error('Solo puedes editar información de rentas correspondientes a tu propio ADC asignado.');
+        return;
+      }
+    }
     setEditRentaConfig({
       isOpen: true,
       id: renta.id,
@@ -742,30 +767,47 @@ export default function RentasTab({
   };
 
   // ADC Visual Filtering Logic
-  const isAdministrator = userRole === 'administrador' || userRole.includes('coordinaci') || userRole.includes('geren');
-
   let baseRentas = rentas;
   if (isAdc) {
-    baseRentas = rentas.filter(r => {
-        const adcLower = r.adc?.toLowerCase() || '';
-        const userLower = loggedInAdcName.toLowerCase();
-        return adcLower === userLower || userLower.includes(adcLower) || adcLower.includes(user?.firstName?.toLowerCase() || '');
-    });
-  } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
-    const currentUserNameLower = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
-    let assignedAdcKeywords: string[] = [];
-    if (currentUserNameLower.includes('cecilia')) {
-      assignedAdcKeywords = ['montserrat', 'andrea'];
-    } else if (currentUserNameLower.includes('paola')) {
-      assignedAdcKeywords = ['angélica', 'angelica', 'alejandra', 'daniel'];
-    } else {
-      assignedAdcKeywords = [(user?.firstName || '').toLowerCase()];
-    }
+    const adcKeywords = loggedInAdcName
+      .split(',')
+      .map((s: string) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const userFirstName = (user?.firstName || '').toLowerCase().trim();
+    const userLastName = (user?.lastName || '').toLowerCase().trim();
+    const userFullName = `${userFirstName} ${userLastName}`.trim();
 
     baseRentas = rentas.filter(r => {
-      const adcLower = (r.adc || '').toLowerCase();
-      return assignedAdcKeywords.some(kw => adcLower.includes(kw));
+        const rAdc = (r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase().trim();
+        if (!rAdc) return false;
+        return adcKeywords.some((kw: string) => 
+          rAdc === kw || 
+          rAdc.includes(kw) || 
+          kw.includes(rAdc)
+        ) || (userFullName && (rAdc.includes(userFullName) || userFullName.includes(rAdc))) ||
+        (userFirstName && rAdc.includes(userFirstName));
     });
+  } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
+    let assignedAdcKeywords: string[] = [];
+    if (rawAdcAsociado && rawAdcAsociado !== 'ninguno') {
+      assignedAdcKeywords = rawAdcAsociado
+        .split(',')
+        .map((s: string) => s.trim().toLowerCase())
+        .filter(Boolean);
+    }
+
+    if (assignedAdcKeywords.length === 0) {
+      baseRentas = [];
+    } else {
+      baseRentas = rentas.filter(r => {
+        const rAdc = (r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase().trim();
+        return assignedAdcKeywords.some(kw => 
+          rAdc === kw || 
+          rAdc.includes(kw) || 
+          kw.includes(rAdc)
+        );
+      });
+    }
   }
 
   const filterUniqueCuentas = Array.from(new Set(baseRentas.map(r => r.cuenta).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
@@ -2409,16 +2451,50 @@ export default function RentasTab({
                       </div>
 
                       <div className="space-y-2 mb-4 relative">
-                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Asignar Equipo (Serie)</label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
+                            <Search className="w-3.5 h-3.5 text-red-600" />
+                            Asignar Equipo (Serie)
+                          </label>
+                          {newRentaFormData.activo_id && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewRentaFormData(prev => ({ ...prev, activo_id: '', renta_base: '' }));
+                              }}
+                              className="text-[10px] font-bold text-red-600 hover:underline"
+                            >
+                              Limpiar equipo
+                            </button>
+                          )}
+                        </div>
+
                         <button
                           type="button"
-                          disabled={!newRentaFormData.cliente_id || !newRentaFormData.sitio_id}
-                          onClick={() => setOpenEquipo(!openEquipo)}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200"
+                          onClick={() => {
+                            setOpenEquipo(!openEquipo);
+                            setOpenCliente(false);
+                            setOpenCuenta(false);
+                            setOpenSitio(false);
+                          }}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
                         >
-                          {newRentaFormData.activo_id
-                            ? equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id)?.serie
-                            : "Seleccionar Equipo..."}
+                          {newRentaFormData.activo_id ? (() => {
+                            const eq = equiposDisponibles.find((e) => e.id === newRentaFormData.activo_id);
+                            return (
+                              <span className="flex items-center gap-2 truncate">
+                                <span className="font-black text-slate-900">{eq?.serie}</span>
+                                {eq?.modelo && <span className="text-slate-500 font-normal text-xs">({eq.modelo})</span>}
+                                {eq?.estatus && (
+                                  <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
+                                    {eq.estatus}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })() : (
+                            <span className="text-slate-400 font-medium">Buscar o seleccionar equipo por serie...</span>
+                          )}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </button>
                         
@@ -2438,68 +2514,100 @@ export default function RentasTab({
                           }
                           return null;
                         })()}
-                        {(!newRentaFormData.cliente_id || !newRentaFormData.sitio_id) && (
-                          <p className="text-[10px] text-slate-400 font-bold mt-1 ml-1 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
-                            {!newRentaFormData.cliente_id
-                              ? 'Selecciona primero una cuenta'
-                              : 'Selecciona primero un sitio'}
-                          </p>
-                        )}
 
                         {openEquipo && (
-                          <div className="absolute top-[100%] mt-2 left-0 w-full sm:w-[400px] z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl p-2 animate-in fade-in zoom-in-95 duration-200">
+                          <div className="absolute top-[100%] mt-2 left-0 w-full z-[9999] bg-white border border-slate-200 shadow-2xl rounded-2xl p-3 animate-in fade-in zoom-in-95 duration-200">
                             <div className="relative mb-2">
-                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />
                               <input
+                                autoFocus
                                 type="text"
-                                placeholder="Buscar por serie o modelo..."
+                                placeholder="Escribe la serie, modelo o distribuidor..."
                                 value={equipoSearchTerm}
                                 onChange={(e) => setEquipoSearchTerm(e.target.value)}
-                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-red-500 focus:bg-white"
                               />
                             </div>
-                            <div className="max-h-[200px] overflow-y-auto space-y-1">
+                            <div className="max-h-[240px] overflow-y-auto space-y-1 custom-scrollbar">
                               {equiposDisponibles
                                 .filter((e) => {
-                                  // Show only equipment available for rent: Inactivo or Inactivo con Cliente (all DB variants)
-                                  const st = (e.estatus || '').trim().toUpperCase();
-                                  if (!st.startsWith('INACTIVO')) return false;
-                                  const term = equipoSearchTerm.toLowerCase();
-                                  return (e.serie?.toLowerCase().includes(term) || e.modelo?.toLowerCase().includes(term));
+                                  const term = (equipoSearchTerm || '').toLowerCase().trim();
+                                  if (!term) return true;
+                                  return (
+                                    (e.serie || '').toLowerCase().includes(term) ||
+                                    (e.modelo || '').toLowerCase().includes(term) ||
+                                    (e.distribuidor || '').toLowerCase().includes(term) ||
+                                    (e.cliente || '').toLowerCase().includes(term)
+                                  );
                                 })
-                                .map((e) => (
-                                  <button
-                                    key={e.id}
-                                    type="button"
-                                    onClick={() => {
-                                      const assetPrice = e.renta_precio || 0;
-                                      setNewRentaFormData((prev) => ({
-                                        ...prev,
-                                        activo_id: e.id,
-                                        renta_base: assetPrice.toString(),
-                                      }));
-                                      setOpenEquipo(false);
-                                      setEquipoSearchTerm('');
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
-                                  >
-                                    <span>{e.serie} {e.modelo ? `- ${e.modelo}` : ''}</span>
-                                    {newRentaFormData.activo_id === e.id && (
-                                      <Check className="w-4 h-4 text-red-600" />
-                                    )}
-                                  </button>
-                                ))}
-                                {equiposDisponibles.filter((e) => {
-                                  const st = (e.estatus || '').trim().toUpperCase();
-                                  if (!st.startsWith('INACTIVO')) return false;
-                                  const term = equipoSearchTerm.toLowerCase();
-                                  return (e.serie?.toLowerCase().includes(term) || e.modelo?.toLowerCase().includes(term));
-                                }).length === 0 && (
-                                  <div className="py-4 text-center text-sm text-slate-500">
-                                    No se encontraron equipos disponibles.
-                                  </div>
-                                )}
+                                .map((e) => {
+                                  const isSelected = newRentaFormData.activo_id === e.id;
+                                  const assetPrice = e.renta_precio || 0;
+                                  return (
+                                    <button
+                                      key={e.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setNewRentaFormData((prev) => {
+                                          const nextState = {
+                                            ...prev,
+                                            activo_id: e.id,
+                                            renta_base: prev.renta_base || (assetPrice ? assetPrice.toString() : ''),
+                                          };
+                                          if (!prev.cliente_id && e.cliente_id) {
+                                            nextState.cliente_id = e.cliente_id;
+                                          }
+                                          if (!prev.sitio_id && e.sitio_id) {
+                                            nextState.sitio_id = e.sitio_id;
+                                          }
+                                          if (!prev.cuenta && e.cuenta && e.cuenta !== '-') {
+                                            nextState.cuenta = e.cuenta;
+                                          }
+                                          return nextState;
+                                        });
+                                        setOpenEquipo(false);
+                                        setEquipoSearchTerm('');
+                                      }}
+                                      className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center justify-between text-xs ${
+                                        isSelected 
+                                          ? 'bg-red-50 text-red-900 border border-red-200 font-bold' 
+                                          : 'hover:bg-slate-50 text-slate-800'
+                                      }`}
+                                    >
+                                      <div className="flex flex-col gap-0.5 min-w-0 pr-2">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-black text-slate-900 text-sm">{e.serie}</span>
+                                          {e.modelo && <span className="text-slate-500 font-medium">({e.modelo})</span>}
+                                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                            (e.estatus || '').toLowerCase().includes('inactivo') ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                                          }`}>
+                                            {e.estatus || 'Sin estatus'}
+                                          </span>
+                                        </div>
+                                        {(e.cliente && e.cliente !== 'Sin Cliente') && (
+                                          <span className="text-[11px] text-slate-400 truncate">
+                                            Cliente actual: {e.cliente} {e.site && e.site !== 'Sin Sitio' ? `• ${e.site}` : ''}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isSelected && <Check className="w-4 h-4 text-red-600 shrink-0" />}
+                                    </button>
+                                  );
+                                })}
+                              {equiposDisponibles.filter((e) => {
+                                const term = (equipoSearchTerm || '').toLowerCase().trim();
+                                if (!term) return true;
+                                return (
+                                  (e.serie || '').toLowerCase().includes(term) ||
+                                  (e.modelo || '').toLowerCase().includes(term) ||
+                                  (e.distribuidor || '').toLowerCase().includes(term) ||
+                                  (e.cliente || '').toLowerCase().includes(term)
+                                );
+                              }).length === 0 && (
+                                <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                                  No se encontraron equipos con la serie o modelo especificado.
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}

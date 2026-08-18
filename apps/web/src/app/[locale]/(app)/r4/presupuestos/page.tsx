@@ -20,6 +20,14 @@ export default function PresupuestosPage() {
     const canEditFacturado = ['gerente', 'administrador', 'admin', 'superadmin'].includes(roleName.toLowerCase());
     const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleName.toLowerCase().includes(r));
     
+    // Resolve logged in ADC's assigned/profile name
+    const resolvedAdcName = 
+        freshUserProfile?.adcAsociadoName ||
+        (user as any)?.adc_asociado_name || 
+        (user as any)?.adcAsociadoName || 
+        `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 
+        (user as any)?.name || '';
+
     const [adminAdcScope, setAdminAdcScope] = useState<'todos' | 'mis_adcs'>('todos');
 
     const currentDate = dayjs();
@@ -36,7 +44,7 @@ export default function PresupuestosPage() {
     const [activeFilters, setActiveFilters] = useState(initialFilters);
 
     const { data: dashboardData, isLoading, isFetching, error, refetch } = useQuery({
-        queryKey: ['presupuestos-dashboard', activeFilters, adminAdcScope],
+        queryKey: ['presupuestos-dashboard', activeFilters, adminAdcScope, isAdministrator, resolvedAdcName],
         queryFn: async () => {
             const params = new URLSearchParams();
             if (activeFilters.year) params.append('year', activeFilters.year);
@@ -46,18 +54,19 @@ export default function PresupuestosPage() {
             if (activeFilters.moneda) params.append('moneda', activeFilters.moneda);
 
             let adcFilter = activeFilters.adc;
-            if (adminAdcScope === 'mis_adcs') {
+
+            if (!isAdministrator) {
+                // Restricted ADC user: ONLY view information for their own assigned ADC
+                adcFilter = resolvedAdcName && resolvedAdcName !== 'ninguno' ? resolvedAdcName : 'SIN_ADC_ASIGNADO';
+            } else if (adminAdcScope === 'mis_adcs') {
                 const rawAdcAsociado = 
                     freshUserProfile?.adcAsociadoName ||
                     (user as any)?.adc_asociado_name || 
                     (user as any)?.adcAsociadoName || '';
 
                 if (rawAdcAsociado && rawAdcAsociado !== 'ninguno') {
-                    // Send the raw string which might be multiple ADCs separated by comma
-                    // The backend needs to be updated to handle multiple ADCs if it doesn't already
                     adcFilter = rawAdcAsociado;
                 } else {
-                    // Si no tiene ADCs asignados, mandamos un valor que no exista para que traiga 0 resultados
                     adcFilter = 'SIN_ADC_ASIGNADO';
                 }
             }
@@ -92,8 +101,8 @@ export default function PresupuestosPage() {
                     </p>
                 </div>
 
-                {/* Global ADC Scope Toggle (Todos los ADC vs Solo mis ADC) */}
-                {isAdministrator && (
+                {/* Scope selector for Admins / Badge for ADC */}
+                {isAdministrator ? (
                     <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200 shadow-inner">
                         <button
                             type="button"
@@ -113,6 +122,11 @@ export default function PresupuestosPage() {
                         >
                             Solo mis ADC
                         </button>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ejecutivo:</span>
+                        <span className="text-xs font-black text-slate-800">{resolvedAdcName || user?.email || 'Mi Usuario'}</span>
                     </div>
                 )}
             </div>

@@ -18,6 +18,7 @@ import { useUser } from '@/hooks/useUsers';
 import PageLoader from '@/components/ui/PageLoader';
 import TooltipInfo from '@/components/ui/TooltipInfo';
 import { TableSkeleton } from '@/components/ui/TableSkeleton';
+import { SearchableSelect, SearchableSelectOption } from '@/components/ui/SearchableSelect';
 import * as XLSX from 'xlsx';
 
 const statusColors = {
@@ -439,6 +440,17 @@ export default function FlotillaTab({
 
   const startEditing = (e: React.MouseEvent, asset: any) => {
     e.stopPropagation();
+    if (isAdc && !isTestingAdmin) {
+      const adcLower = (asset.adc || '').toLowerCase().trim();
+      const adcKeywords = loggedInAdcName.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      const userFirstName = (user?.firstName || '').toLowerCase().trim();
+      const isOwner = adcKeywords.some(kw => adcLower === kw || adcLower.includes(kw) || kw.includes(adcLower)) ||
+        (userFirstName && adcLower.includes(userFirstName));
+      if (!isOwner) {
+        toast.error('Solo puedes editar o solicitar cambios para equipos de tu propio ADC asignado.');
+        return;
+      }
+    }
     setEditingRowId(asset.serie);
     // Deep clone to avoid mutating the original
     setEditingData(JSON.parse(JSON.stringify(asset)));
@@ -760,8 +772,19 @@ export default function FlotillaTab({
     />
   );
 
-  const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
-  const paginatedAssets = filteredAssets.slice(
+  // Sort alphabetically by client name, then secondary by series
+  const sortedAssets = [...filteredAssets].sort((a: any, b: any) => {
+    const clientA = (a.cliente || a.cliente_nombre || '').toString().trim();
+    const clientB = (b.cliente || b.cliente_nombre || '').toString().trim();
+    const clientCompare = clientA.localeCompare(clientB, 'es', { sensitivity: 'base' });
+    if (clientCompare !== 0) return clientCompare;
+    const serieA = (a.serie || '').toString().trim();
+    const serieB = (b.serie || '').toString().trim();
+    return serieA.localeCompare(serieB, 'es', { sensitivity: 'base' });
+  });
+
+  const totalPages = Math.ceil(sortedAssets.length / itemsPerPage);
+  const paginatedAssets = sortedAssets.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );

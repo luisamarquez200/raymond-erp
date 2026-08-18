@@ -33,14 +33,28 @@ export class ClientesService {
 
             let filteredClientes = clientes;
 
-            if ((user?.roles === 'ADC' || user?.roles === 'AUXILIAR') && (user?.first_name || user?.adc_asociado_name)) {
-                const target = (user?.adc_asociado_name || user?.first_name).toLowerCase();
+            const roleStr = String(user?.roles || user?.role || '').toLowerCase();
+            const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleStr.includes(r));
+            const isAdc = !isAdministrator && !!user;
+
+            if (isAdc) {
+                const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
+                const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+
                 filteredClientes = clientes.filter(cliente => {
                     const comercial = (cliente.datos_comerciales as any) || {};
                     const clientAdc = (comercial.adc || '').toLowerCase();
-                    const hasMatchingSitio = cliente.sitios?.some(s => (s.adc || '').toLowerCase().includes(target));
-                    const hasMatchingActivo = cliente.activos?.some(a => (a.adc || '').toLowerCase().includes(target));
-                    return clientAdc.includes(target) || hasMatchingSitio || hasMatchingActivo;
+                    const hasMatchingSitio = cliente.sitios?.some(s => {
+                        const sAdc = (s.adc || '').toLowerCase();
+                        return adcKeywords.some(kw => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
+                    });
+                    const hasMatchingActivo = cliente.activos?.some(a => {
+                        const aAdc = (a.adc || '').toLowerCase();
+                        return adcKeywords.some(kw => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                    });
+                    const matchesClient = adcKeywords.some(kw => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
+                    return matchesClient || hasMatchingSitio || hasMatchingActivo;
                 });
             }
 
