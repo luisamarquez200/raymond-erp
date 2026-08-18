@@ -20,11 +20,14 @@ const outfit = Outfit({
 })
 
 export const metadata: Metadata = {
-  title: 'Logística Raymond',
+  title: 'Revenue Management',
   description: 'Enterprise Resource Planning System',
   icons: {
-    icon: '/fsimage.png',
-    apple: '/fsimage.png',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
 }
 

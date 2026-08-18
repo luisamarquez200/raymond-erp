@@ -183,8 +183,8 @@ export const PRIORITY_COLORS = {
     URGENT: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
 }
 
-export const APP_NAME = 'Raymond Logística'
-export const APP_DESCRIPTION = 'Sistema de Gestión de Logística'
+export const APP_NAME = 'Revenue Management'
+export const APP_DESCRIPTION = 'Revenue Management System'
 export const APP_VERSION = '2.0.0'
 
 export const checkModuleAccess = (moduleId: string, user: any): boolean => {
