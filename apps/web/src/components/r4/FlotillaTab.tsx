@@ -923,9 +923,9 @@ export default function FlotillaTab({
       setIsUploading(false);
     }
   };
-  const uniqueADCs = Array.from(new Set(fleetAssets.map((a: any) => a.adc).filter(Boolean))).sort() as string[];
-  const uniqueDistribuidores = Array.from(new Set(fleetAssets.map((a: any) => a.distribuidor).filter(Boolean))).sort() as string[];
-  const uniqueClases = Array.from(new Set(fleetAssets.map((a: any) => a.clase).filter(Boolean))).sort() as string[];
+  const uniqueADCs = Array.from(new Set(normalizedAssets.map((a: any) => a.adc).filter(Boolean))).sort() as string[];
+  const uniqueDistribuidores = Array.from(new Set(normalizedAssets.map((a: any) => a.distribuidor).filter(Boolean))).sort() as string[];
+  const uniqueClases = Array.from(new Set(normalizedAssets.map((a: any) => a.clase).filter(Boolean))).sort() as string[];
 
   const renderIwarehouseBadge = (val: string) => {
     if (!val || val === '-') return <span className="text-slate-400">-</span>;

@@ -70,11 +70,21 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
     const { user, signOut } = useAuthStore();
     const { roleColors } = useConfigStore();
 
-    const stringRole = (typeof user?.role === 'string' ? user.role : (user?.role as any)?.name || '')?.toLowerCase();
-    const currentColor = roleColors[stringRole] || (stringRole.includes('gerent') ? '#16a34a' : roleColors.administrador);
-    const subtitleText = stringRole.includes('gerent') 
+    const userRole = user?.role || (user as any)?.roles || (user as any)?.role_id || (user as any)?.firstName;
+    const stringRole = (typeof userRole === 'string' ? userRole : (userRole as any)?.name || '')?.toLowerCase().trim();
+    
+    const isGerencia = stringRole.includes('geren') || (user as any)?.username?.toLowerCase()?.includes('geren') || (user as any)?.firstName?.toLowerCase()?.includes('geren') || user?.email?.toLowerCase()?.includes('geren');
+    const isAdc = stringRole.includes('adc') || (user as any)?.username?.toLowerCase()?.includes('adc') || (user as any)?.firstName?.toLowerCase()?.includes('adc') || user?.email?.toLowerCase()?.includes('adc');
+
+    const currentColor = isGerencia 
+        ? (roleColors.gerencia || roleColors.gerente || '#16a34a') 
+        : isAdc 
+            ? (roleColors.adc || '#2563eb')
+            : (roleColors[stringRole] || roleColors.administrador || '#dc2626');
+
+    const subtitleText = isGerencia 
         ? 'Gerencia Comercial' 
-        : stringRole.includes('adc') 
+        : isAdc 
             ? 'ADC Comercial' 
             : 'Admin Comercial';
 
@@ -211,7 +221,10 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
             <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
                 <DialogContent className="max-w-md p-0 overflow-hidden bg-white border-none shadow-2xl rounded-[2rem]">
                     <div className="p-8 space-y-6">
-                        <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mx-auto">
+                        <div 
+                            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto transition-all"
+                            style={{ backgroundColor: `${currentColor}15`, color: currentColor }}
+                        >
                             <AlertCircle className="w-8 h-8" />
                         </div>
                         <div className="text-center space-y-2">
@@ -223,13 +236,17 @@ export default function AdminComercialSidebar({ isCollapsed: externalIsCollapsed
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowLogoutConfirm(false)}
-                                className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                                className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handleConfirmLogout}
-                                className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-200 transition-all"
+                                className="flex-1 py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer shadow-lg hover:brightness-110 active:scale-98"
+                                style={{ 
+                                    backgroundColor: currentColor,
+                                    boxShadow: `0 10px 25px -5px ${currentColor}40`
+                                }}
                             >
                                 Confirmar
                             </button>

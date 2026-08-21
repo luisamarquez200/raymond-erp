@@ -24,11 +24,21 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
     const params = useParams();
     const [isClient, setIsClient] = useState(false);
 
-    const stringRole = (typeof user?.role === 'string' ? user.role : (user?.role as any)?.name || '')?.toLowerCase();
-    const currentColor = roleColors[stringRole] || (stringRole.includes('gerent') ? '#16a34a' : roleColors.administrador);
-    const subtitleText = stringRole.includes('gerent') 
+    const userRole = user?.role || (user as any)?.roles || (user as any)?.role_id || (user as any)?.firstName;
+    const stringRole = (typeof userRole === 'string' ? userRole : (userRole as any)?.name || '')?.toLowerCase().trim();
+    
+    const isGerencia = stringRole.includes('geren') || (user as any)?.username?.toLowerCase()?.includes('geren') || (user as any)?.firstName?.toLowerCase()?.includes('geren') || user?.email?.toLowerCase()?.includes('geren');
+    const isAdc = stringRole.includes('adc') || (user as any)?.username?.toLowerCase()?.includes('adc') || (user as any)?.firstName?.toLowerCase()?.includes('adc') || user?.email?.toLowerCase()?.includes('adc');
+
+    const currentColor = isGerencia 
+        ? (roleColors.gerencia || roleColors.gerente || '#16a34a') 
+        : isAdc 
+            ? (roleColors.adc || '#2563eb')
+            : (roleColors[stringRole] || roleColors.administrador || '#dc2626');
+
+    const subtitleText = isGerencia 
         ? 'Gerencia Comercial' 
-        : stringRole.includes('adc') 
+        : isAdc 
             ? 'ADC Comercial' 
             : 'Admin Comercial';
 
@@ -43,12 +53,12 @@ export default function R4Layout({ children }: { children: React.ReactNode }) {
                 router.push(`/${locale}/login`);
             } else {
                 // Determine if user has R4 access
-                const roleLower = user.role?.toLowerCase() || '';
+                const roleLower = stringRole;
                 const hasR4Access = user.isSuperadmin || 
                     roleLower === 'administrador' || 
                     roleLower === 'admin' ||
                     roleLower === 'adc' ||
-                    roleLower.includes('gerent') ||
+                    roleLower.includes('geren') ||
                     roleLower.includes('coordinad') ||
                     roleLower.includes('coordinaci') ||
                     roleLower.includes('auxiliar') ||

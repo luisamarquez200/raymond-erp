@@ -21,9 +21,10 @@ export class ClientesController {
     }
 
     @Get('exportar/excel')
-    async exportarExcel(@Res() res: Response) {
+    @UseGuards(JwtAuthGuard)
+    async exportarExcel(@Req() req: any, @Res() res: Response) {
         try {
-            const workbook = await this.clientesService.exportarExcel();
+            const workbook = await this.clientesService.exportarExcel(req?.user);
             res.setHeader(
                 'Content-Type',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

@@ -5,6 +5,7 @@ export interface RoleColorMapping {
   administrador: string;
   adc: string;
   gerente: string;
+  gerencia: string;
   [key: string]: string; // Allow dynamic roles if needed in the future
 }
 
@@ -18,6 +19,7 @@ const defaultRoleColors: RoleColorMapping = {
   administrador: '#dc2626', // Red
   adc: '#2563eb',          // Blue
   gerente: '#16a34a',      // Green
+  gerencia: '#16a34a',     // Green
 };
 
 export const useConfigStore = create<ConfigState>()(
