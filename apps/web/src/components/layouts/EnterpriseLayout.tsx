@@ -119,31 +119,13 @@ export default function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
 
                         {/* Page Content */}
                         <main className={cn(
-                            "overflow-x-hidden w-full pb-10",
+                            "overflow-x-hidden w-full",
                             !isIsolated ? "p-3 sm:p-4 md:p-6" : "p-0"
                         )}>
                             <div className="max-w-full">
                                 {children}
                             </div>
                         </main>
-                    </div>
-
-                    {/* Footer Banner */}
-                    <div 
-                        className={cn(
-                            "fixed bottom-0 right-0 text-white text-[10px] sm:text-[11px] font-normal uppercase tracking-widest text-center py-1.5 px-4 shadow-md z-40 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 h-auto min-h-[40px] transition-all duration-300",
-                            !isIsolated && (sidebarCollapsed ? "lg:left-16 left-0" : "lg:left-64 left-0"),
-                            isIsolated && "left-0"
-                        )}
-                        style={{ backgroundColor: user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador }}
-                    >
-                        <span>Software Beta</span>
-                        <span className="hidden sm:inline opacity-50">•</span>
-                        <a href="https://www.runsolutions-services.com" target="_blank" rel="noreferrer" className="hover:underline hover:text-white/80 transition-colors">
-                            www.runsolutions-Services.com
-                        </a>
-                        <span className="hidden sm:inline opacity-50">•</span>
-                        <span>Software v1.2</span>
                     </div>
 
                 </div>

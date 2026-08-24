@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import TooltipInfo from '@/components/ui/TooltipInfo';
 import { 
-    Search, ChevronDown, ChevronRight, Filter, Building2, Truck, 
+    Search, ChevronDown, ChevronRight, ChevronLeft, Filter, Building2, Truck, 
     ShieldCheck, PieChart as PieChartIcon, BarChart3, Layers, DollarSign, Sparkles
 } from 'lucide-react';
 import { 
@@ -58,6 +58,13 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
     const [expandedDistribuidores, setExpandedDistribuidores] = useState<Record<string, boolean>>({});
     const [activeTab, setActiveTab] = useState<'graficos' | 'desglose' | 'renta_terceros' | 'preventivos'>('graficos');
     const [resumenMonedaFilter, setResumenMonedaFilter] = useState<'USD' | 'MXN'>('MXN');
+
+    // Pagination states for Tab 3 & 4
+    const [rentaTercerosPage, setRentaTercerosPage] = useState<number>(1);
+    const [rentaTercerosPageSize, setRentaTercerosPageSize] = useState<number>(15);
+
+    const [preventivosPage, setPreventivosPage] = useState<number>(1);
+    const [preventivosPageSize, setPreventivosPageSize] = useState<number>(15);
 
     const formatCurrency = (val: number, cur: string = 'MXN') => {
         if (val === 0) return '-';
@@ -151,6 +158,25 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
             return true;
         });
     }, [preventivosList, moneda, selectedDistribuidorFilter, selectedClienteFilter, searchTerm]);
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setRentaTercerosPage(1);
+        setPreventivosPage(1);
+    }, [searchTerm, selectedDistribuidorFilter, selectedClienteFilter, moneda]);
+
+    // Paginated datasets
+    const totalRentaTercerosPages = Math.ceil(filteredRentaTerceros.length / rentaTercerosPageSize) || 1;
+    const paginatedRentaTerceros = useMemo(() => {
+        const start = (rentaTercerosPage - 1) * rentaTercerosPageSize;
+        return filteredRentaTerceros.slice(start, start + rentaTercerosPageSize);
+    }, [filteredRentaTerceros, rentaTercerosPage, rentaTercerosPageSize]);
+
+    const totalPreventivosPages = Math.ceil(filteredPreventivos.length / preventivosPageSize) || 1;
+    const paginatedPreventivos = useMemo(() => {
+        const start = (preventivosPage - 1) * preventivosPageSize;
+        return filteredPreventivos.slice(start, start + preventivosPageSize);
+    }, [filteredPreventivos, preventivosPage, preventivosPageSize]);
 
     // 3. Consolidated Breakdown: Distribuidor -> Clientes Relacionados
     const desgloseDistribuidorClienteMap = useMemo(() => {
@@ -782,7 +808,7 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        filteredRentaTerceros.map((row: any, idx: number) => (
+                                        paginatedRentaTerceros.map((row: any, idx: number) => (
                                             <TableRow key={idx} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
                                                 <TableCell className="py-3 px-4 font-bold text-slate-900">
                                                     {row.distribuidor}
@@ -813,6 +839,79 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
                                     )}
                                 </TableBody>
                             </Table>
+
+                            {/* Pagination Footer */}
+                            {filteredRentaTerceros.length > 0 && (
+                                <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50 gap-4">
+                                    <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
+                                        <span>
+                                            Mostrando <strong className="text-slate-900 font-bold">{((rentaTercerosPage - 1) * rentaTercerosPageSize) + 1}</strong> a <strong className="text-slate-900 font-bold">{Math.min(rentaTercerosPage * rentaTercerosPageSize, filteredRentaTerceros.length)}</strong> de <strong className="text-slate-900 font-bold">{filteredRentaTerceros.length}</strong> registros
+                                        </span>
+                                        <span className="text-slate-300">|</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span>Filas:</span>
+                                            <select
+                                                value={rentaTercerosPageSize}
+                                                onChange={(e) => {
+                                                    setRentaTercerosPageSize(Number(e.target.value));
+                                                    setRentaTercerosPage(1);
+                                                }}
+                                                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs"
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={15}>15</option>
+                                                <option value={25}>25</option>
+                                                <option value={50}>50</option>
+                                                <option value={100}>100</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setRentaTercerosPage(1)}
+                                            disabled={rentaTercerosPage === 1}
+                                            className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                            title="Primera página"
+                                        >
+                                            «
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRentaTercerosPage(p => Math.max(1, p - 1))}
+                                            disabled={rentaTercerosPage === 1}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                        >
+                                            <ChevronLeft className="w-3.5 h-3.5" />
+                                            <span>Anterior</span>
+                                        </button>
+
+                                        <div className="flex items-center px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-xs">
+                                            <span>{rentaTercerosPage} / {totalRentaTercerosPages}</span>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setRentaTercerosPage(p => Math.min(totalRentaTercerosPages, p + 1))}
+                                            disabled={rentaTercerosPage >= totalRentaTercerosPages}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                        >
+                                            <span>Siguiente</span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRentaTercerosPage(totalRentaTercerosPages)}
+                                            disabled={rentaTercerosPage >= totalRentaTercerosPages}
+                                            className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                            title="Última página"
+                                        >
+                                            »
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 )}
@@ -850,7 +949,7 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        filteredPreventivos.map((row: any, idx: number) => (
+                                        paginatedPreventivos.map((row: any, idx: number) => (
                                             <TableRow key={idx} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
                                                 <TableCell className="py-3 px-4 font-bold text-slate-900">
                                                     {row.distribuidor}
@@ -884,6 +983,79 @@ export default function EgresosDashboard({ data, moneda }: EgresosDashboardProps
                                     )}
                                 </TableBody>
                             </Table>
+
+                            {/* Pagination Footer */}
+                            {filteredPreventivos.length > 0 && (
+                                <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50 gap-4">
+                                    <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
+                                        <span>
+                                            Mostrando <strong className="text-slate-900 font-bold">{((preventivosPage - 1) * preventivosPageSize) + 1}</strong> a <strong className="text-slate-900 font-bold">{Math.min(preventivosPage * preventivosPageSize, filteredPreventivos.length)}</strong> de <strong className="text-slate-900 font-bold">{filteredPreventivos.length}</strong> registros
+                                        </span>
+                                        <span className="text-slate-300">|</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span>Filas:</span>
+                                            <select
+                                                value={preventivosPageSize}
+                                                onChange={(e) => {
+                                                    setPreventivosPageSize(Number(e.target.value));
+                                                    setPreventivosPage(1);
+                                                }}
+                                                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs"
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={15}>15</option>
+                                                <option value={25}>25</option>
+                                                <option value={50}>50</option>
+                                                <option value={100}>100</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreventivosPage(1)}
+                                            disabled={preventivosPage === 1}
+                                            className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                            title="Primera página"
+                                        >
+                                            «
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreventivosPage(p => Math.max(1, p - 1))}
+                                            disabled={preventivosPage === 1}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                        >
+                                            <ChevronLeft className="w-3.5 h-3.5" />
+                                            <span>Anterior</span>
+                                        </button>
+
+                                        <div className="flex items-center px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-xs">
+                                            <span>{preventivosPage} / {totalPreventivosPages}</span>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreventivosPage(p => Math.min(totalPreventivosPages, p + 1))}
+                                            disabled={preventivosPage >= totalPreventivosPages}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                        >
+                                            <span>Siguiente</span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreventivosPage(totalPreventivosPages)}
+                                            disabled={preventivosPage >= totalPreventivosPages}
+                                            className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                                            title="Última página"
+                                        >
+                                            »
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 )}

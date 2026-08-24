@@ -3,7 +3,7 @@
 import { 
   Search, Filter, Download, Grid3x3, List, Plus, Eye, Edit, 
   FileText, Clock, CheckCircle, Upload, X, FileSpreadsheet, 
-  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2
+  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ChevronLeft, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -147,7 +147,7 @@ export default function FlotillaTab({
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(15);
 
   // Upload state
   const [file, setFile] = useState<File | null>(null);
@@ -1313,25 +1313,73 @@ export default function FlotillaTab({
           </div>
           
           {/* Table Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t-2 border-slate-50 bg-slate-50/50">
-              <span className="text-xs font-bold text-slate-500 font-brand">
-                Página {currentPage} de {totalPages}
-              </span>
-              <div className="flex gap-2">
+          {sortedAssets.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t-2 border-slate-50 bg-slate-50/50 gap-4">
+              <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
+                <span>
+                  Mostrando <strong className="text-slate-900 font-bold">{((currentPage - 1) * itemsPerPage) + 1}</strong> a <strong className="text-slate-900 font-bold">{Math.min(currentPage * itemsPerPage, sortedAssets.length)}</strong> de <strong className="text-slate-900 font-bold">{sortedAssets.length}</strong> registros
+                </span>
+                <span className="text-slate-300">|</span>
+                <div className="flex items-center gap-1.5">
+                  <span>Filas:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 cursor-pointer shadow-xs"
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  type="button"
+                  onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                  title="Primera página"
                 >
-                  Anterior
+                  «
                 </button>
                 <button
+                  type="button"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Anterior</span>
+                </button>
+
+                <div className="flex items-center px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-xs">
+                  <span>{currentPage} / {totalPages}</span>
+                </div>
+
+                <button
+                  type="button"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 disabled:opacity-50 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
                 >
-                  Siguiente
+                  <span>Siguiente</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                  title="Última página"
+                >
+                  »
                 </button>
               </div>
             </div>
