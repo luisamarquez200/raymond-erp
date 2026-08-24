@@ -337,13 +337,18 @@ export default function ClientesSitios() {
       return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
     });
 
-  // Calculate unique distributors dynamically from the database, starting with a base list
+  const userRoleStr = (user?.role || '').toLowerCase();
+  const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => userRoleStr.includes(r));
+  const isAdc = !isAdministrator && !!user;
+
+  // Calculate unique distributors dynamically from the database
   const loadedDistribuidores = allSites
     .map((site: any) => site.distribuidor)
     .filter((d: any) => Boolean(d) && String(d) !== '[object Object]' && String(d) !== '-');
   const baseDistribuidores = ['Raymond GDL', 'Raymond Monterrey', 'Raymond Centro', 'Raymond Bajío', 'Raymond Norte', 'Raymond Occidente'];
-  const uniqueDistribuidores = Array.from(new Set([...baseDistribuidores, ...loadedDistribuidores]))
-    .sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { sensitivity: 'base' }));
+  const uniqueDistribuidores = isAdc
+    ? (Array.from(new Set(loadedDistribuidores)).sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { sensitivity: 'base' })))
+    : (Array.from(new Set([...baseDistribuidores, ...loadedDistribuidores])).sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { sensitivity: 'base' })));
 
   const totalPagesDirectorio = Math.ceil(allSites.length / itemsPerPageDirectorio);
   const paginatedAllSites = allSites.slice((currentPageDirectorio - 1) * itemsPerPageDirectorio, currentPageDirectorio * itemsPerPageDirectorio);

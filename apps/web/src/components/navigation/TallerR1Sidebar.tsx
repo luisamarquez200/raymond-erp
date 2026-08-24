@@ -223,8 +223,14 @@ export default function TallerR1Sidebar({ isCollapsed: externalIsCollapsed, onTo
             "w-full flex items-center gap-3 p-2 rounded-xl transition-all h-12 text-left",
             !isCollapsed ? "hover:bg-red-50 group" : "justify-center hover:bg-red-50"
           )}>
-          <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg border-2 border-white group-hover:bg-red-700 transition-colors">
-            {isCollapsed ? <LogOut className="w-5 h-5" /> : (user ? getInitials(user.firstName || (user as any).Usuario || user.email, user.lastName || '', user.email) : 'AD')}
+          <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg border-2 border-white group-hover:bg-red-700 transition-colors overflow-hidden">
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+            ) : isCollapsed ? (
+              <LogOut className="w-5 h-5" />
+            ) : (
+              user ? getInitials(user.firstName || (user as any).Usuario || user.email, user.lastName || '', user.email) : 'AD'
+            )}
           </div>
           {!isCollapsed && (
             <div className="flex-1 min-w-0">

@@ -2,18 +2,56 @@
 
 import { useAuthTallerStore } from '@/store/auth-taller.store';
 import { useAuthStore } from '@/store/auth.store';
+import { useConfigStore } from '@/store/config.store';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Building2, Factory, Warehouse, ChevronRight, FileSpreadsheet, LayoutDashboard } from 'lucide-react';
+import { Building2, Factory, Warehouse, ChevronRight, ChevronLeft, FileSpreadsheet, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
+
+const CAROUSEL_IMAGES = [
+    '/comercial/page1.jpeg',
+    '/comercial/page2.jpeg',
+    '/comercial/page3.jpeg',
+    '/comercial/page4.jpeg',
+];
 
 export default function SiteSelectionPage() {
     const { user: tallerUser, setSelectedSite } = useAuthTallerStore();
     const { user: mainUser } = useAuthStore();
     const user = tallerUser || mainUser;
+    const { roleColors } = useConfigStore();
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
     const router = useRouter();
+
+    // Auto-advance carousel every 5 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentImageIndex((prev) => (prev + 1) % CAROUSEL_IMAGES.length);
+        }, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const nextImage = () => {
+        setCurrentImageIndex((prev) => (prev + 1) % CAROUSEL_IMAGES.length);
+    };
+
+    const prevImage = () => {
+        setCurrentImageIndex((prev) => (prev - 1 + CAROUSEL_IMAGES.length) % CAROUSEL_IMAGES.length);
+    };
+
+    const userRole = user?.role || (user as any)?.roles || (user as any)?.role_id || (user as any)?.firstName;
+    const stringRole = (typeof userRole === 'string' ? userRole : (userRole as any)?.name || '')?.toLowerCase().trim();
+    
+    const isGerencia = stringRole.includes('geren') || (user as any)?.username?.toLowerCase()?.includes('geren') || (user as any)?.firstName?.toLowerCase()?.includes('geren') || user?.email?.toLowerCase()?.includes('geren');
+    const isAdc = stringRole.includes('adc') || (user as any)?.username?.toLowerCase()?.includes('adc') || (user as any)?.firstName?.toLowerCase()?.includes('adc') || user?.email?.toLowerCase()?.includes('adc');
+
+    const currentColor = isGerencia 
+        ? (roleColors.gerencia || roleColors.gerente || '#16a34a')
+        : isAdc 
+            ? (roleColors.adc || '#2563eb')
+            : (roleColors[stringRole] || roleColors.administrador || '#dc2626');
 
     // Mapping code to display names and descriptions
     const siteOptions = [
@@ -34,12 +72,12 @@ export default function SiteSelectionPage() {
         {
             id: 'admin-comercial',
             code: 'ADMIN_COMERCIAL',
-            name: 'Administración Comercial',
+            name: isGerencia ? 'Gerencia Comercial' : isAdc ? 'Portal ADC Comercial' : 'Administración Comercial',
             description: 'Gestión comercial y cargue masivo de datos.',
             icon: FileSpreadsheet,
-            color: 'from-amber-500 to-amber-700',
-            borderColor: 'border-amber-100',
-            bgLight: 'bg-amber-50',
+            color: '',
+            borderColor: 'border-slate-100',
+            bgLight: '',
             path: '/es/r4/flotilla',
             isUpcoming: false,
 
@@ -48,8 +86,7 @@ export default function SiteSelectionPage() {
 
     // Filter sites based on user permissions
     const userSites = user?.sitio ? user.sitio.split(',').map(s => s.trim().toUpperCase()) : ['R1'];
-    const userRole = typeof user?.role === 'string' ? user.role : (user?.role as any)?.name;
-    const isAdmin = ['Admin', 'Administrador', 'Superadmin', 'ADMIN_COMERCIAL'].includes(userRole);
+    const isAdmin = ['admin', 'administrador', 'superadmin', 'admin_comercial'].some(r => stringRole.includes(r));
 
     const availableOptions = siteOptions.filter(opt => {
         if (opt.code === 'ADMIN_COMERCIAL') return true;
@@ -87,38 +124,29 @@ export default function SiteSelectionPage() {
         router.push(`/es/${site.id}/entradas`);
     };
 
-    // Auto-selection disabled per user request to allow review/debugging
-    /*
-    useEffect(() => {
-        if (availableOptions.length === 1) {
-            handleSelect(availableOptions[0].id);
-        }
-    }, [availableOptions.length]);
-    */
-
     if (!user) return null;
 
     return (
         <div className="min-h-screen w-full flex flex-col lg:flex-row font-sans overflow-hidden bg-white">
             
             {/* Left Side - Content */}
-            <div className="relative w-full lg:w-1/2 flex flex-col bg-white min-h-screen">
+            <div className="relative w-full lg:w-1/2 flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100/70 min-h-screen">
                 
                 {/* Main Content Centered */}
-                <div className="flex-1 flex flex-col items-center justify-center p-6">
+                <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10">
                     <div className="w-full max-w-xl relative z-10">
                         <div className="text-center mb-12">
-                            <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+                            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight">
                                 Selecciona un Centro de Control
                             </h1>
-                            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                                Bienvenido, <span className="font-semibold text-gray-900">{(user as any).username || (user as any).firstName}</span>.
+                            <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
+                                Bienvenido, <span className="font-bold text-slate-900">{(user as any).username || (user as any).firstName}</span>.
                                 Por favor selecciona el sitio con el que deseas trabajar hoy.
                             </p>
                         </div>
 
                         <div className={cn(
-                            "grid gap-8 mx-auto",
+                            "grid gap-6 sm:gap-8 mx-auto",
                             availableOptions.length === 1 ? "grid-cols-1 max-w-sm" :
                             availableOptions.length === 2 ? "grid-cols-1 md:grid-cols-2 max-w-2xl" :
                             availableOptions.length === 4 ? "grid-cols-1 md:grid-cols-4" : 
@@ -130,39 +158,41 @@ export default function SiteSelectionPage() {
                                     onClick={() => handleSelect(site)}
                                     disabled={false}
                                     className={cn(
-                                        `group relative flex flex-col text-left bg-white rounded-3xl p-8 border ${site.borderColor} shadow-sm transition-all duration-300 ease-out overflow-hidden`,
+                                        `group relative flex flex-col text-left bg-white rounded-3xl p-8 border border-slate-200/80 shadow-sm transition-all duration-300 ease-out overflow-hidden cursor-pointer`,
                                         site.isUpcoming
                                             ? "opacity-60 grayscale cursor-not-allowed border-gray-100"
-                                            : "hover:shadow-xl hover:-translate-y-2"
+                                            : "hover:shadow-xl hover:-translate-y-1 hover:border-slate-300 active:scale-[0.99]"
                                     )}
                                 >
                                     {/* Accent Background Gradient */}
                                     {!site.isUpcoming && (
-                                        <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${site.color} opacity-0 group-hover:opacity-5 rounded-bl-full transition-opacity duration-300`} />
+                                        <div 
+                                            className="absolute top-0 right-0 w-36 h-36 rounded-bl-full transition-opacity duration-300 pointer-events-none group-hover:opacity-15"
+                                            style={{ backgroundColor: currentColor, opacity: 0.08 }}
+                                        />
                                     )}
 
-                                    <div className={cn(
-                                        `w-16 h-16 rounded-2xl ${site.bgLight} flex items-center justify-center mb-8`,
-                                        !site.isUpcoming && "group-hover:scale-110 transition-transform duration-300"
-                                    )}>
-                                        <site.icon className={cn(
-                                            `w-8 h-8 rounded-lg p-1.5`,
-                                            site.isUpcoming
-                                                ? "bg-gray-400 text-white"
-                                                : `bg-gradient-to-br ${site.color} text-white`
-                                        )} fill="currentColor" />
+                                    <div 
+                                        className={cn(
+                                            "w-16 h-16 rounded-2xl flex items-center justify-center mb-8 transition-transform duration-300",
+                                            !site.isUpcoming && "group-hover:scale-105"
+                                        )}
+                                        style={{ backgroundColor: `${currentColor}15` }}
+                                    >
+                                        <site.icon 
+                                            className="w-8 h-8 rounded-lg p-1.5"
+                                            style={{ backgroundColor: currentColor, color: '#ffffff' }}
+                                        />
                                     </div>
 
-                                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                                    <h3 className="text-xl font-black text-slate-900 mb-2 tracking-tight">
                                         {site.name}
                                     </h3>
 
-                                    <div className={cn(
-                                        "mt-auto flex items-center text-sm font-semibold transition-colors",
-                                        site.isUpcoming
-                                            ? "text-gray-400"
-                                            : "text-gray-900 group-hover:text-red-600"
-                                    )}>
+                                    <div 
+                                        className="mt-auto flex items-center text-sm font-bold transition-all"
+                                        style={{ color: site.isUpcoming ? '#94a3b8' : currentColor }}
+                                    >
                                         {site.isUpcoming ? "Bloqueado" : "Entrar ahora"}
                                         {!site.isUpcoming && <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />}
                                     </div>
@@ -171,7 +201,7 @@ export default function SiteSelectionPage() {
                         </div>
 
                         {availableOptions.length === 0 && (
-                            <div className="text-center mt-12 p-8 bg-red-50 rounded-2xl border border-red-100 italic text-red-600">
+                            <div className="text-center mt-12 p-8 bg-red-50 rounded-2xl border border-red-100 italic text-red-600 font-semibold">
                                 No tienes sitios asignados. Por favor, contacta al administrador.
                             </div>
                         )}
@@ -179,14 +209,61 @@ export default function SiteSelectionPage() {
                 </div>
             </div>
 
-            {/* Right Side - Image */}
-            <div className="hidden lg:block lg:w-1/2 relative bg-slate-900">
-                <div className="absolute inset-0 bg-black/20 z-10" /> {/* Dark overlay for premium feel */}
-                <img
-                    src="https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=2070&auto=format&fit=crop"
-                    alt="Logistics Background"
-                    className="absolute inset-0 w-full h-full object-cover object-center"
-                />
+            {/* Right Side - Carousel */}
+            <div className="hidden lg:block lg:w-1/2 relative bg-slate-950 overflow-hidden group">
+                {/* Images with crossfade transition */}
+                {CAROUSEL_IMAGES.map((src, index) => (
+                    <div
+                        key={src}
+                        className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                            index === currentImageIndex ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                        }`}
+                    >
+                        <img
+                            src={src}
+                            alt={`Slide ${index + 1}`}
+                            className="w-full h-full object-cover object-center transform scale-100 transition-transform duration-7000 ease-out"
+                        />
+                    </div>
+                ))}
+
+                {/* Dark overlay for contrast */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-black/30 z-20 pointer-events-none" />
+
+                {/* Navigation Arrows */}
+                <button
+                    type="button"
+                    onClick={prevImage}
+                    aria-label="Imagen anterior"
+                    className="absolute left-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/40 hover:bg-black/70 text-white/90 hover:text-white backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 shadow-xl cursor-pointer"
+                >
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                    type="button"
+                    onClick={nextImage}
+                    aria-label="Siguiente imagen"
+                    className="absolute right-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/40 hover:bg-black/70 text-white/90 hover:text-white backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 shadow-xl cursor-pointer"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+
+                {/* Carousel Indicators / Dots */}
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/35 backdrop-blur-md">
+                    {CAROUSEL_IMAGES.map((_, index) => (
+                        <button
+                            key={index}
+                            type="button"
+                            onClick={() => setCurrentImageIndex(index)}
+                            aria-label={`Ir a la imagen ${index + 1}`}
+                            className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                                index === currentImageIndex
+                                    ? 'w-8 bg-white shadow-md'
+                                    : 'w-2 bg-white/40 hover:bg-white/70'
+                            }`}
+                        />
+                    ))}
+                </div>
             </div>
 
         </div>

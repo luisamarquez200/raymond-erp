@@ -7,6 +7,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const nextConfig: NextConfig = {
   /* config options here */
   output: 'standalone',
+  devIndicators: false,
   // Configuración para Turbopack en monorepo
   // La raíz del workspace está en el directorio padre (raíz del monorepo)
   turbopack: {

@@ -61,7 +61,36 @@ export class ClientesService {
             let mapped = filteredClientes.map(cliente => {
                 const comercial = (cliente.datos_comerciales as any) || {};
                 const fiscal = (cliente.datos_fiscales as any) || {};
-                const firstSiteWithAdc = cliente.sitios?.find(s => s.adc);
+                
+                // If user is ADC, filter sitios to only those that belong to this ADC
+                let relevantSitios = cliente.sitios || [];
+                let relevantActivos = cliente.activos || [];
+
+                if (isAdc) {
+                    const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
+                    const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                    const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+                    const clientAdc = (comercial.adc || '').toLowerCase();
+                    const clientMatches = adcKeywords.some((kw: string) => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
+
+                    relevantSitios = relevantSitios.filter((s: any) => {
+                        const sAdc = (s.adc || '').toLowerCase();
+                        const sActivoMatch = s.activos?.some((a: any) => {
+                            const aAdc = (a.adc || '').toLowerCase();
+                            return adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                        });
+                        const sMatch = adcKeywords.some((kw: string) => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
+                        return sMatch || sActivoMatch || (clientMatches && (!sAdc || sAdc === '-'));
+                    });
+
+                    relevantActivos = relevantActivos.filter((a: any) => {
+                        const aAdc = (a.adc || '').toLowerCase();
+                        const aMatch = adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                        return aMatch || (clientMatches && (!aAdc || aAdc === '-'));
+                    });
+                }
+
+                const firstSiteWithAdc = relevantSitios.find(s => s.adc);
                 
                 return {
                     id: cliente.id,
@@ -72,9 +101,9 @@ export class ClientesService {
                     moneda: comercial.moneda || 'MXN',
                     ciudad: fiscal.ciudad || '-',
                     estado_fiscal: fiscal.estado || '-',
-                    sitiosCount: cliente.sitios?.length || 0,
-                    activosCount: cliente.activos?.length || 0,
-                    sitios: cliente.sitios?.map(s => {
+                    sitiosCount: relevantSitios.length,
+                    activosCount: relevantActivos.length,
+                    sitios: relevantSitios.map(s => {
                         let contacto: any = {};
                         try {
                             if (typeof s.contacto_operativo === 'string' && s.contacto_operativo.startsWith('{')) {
@@ -108,16 +137,16 @@ export class ClientesService {
                         // Extract contact info
                         const cNombre = cleanStr(contacto.distribuidor_contacto_nombre || contacto.contacto_nombre || contacto.nombre || contacto.tecnico);
                         const cTelefono = cleanStr(contacto.distribuidor_contacto_telefono || contacto.telefono || contacto.tel);
-                        const cCorreo = cleanStr(contacto.distribuidor_contacto_correo || contacto.correo || contacto.email);
+                        const cCorreo = cleanStr(contacto.distribuidor_contacto_correo || contacto.contacto_correo || contacto.correo || contacto.email);
 
                         return {
                             id: s.id,
                             nombre: s.nombre,
-                            tienda: s.tienda,
-                            cuenta: s.cuenta,
-                            ciudad: s.ciudad,
-                            direccion: s.direccion,
-                            no_totvs: s.no_totvs,
+                            tienda: s.tienda || '-',
+                            cuenta: s.cuenta || '-',
+                            ciudad: s.ciudad || '-',
+                            direccion: s.direccion || '-',
+                            no_totvs: s.no_totvs || '-',
                             adc: cleanStr(siteAdc),
                             region: cleanStr(contacto.region),
                             responsable: cleanStr(contacto.responsable),
@@ -525,7 +554,7 @@ export class ClientesService {
         }
     }
 
-    async exportarExcel() {
+    async exportarExcel(user?: any) {
         const db = this.getDb();
         const clientes = await db.cliente.findMany({
             include: {
@@ -537,6 +566,32 @@ export class ClientesService {
             },
             orderBy: { razon_social: 'asc' }
         });
+
+        const roleStr = String(user?.roles || user?.role || '').toLowerCase();
+        const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleStr.includes(r));
+        const isAdc = !isAdministrator && !!user;
+
+        let filteredClientes = clientes;
+        if (isAdc) {
+            const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
+            const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+            const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+
+            filteredClientes = clientes.filter(cliente => {
+                const comercial = (cliente.datos_comerciales as any) || {};
+                const clientAdc = (comercial.adc || '').toLowerCase();
+                const hasMatchingSitio = cliente.sitios?.some(s => {
+                    const sAdc = (s.adc || '').toLowerCase();
+                    return adcKeywords.some(kw => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
+                });
+                const hasMatchingActivo = cliente.activos?.some(a => {
+                    const aAdc = (a.adc || '').toLowerCase();
+                    return adcKeywords.some(kw => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                });
+                const matchesClient = adcKeywords.some(kw => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
+                return matchesClient || hasMatchingSitio || hasMatchingActivo;
+            });
+        }
 
         const workbook = new ExcelJS.Workbook();
         const sheetClientes = workbook.addWorksheet('Clientes');
@@ -553,9 +608,37 @@ export class ClientesService {
             { header: 'Total Activos', key: 'activosCount', width: 15 },
         ];
 
-        clientes.forEach(c => {
+        filteredClientes.forEach(c => {
             const comercial = (c.datos_comerciales as any) || {};
             const fiscal = (c.datos_fiscales as any) || {};
+
+            let relevantSitios = c.sitios || [];
+            let relevantActivos = c.activos || [];
+
+            if (isAdc) {
+                const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
+                const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+                const clientAdc = (comercial.adc || '').toLowerCase();
+                const clientMatches = adcKeywords.some((kw: string) => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
+
+                relevantSitios = relevantSitios.filter((s: any) => {
+                    const sAdc = (s.adc || '').toLowerCase();
+                    const sActivoMatch = s.activos?.some((a: any) => {
+                        const aAdc = (a.adc || '').toLowerCase();
+                        return adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                    });
+                    const sMatch = adcKeywords.some((kw: string) => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
+                    return sMatch || sActivoMatch || (clientMatches && (!sAdc || sAdc === '-'));
+                });
+
+                relevantActivos = relevantActivos.filter((a: any) => {
+                    const aAdc = (a.adc || '').toLowerCase();
+                    const aMatch = adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                    return aMatch || (clientMatches && (!aAdc || aAdc === '-'));
+                });
+            }
+
             sheetClientes.addRow({
                 id: c.id,
                 razonSocial: c.razon_social,
@@ -565,8 +648,8 @@ export class ClientesService {
                 moneda: comercial.moneda || 'MXN',
                 ciudad: fiscal.ciudad || '-',
                 estado_fiscal: fiscal.estado || '-',
-                sitiosCount: c.sitios?.length || 0,
-                activosCount: c.activos?.length || 0,
+                sitiosCount: relevantSitios.length,
+                activosCount: relevantActivos.length,
             });
         });
 
@@ -586,8 +669,36 @@ export class ClientesService {
             { header: 'Moneda (Cliente)', key: 'moneda', width: 15 },
         ];
 
-        clientes.forEach(c => {
-            c.sitios?.forEach(s => {
+        filteredClientes.forEach(c => {
+            const comercial = (c.datos_comerciales as any) || {};
+            let relevantSitios = c.sitios || [];
+            let relevantActivos = c.activos || [];
+
+            if (isAdc) {
+                const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
+                const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+                const clientAdc = (comercial.adc || '').toLowerCase();
+                const clientMatches = adcKeywords.some((kw: string) => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
+
+                relevantSitios = relevantSitios.filter((s: any) => {
+                    const sAdc = (s.adc || '').toLowerCase();
+                    const sActivoMatch = s.activos?.some((a: any) => {
+                        const aAdc = (a.adc || '').toLowerCase();
+                        return adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                    });
+                    const sMatch = adcKeywords.some((kw: string) => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
+                    return sMatch || sActivoMatch || (clientMatches && (!sAdc || sAdc === '-'));
+                });
+
+                relevantActivos = relevantActivos.filter((a: any) => {
+                    const aAdc = (a.adc || '').toLowerCase();
+                    const aMatch = adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
+                    return aMatch || (clientMatches && (!aAdc || aAdc === '-'));
+                });
+            }
+
+            relevantSitios.forEach(s => {
                 const contacto = (s.contacto_operativo as any) || {};
                 sheetDistribuidores.addRow({
                     cliente: c.razon_social,
@@ -599,9 +710,9 @@ export class ClientesService {
                     contacto_nombre: contacto.distribuidor_contacto_nombre || '-',
                     contacto_telefono: contacto.distribuidor_contacto_telefono || '-',
                     contacto_correo: contacto.distribuidor_contacto_correo || '-',
-                    total_sitios: c.sitios?.length || 0,
-                    total_activos: c.activos?.length || 0,
-                    moneda: ((c.datos_comerciales as any) || {}).moneda || 'MXN'
+                    total_sitios: relevantSitios.length,
+                    total_activos: relevantActivos.length,
+                    moneda: comercial.moneda || 'MXN'
                 });
             });
         });
