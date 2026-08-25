@@ -1,15 +1,9 @@
 /**
- * clear-r4-db.js — Borra toda la data operativa de ComercialR4
+ * clear-r4-db.js — Borra toda la data operativa de ComercialR4 y ComercialR4PDN
  * Uso: node clear-r4-db.js
  */
 const mysql = require('./apps/api/node_modules/mysql2/promise');
-
-// Leer la URL del env file manualmente
 const fs = require('fs');
-const envContent = fs.readFileSync('./apps/api/.env', 'utf8');
-const match = envContent.match(/COMERCIAL_R4_DATABASE_URL="?([^"\n]+)"?/);
-if (!match) { console.error('No se encontró COMERCIAL_R4_DATABASE_URL'); process.exit(1); }
-const DB_URL = match[1].trim();
 
 function parseUrl(url) {
     const withoutProto = url.replace('mysql://', '');
@@ -35,31 +29,32 @@ function parseUrl(url) {
     };
 }
 
-async function main() {
-    const config = parseUrl(DB_URL);
-    console.log('\n🔌 Conectando a ' + config.host + '/' + config.database + '...');
+const tables = [
+    'tipos_cambio_historial',
+    'detalles_renta',
+    'ordenes_mensuales',
+    'cargas_masivas_logs',
+    'cambios_sitio',
+    'activo_accesorios',
+    'auditorias',
+    'documentos',
+    'tarifas',
+    'rentas',
+    'contratos',
+    'activos',
+    'sitios',
+    'clientes',
+    'facturacion_mensual'
+];
+
+async function cleanDatabase(dbUrl, label) {
+    const config = parseUrl(dbUrl);
+    console.log(`\n🔌 Conectando a [${label}] ${config.host}/${config.database}...`);
     const conn = await mysql.createConnection(config);
-    console.log('✅ Conectado.\n');
+    console.log(`✅ Conectado a [${label}].\n`);
 
     await conn.execute('SET FOREIGN_KEY_CHECKS = 0');
-    await conn.execute('SET innodb_lock_wait_timeout = 5');
-
-    const tables = [
-        'tipos_cambio_historial',
-        'detalles_renta',
-        'ordenes_mensuales',
-        'cargas_masivas_logs',
-        'cambios_sitio',
-        'activo_accesorios',
-        'auditorias',
-        'documentos',
-        'tarifas',
-        'rentas',
-        'contratos',
-        'activos',
-        'sitios',
-        'clientes',
-    ];
+    await conn.execute('SET innodb_lock_wait_timeout = 10');
 
     let total = 0;
     for (const t of tables) {
@@ -68,14 +63,27 @@ async function main() {
             total++;
             console.log('  🗑️  ' + t.padEnd(32) + 'limpiada');
         } catch(e) {
-            console.log('  ⚠️  ' + t.padEnd(32) + 'ERROR: ' + e.message);
+            console.log('  ⚠️  ' + t.padEnd(32) + 'ERROR / NO EXISTE: ' + e.message);
         }
     }
 
     await conn.execute('SET FOREIGN_KEY_CHECKS = 1');
     await conn.end();
-    console.log('\n✅ Limpieza completa. Total: ' + total + ' registros eliminados.');
-    console.log('📋 Ya puedes volver a subir el Excel desde la UI.\n');
+    console.log(`\n✅ Limpieza de [${label}] completa. Total tablas: ${total}.`);
+}
+
+async function main() {
+    // 1. URL de Dev
+    const devUrl = "mysql://AppSheet:U%407qV%29F%28k%5D15qQ%254H%28ie@143.198.60.56:3306/ComercialR4?ssl-mode=REQUIRED&accept-invalid-certs=true";
+    // 2. URL de Producción
+    const pdnUrl = "mysql://AppSheet:U%407qV%29F%28k%5D15qQ%254H%28ie@143.198.60.56:3306/ComercialR4PDN?ssl-mode=REQUIRED&accept-invalid-certs=true";
+
+    await cleanDatabase(devUrl, 'DEV (ComercialR4)');
+    await cleanDatabase(pdnUrl, 'PDN (ComercialR4PDN)');
+
+    console.log('\n✨ ¡Ambas bases de datos (Dev y PDN) quedaron limpias exitosamente!');
+    console.log('📋 Los usuarios y roles se conservaron intactos.\n');
 }
 
 main().catch(e => { console.error('\n❌ Error:', e.message); process.exit(1); });
+

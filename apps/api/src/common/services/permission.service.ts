@@ -37,9 +37,9 @@ export class PermissionService {
         // Superadmin has all permissions
         if (user.roles.name === 'Superadmin') return true;
 
-        const userPermissions = user.roles.role_permissions.map( // Fixed: use role_permissions
-            rp => `${rp.permissions.resource}:${rp.permissions.action}` // Fixed: use permissions instead of permission
-        );
+        const userPermissions = (user.roles.role_permissions || [])
+            .filter(rp => rp?.permissions?.resource && rp?.permissions?.action)
+            .map(rp => `${rp.permissions.resource}:${rp.permissions.action}`);
 
         // Check if user has all required permissions
         return requiredPermissions.every(required => {
@@ -223,9 +223,9 @@ export class PermissionService {
 
         if (!user || !user.roles) return [];
 
-        return user.roles.role_permissions.map( // Fixed: use role_permissions
-            rp => `${rp.permissions.resource}:${rp.permissions.action}` // Fixed: use permissions instead of permission
-        );
+        return (user.roles.role_permissions || [])
+            .filter(rp => rp?.permissions?.resource && rp?.permissions?.action)
+            .map(rp => `${rp.permissions.resource}:${rp.permissions.action}`);
     }
 
     /**

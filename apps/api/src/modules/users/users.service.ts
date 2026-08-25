@@ -14,8 +14,8 @@ export class UsersService {
         const existingUser = await this.prisma.users.findFirst({
             where: {
                 email: createUserDto.email,
-                organization_id,
-                deleted_at: null, // Fixed: snake_case
+                ...(organization_id ? { organization_id } : {}),
+                deleted_at: null,
             },
         });
 
@@ -23,11 +23,16 @@ export class UsersService {
             throw new ConflictException('Email already exists in this organization');
         }
 
-        // Validate that role belongs to the organization
+        // Validate that role exists (supporting global roles with organization_id = null or matching org)
         const role = await this.prisma.roles.findFirst({
             where: {
                 id: createUserDto.role_id,
-                organization_id,
+                ...(organization_id ? {
+                    OR: [
+                        { organization_id },
+                        { organization_id: null },
+                    ]
+                } : {}),
             },
         });
 
@@ -41,50 +46,68 @@ export class UsersService {
         }
 
         // SECURITY: CEO cannot create users with roles higher than level 90
-        if (currentUser && currentUser.isCEO && !currentUser.isSuperadmin && role.level > 90) {
+        if (currentUser && currentUser.isCEO && !currentUser.isSuperadmin && (role.level || 0) > 90) {
             throw new ForbiddenException('CEO cannot create users with roles higher than level 90');
         }
 
         // SECURITY: CEO cannot create users with level 100+ roles
-        if (role.level >= 100 && (!currentUser || !currentUser.isSuperadmin)) {
+        if ((role.level || 0) >= 100 && (!currentUser || !currentUser.isSuperadmin)) {
             throw new ForbiddenException('Only Superadmin can create users with level 100 or higher roles');
         }
 
         // Hash password
         const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
-        // Create user
-        const user = await this.prisma.users.create({
-            data: {
-                id: require('crypto').randomUUID(),
-                email: createUserDto.email,
-                password: hashedPassword,
-                first_name: createUserDto.first_name,
-                last_name: createUserDto.last_name,
-                organization_id,
-                role_id: createUserDto.role_id,
-                is_active: true, // New users are active by default
-                ubicacion: createUserDto.ubicacion,
-                adc_asociado_name: createUserDto.adc_asociado_name,
-                supervisor_id: createUserDto.supervisor_id,
-                supervisor_name: createUserDto.supervisor_name,
-                auxiliar_id: createUserDto.auxiliar_id,
-                auxiliar_name: createUserDto.auxiliar_name,
-                updated_at: new Date(), // Required field
-            } as any,
-            include: {
-                roles: {
-                    select: {
-                        id: true,
-                        name: true,
+        // Sanitize optional fields to avoid PostgreSQL UUID / FK violations with empty strings
+        const supervisor_id = createUserDto.supervisor_id && createUserDto.supervisor_id.trim() !== '' ? createUserDto.supervisor_id.trim() : null;
+        const auxiliar_id = createUserDto.auxiliar_id && createUserDto.auxiliar_id.trim() !== '' ? createUserDto.auxiliar_id.trim() : null;
+        const supervisor_name = createUserDto.supervisor_name && createUserDto.supervisor_name.trim() !== '' ? createUserDto.supervisor_name.trim() : null;
+        const auxiliar_name = createUserDto.auxiliar_name && createUserDto.auxiliar_name.trim() !== '' ? createUserDto.auxiliar_name.trim() : null;
+        const adc_asociado_name = createUserDto.adc_asociado_name && createUserDto.adc_asociado_name.trim() !== '' && createUserDto.adc_asociado_name.trim() !== 'ninguno' ? createUserDto.adc_asociado_name.trim() : null;
+        const ubicacion = createUserDto.ubicacion && createUserDto.ubicacion.trim() !== '' ? createUserDto.ubicacion.trim() : null;
+
+        try {
+            // Create user
+            const user = await this.prisma.users.create({
+                data: {
+                    id: require('crypto').randomUUID(),
+                    email: createUserDto.email,
+                    password: hashedPassword,
+                    first_name: createUserDto.first_name,
+                    last_name: createUserDto.last_name,
+                    organization_id: organization_id || null,
+                    role_id: createUserDto.role_id,
+                    is_active: true, // New users are active by default
+                    ubicacion,
+                    adc_asociado_name,
+                    supervisor_id,
+                    supervisor_name,
+                    auxiliar_id,
+                    auxiliar_name,
+                    updated_at: new Date(), // Required field
+                } as any,
+                include: {
+                    roles: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
                     },
                 },
-            },
-        });
+            });
 
-        // Remove password from response
-        const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
+            // Remove password from response
+            const { password, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+        } catch (error: any) {
+            if (error.code === 'P2002') {
+                throw new ConflictException('El correo ya se encuentra registrado en el sistema');
+            }
+            if (error.code === 'P2003') {
+                throw new BadRequestException('Uno de los identificadores asociados (supervisor, auxiliar o rol) no es válido');
+            }
+            throw error;
+        }
     }
 
     async findAll(organization_id: string) {
