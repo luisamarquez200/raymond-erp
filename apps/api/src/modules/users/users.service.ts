@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { PrismaDynamicService } from '../../database/prisma-dynamic.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -90,6 +91,30 @@ export class UsersService {
                     },
                 },
             });
+
+            // Synchronize into ComercialR4PDN.usuarios for direct management & persistence
+            try {
+                const dbR4 = PrismaDynamicService.clients.r4;
+                if (dbR4 && user.email) {
+                    await dbR4.usuario.upsert({
+                        where: { correo: user.email },
+                        update: {
+                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+                            rol: role.name || 'USUARIO',
+                            bloqueado: !user.is_active,
+                        },
+                        create: {
+                            id: user.id,
+                            correo: user.email,
+                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+                            rol: role.name || 'USUARIO',
+                            bloqueado: false,
+                        },
+                    });
+                }
+            } catch (err: any) {
+                // Non-blocking sync warning
+            }
 
             // Remove password from response
             const { password, ...userWithoutPassword } = user;
@@ -290,6 +315,28 @@ export class UsersService {
             },
         });
 
+        // Synchronize into ComercialR4PDN.usuarios
+        try {
+            const dbR4 = PrismaDynamicService.clients.r4;
+            if (dbR4 && updatedUser.email) {
+                await dbR4.usuario.upsert({
+                    where: { correo: updatedUser.email },
+                    update: {
+                        nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
+                        rol: updatedUser.roles?.name || 'USUARIO',
+                        bloqueado: updatedUser.is_active === false,
+                    },
+                    create: {
+                        id: updatedUser.id,
+                        correo: updatedUser.email,
+                        nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
+                        rol: updatedUser.roles?.name || 'USUARIO',
+                        bloqueado: updatedUser.is_active === false,
+                    },
+                });
+            }
+        } catch (err: any) {}
+
         // Remove password from response
         const { password, ...userWithoutPassword } = updatedUser;
         return userWithoutPassword;
@@ -371,6 +418,17 @@ export class UsersService {
                 },
             },
         });
+
+        // Also mark as blocked in ComercialR4PDN.usuarios
+        try {
+            const dbR4 = PrismaDynamicService.clients.r4;
+            if (dbR4 && deletedUser.email) {
+                await dbR4.usuario.updateMany({
+                    where: { correo: deletedUser.email },
+                    data: { bloqueado: true }
+                });
+            }
+        } catch (err: any) {}
 
         // Remove password from response
         const { password, ...userWithoutPassword } = deletedUser;

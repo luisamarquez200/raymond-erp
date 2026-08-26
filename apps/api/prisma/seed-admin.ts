@@ -126,7 +126,31 @@ async function main() {
         } as any,
     });
 
-    console.log("Created comercial.admin2@run.com (Administrador), comercial.adc2@run.com (ADC) and gerencia@run.com (GERENCIA)");
+    // Create admin.comercial@raymond.com.mx
+    const raymond2026Hash = await bcrypt.hash('Raymond2026!', 10);
+    await prisma.users.upsert({
+        where: { email_organization_id: { email: 'admin.comercial@raymond.com.mx', organization_id: org.id } },
+        update: {
+            password: raymond2026Hash,
+            role_id: adminRole.id,
+            first_name: 'Admin',
+            last_name: 'Comercial',
+            updated_at: new Date(),
+        },
+        create: {
+            id: '1edc1be8-f8a0-4fcb-b492-49e468133569',
+            email: 'admin.comercial@raymond.com.mx',
+            password: raymond2026Hash,
+            first_name: 'Admin',
+            last_name: 'Comercial',
+            role_id: adminRole.id,
+            organization_id: org.id,
+            is_active: true,
+            updated_at: new Date(),
+        } as any,
+    });
+
+    console.log("Created admin.comercial@raymond.com.mx, comercial.admin2@run.com (Administrador), comercial.adc2@run.com (ADC) and gerencia@run.com (GERENCIA)");
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());

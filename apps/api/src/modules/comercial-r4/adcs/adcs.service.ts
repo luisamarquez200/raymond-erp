@@ -198,6 +198,30 @@ export class AdcsService {
                 }
             });
 
+            // Synchronize into ComercialR4PDN.usuarios for direct management & persistence
+            try {
+                const db = this.getDb();
+                if (db) {
+                    await db.usuario.upsert({
+                        where: { correo: dto.email },
+                        update: {
+                            nombre: dto.name,
+                            rol: 'ADC',
+                            bloqueado: false,
+                        },
+                        create: {
+                            id: newUser.id,
+                            correo: dto.email,
+                            nombre: dto.name,
+                            rol: 'ADC',
+                            bloqueado: false,
+                        },
+                    });
+                }
+            } catch (err: any) {
+                this.logger.warn(`Could not mirror user to ComercialR4PDN: ${err.message}`);
+            }
+
             return {
                 id: newUser.id,
                 name: newUser.first_name,
@@ -227,6 +251,18 @@ export class AdcsService {
             await this.prismaService.users.delete({
                 where: { id: user.id }
             });
+
+            // Also remove or block in ComercialR4PDN.usuarios
+            try {
+                const db = this.getDb();
+                if (db && user.email) {
+                    await db.usuario.deleteMany({
+                        where: { correo: user.email }
+                    });
+                }
+            } catch (err: any) {
+                this.logger.warn(`Could not delete user from ComercialR4PDN: ${err.message}`);
+            }
 
             return { success: true, message: 'Usuario eliminado correctamente' };
         } catch (error: any) {

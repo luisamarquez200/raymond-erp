@@ -77,6 +77,8 @@ services:
       - POSTGRES_DB=${DB_NAME:-raymond_db}
     ports:
       - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - raymond-network
     healthcheck:
@@ -110,3 +112,4 @@ networks:
     driver: bridge
 volumes:
   minio_data:
+  postgres_data:
