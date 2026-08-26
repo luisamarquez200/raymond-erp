@@ -20,6 +20,7 @@ model Usuario {
   rol               String   @default("USUARIO") @db.VarChar(50)
   adc_asociado_name String?  @db.VarChar(255)
   auxiliar_name     String?  @db.VarChar(255)
+  avatar_url        String?  @db.LongText
   bloqueado         Boolean  @default(false)
   created_at        DateTime @default(now())
   

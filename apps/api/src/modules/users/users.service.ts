@@ -135,6 +135,7 @@ export class UsersService {
                             rol: role.name || 'USUARIO',
                             adc_asociado_name: user.adc_asociado_name || null,
                             auxiliar_name: user.auxiliar_name || null,
+                            avatar_url: user.avatar_url || null,
                             bloqueado: !user.is_active,
                         },
                         create: {
@@ -144,6 +145,7 @@ export class UsersService {
                             rol: role.name || 'USUARIO',
                             adc_asociado_name: user.adc_asociado_name || null,
                             auxiliar_name: user.auxiliar_name || null,
+                            avatar_url: user.avatar_url || null,
                             bloqueado: false,
                         },
                     });
@@ -386,6 +388,7 @@ export class UsersService {
                         rol: updatedUser.roles?.name || 'USUARIO',
                         adc_asociado_name: updatedUser.adc_asociado_name || null,
                         auxiliar_name: updatedUser.auxiliar_name || null,
+                        avatar_url: updatedUser.avatar_url || null,
                         bloqueado: updatedUser.is_active === false,
                     },
                     create: {
@@ -395,6 +398,7 @@ export class UsersService {
                         rol: updatedUser.roles?.name || 'USUARIO',
                         adc_asociado_name: updatedUser.adc_asociado_name || null,
                         auxiliar_name: updatedUser.auxiliar_name || null,
+                        avatar_url: updatedUser.avatar_url || null,
                         bloqueado: updatedUser.is_active === false,
                     },
                 });
