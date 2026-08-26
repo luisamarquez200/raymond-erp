@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, UnauthorizedException, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { PrismaDynamicService } from '../../database/prisma-dynamic.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -7,8 +7,67 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
+    private readonly logger = new Logger(UsersService.name);
+
     constructor(private prisma: PrismaService) { }
+
+    async onModuleInit() {
+        // Automatic background sync on startup/deployment to guarantee avatars & users in ComercialR4PDN
+        setTimeout(async () => {
+            try {
+                await this.syncAllUsersToR4();
+            } catch (e: any) {
+                this.logger.warn(`Startup sync to ComercialR4PDN: ${e?.message}`);
+            }
+        }, 5000);
+    }
+
+    async syncAllUsersToR4() {
+        try {
+            await PrismaDynamicService.ensureClientsInitialized();
+            const dbR4 = PrismaDynamicService.clients.r4;
+            if (!dbR4) return;
+
+            const users = await this.prisma.users.findMany({
+                where: {
+                    deleted_at: null,
+                },
+                include: {
+                    roles: true,
+                },
+            });
+
+            for (const user of users) {
+                if (user.email) {
+                    await dbR4.usuario.upsert({
+                        where: { correo: user.email },
+                        update: {
+                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+                            rol: user.roles?.name || 'USUARIO',
+                            adc_asociado_name: user.adc_asociado_name || null,
+                            auxiliar_name: user.auxiliar_name || null,
+                            avatar_url: user.avatar_url || null,
+                            bloqueado: !user.is_active,
+                        },
+                        create: {
+                            id: user.id,
+                            correo: user.email,
+                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+                            rol: user.roles?.name || 'USUARIO',
+                            adc_asociado_name: user.adc_asociado_name || null,
+                            auxiliar_name: user.auxiliar_name || null,
+                            avatar_url: user.avatar_url || null,
+                            bloqueado: !user.is_active,
+                        },
+                    });
+                }
+            }
+            this.logger.log(`✔️ Sincronización automática de usuarios y avatares completada en ComercialR4PDN (${users.length} usuarios)`);
+        } catch (err: any) {
+            this.logger.warn(`Error en sincronización inicial de usuarios a ComercialR4PDN: ${err?.message}`);
+        }
+    }
 
     async create(createUserDto: CreateUserDto, organization_id: string, currentUser?: any) {
         // Validate if user exists in the organization (active or soft-deleted)
