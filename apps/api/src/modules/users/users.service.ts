@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { PrismaDynamicService } from '../../database/prisma-dynamic.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -10,17 +11,16 @@ export class UsersService {
     constructor(private prisma: PrismaService) { }
 
     async create(createUserDto: CreateUserDto, organization_id: string, currentUser?: any) {
-        // Validate that email is unique in the organization
-        const existingUser = await this.prisma.users.findFirst({
+        // Validate if user exists in the organization (active or soft-deleted)
+        const existingAnyUser = await this.prisma.users.findFirst({
             where: {
                 email: createUserDto.email,
                 organization_id,
-                deleted_at: null, // Fixed: snake_case
             },
         });
 
-        if (existingUser) {
-            throw new ConflictException('Email already exists in this organization');
+        if (existingAnyUser && existingAnyUser.deleted_at === null) {
+            throw new ConflictException('El correo ya se encuentra registrado en el sistema');
         }
 
         // Validate that role belongs to the organization
@@ -53,34 +53,101 @@ export class UsersService {
         // Hash password
         const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
-        // Create user
-        const user = await this.prisma.users.create({
-            data: {
-                id: require('crypto').randomUUID(),
-                email: createUserDto.email,
-                password: hashedPassword,
-                first_name: createUserDto.first_name,
-                last_name: createUserDto.last_name,
-                organization_id,
-                role_id: createUserDto.role_id,
-                is_active: true, // New users are active by default
-                ubicacion: createUserDto.ubicacion,
-                adc_asociado_name: createUserDto.adc_asociado_name,
-                supervisor_id: createUserDto.supervisor_id,
-                supervisor_name: createUserDto.supervisor_name,
-                auxiliar_id: createUserDto.auxiliar_id,
-                auxiliar_name: createUserDto.auxiliar_name,
-                updated_at: new Date(), // Required field
-            } as any,
-            include: {
-                roles: {
-                    select: {
-                        id: true,
-                        name: true,
+        // Sanitize optional fields
+        const supervisor_id = createUserDto.supervisor_id && createUserDto.supervisor_id.trim() !== '' ? createUserDto.supervisor_id.trim() : null;
+        const auxiliar_id = createUserDto.auxiliar_id && createUserDto.auxiliar_id.trim() !== '' ? createUserDto.auxiliar_id.trim() : null;
+        const supervisor_name = createUserDto.supervisor_name && createUserDto.supervisor_name.trim() !== '' ? createUserDto.supervisor_name.trim() : null;
+        const auxiliar_name = createUserDto.auxiliar_name && createUserDto.auxiliar_name.trim() !== '' ? createUserDto.auxiliar_name.trim() : null;
+        const adc_asociado_name = createUserDto.adc_asociado_name && createUserDto.adc_asociado_name.trim() !== '' && createUserDto.adc_asociado_name.trim() !== 'ninguno' ? createUserDto.adc_asociado_name.trim() : null;
+        const ubicacion = createUserDto.ubicacion && createUserDto.ubicacion.trim() !== '' ? createUserDto.ubicacion.trim() : null;
+
+        let user: any;
+
+        // If previously soft-deleted, reactivate and update the record
+        if (existingAnyUser && existingAnyUser.deleted_at !== null) {
+            user = await this.prisma.users.update({
+                where: { id: existingAnyUser.id },
+                data: {
+                    email: createUserDto.email,
+                    password: hashedPassword,
+                    first_name: createUserDto.first_name,
+                    last_name: createUserDto.last_name,
+                    role_id: createUserDto.role_id,
+                    is_active: true,
+                    deleted_at: null,
+                    ubicacion,
+                    adc_asociado_name,
+                    supervisor_id,
+                    supervisor_name,
+                    auxiliar_id,
+                    auxiliar_name,
+                    updated_at: new Date(),
+                } as any,
+                include: {
+                    roles: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
                     },
                 },
-            },
-        });
+            });
+        } else {
+            // Create brand new user
+            user = await this.prisma.users.create({
+                data: {
+                    id: require('crypto').randomUUID(),
+                    email: createUserDto.email,
+                    password: hashedPassword,
+                    first_name: createUserDto.first_name,
+                    last_name: createUserDto.last_name,
+                    organization_id,
+                    role_id: createUserDto.role_id,
+                    is_active: true,
+                    ubicacion,
+                    adc_asociado_name,
+                    supervisor_id,
+                    supervisor_name,
+                    auxiliar_id,
+                    auxiliar_name,
+                    updated_at: new Date(),
+                } as any,
+                include: {
+                    roles: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                },
+            });
+        }
+
+        // Synchronize into ComercialR4PDN.usuarios
+        try {
+            const dbR4 = PrismaDynamicService.clients.r4;
+            if (dbR4 && user.email) {
+                await dbR4.usuario.upsert({
+                    where: { correo: user.email },
+                    update: {
+                        nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+                        rol: role.name || 'USUARIO',
+                        adc_asociado_name: user.adc_asociado_name || null,
+                        auxiliar_name: user.auxiliar_name || null,
+                        bloqueado: !user.is_active,
+                    },
+                    create: {
+                        id: user.id,
+                        correo: user.email,
+                        nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+                        rol: role.name || 'USUARIO',
+                        adc_asociado_name: user.adc_asociado_name || null,
+                        auxiliar_name: user.auxiliar_name || null,
+                        bloqueado: false,
+                    },
+                });
+            }
+        } catch (err: any) {}
 
         // Remove password from response
         const { password, ...userWithoutPassword } = user;
@@ -272,6 +339,32 @@ export class UsersService {
             },
         });
 
+        // Synchronize into ComercialR4PDN.usuarios
+        try {
+            const dbR4 = PrismaDynamicService.clients.r4;
+            if (dbR4 && updatedUser.email) {
+                await dbR4.usuario.upsert({
+                    where: { correo: updatedUser.email },
+                    update: {
+                        nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
+                        rol: updatedUser.roles?.name || 'USUARIO',
+                        adc_asociado_name: updatedUser.adc_asociado_name || null,
+                        auxiliar_name: updatedUser.auxiliar_name || null,
+                        bloqueado: updatedUser.is_active === false,
+                    },
+                    create: {
+                        id: updatedUser.id,
+                        correo: updatedUser.email,
+                        nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
+                        rol: updatedUser.roles?.name || 'USUARIO',
+                        adc_asociado_name: updatedUser.adc_asociado_name || null,
+                        auxiliar_name: updatedUser.auxiliar_name || null,
+                        bloqueado: updatedUser.is_active === false,
+                    },
+                });
+            }
+        } catch (err: any) {}
+
         // Remove password from response
         const { password, ...userWithoutPassword } = updatedUser;
         return userWithoutPassword;
@@ -353,6 +446,16 @@ export class UsersService {
                 },
             },
         });
+
+        // Also mark as blocked/removed in ComercialR4PDN.usuarios
+        try {
+            const dbR4 = PrismaDynamicService.clients.r4;
+            if (dbR4 && deletedUser.email) {
+                await dbR4.usuario.deleteMany({
+                    where: { correo: deletedUser.email }
+                });
+            }
+        } catch (err: any) {}
 
         // Remove password from response
         const { password, ...userWithoutPassword } = deletedUser;
