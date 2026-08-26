@@ -159,11 +159,14 @@ export class ClientesService {
                         const cTelefono = cleanStr(contacto.distribuidor_contacto_telefono || contacto.telefono || contacto.tel);
                         const cCorreo = cleanStr(contacto.distribuidor_contacto_correo || contacto.contacto_correo || contacto.correo || contacto.email);
 
+                        const siteCuenta = (s.cuenta && s.cuenta.trim() !== '' && s.cuenta !== '-') ? s.cuenta.trim() : (cliente.razon_social || cliente.nombre || '-');
+                        const siteTienda = (s.tienda && s.tienda.trim() !== '' && s.tienda !== '-') ? s.tienda.trim() : (s.nombre && s.nombre.trim() !== '' && s.nombre !== '-' ? s.nombre.trim() : '-');
+
                         return {
                             id: s.id,
                             nombre: s.nombre,
-                            tienda: s.tienda || '-',
-                            cuenta: s.cuenta || '-',
+                            tienda: siteTienda,
+                            cuenta: siteCuenta,
                             ciudad: s.ciudad || '-',
                             direccion: s.direccion || '-',
                             no_totvs: s.no_totvs || '-',

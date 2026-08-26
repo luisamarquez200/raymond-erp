@@ -11,17 +11,16 @@ export class UsersService {
     constructor(private prisma: PrismaService) { }
 
     async create(createUserDto: CreateUserDto, organization_id: string, currentUser?: any) {
-        // Validate that email is unique in the organization
-        const existingUser = await this.prisma.users.findFirst({
+        // Validate if user exists in the organization (active or soft-deleted)
+        const existingAnyUser = await this.prisma.users.findFirst({
             where: {
                 email: createUserDto.email,
                 ...(organization_id ? { organization_id } : {}),
-                deleted_at: null,
             },
         });
 
-        if (existingUser) {
-            throw new ConflictException('Email already exists in this organization');
+        if (existingAnyUser && existingAnyUser.deleted_at === null) {
+            throw new ConflictException('El correo ya se encuentra registrado en el sistema');
         }
 
         // Validate that role exists in the organization
@@ -62,35 +61,68 @@ export class UsersService {
         const adc_asociado_name = createUserDto.adc_asociado_name && createUserDto.adc_asociado_name.trim() !== '' && createUserDto.adc_asociado_name.trim() !== 'ninguno' ? createUserDto.adc_asociado_name.trim() : null;
         const ubicacion = createUserDto.ubicacion && createUserDto.ubicacion.trim() !== '' ? createUserDto.ubicacion.trim() : null;
 
+        let user: any;
+
         try {
-            // Create user
-            const user = await this.prisma.users.create({
-                data: {
-                    id: require('crypto').randomUUID(),
-                    email: createUserDto.email,
-                    password: hashedPassword,
-                    first_name: createUserDto.first_name,
-                    last_name: createUserDto.last_name,
-                    organization_id: organization_id || null,
-                    role_id: createUserDto.role_id,
-                    is_active: true, // New users are active by default
-                    ubicacion,
-                    adc_asociado_name,
-                    supervisor_id,
-                    supervisor_name,
-                    auxiliar_id,
-                    auxiliar_name,
-                    updated_at: new Date(), // Required field
-                } as any,
-                include: {
-                    roles: {
-                        select: {
-                            id: true,
-                            name: true,
+            // If previously soft-deleted, reactivate and update the record
+            if (existingAnyUser && existingAnyUser.deleted_at !== null) {
+                user = await this.prisma.users.update({
+                    where: { id: existingAnyUser.id },
+                    data: {
+                        email: createUserDto.email,
+                        password: hashedPassword,
+                        first_name: createUserDto.first_name,
+                        last_name: createUserDto.last_name,
+                        role_id: createUserDto.role_id,
+                        is_active: true,
+                        deleted_at: null,
+                        ubicacion,
+                        adc_asociado_name,
+                        supervisor_id,
+                        supervisor_name,
+                        auxiliar_id,
+                        auxiliar_name,
+                        updated_at: new Date(),
+                    } as any,
+                    include: {
+                        roles: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
                         },
                     },
-                },
-            });
+                });
+            } else {
+                // Create brand new user
+                user = await this.prisma.users.create({
+                    data: {
+                        id: require('crypto').randomUUID(),
+                        email: createUserDto.email,
+                        password: hashedPassword,
+                        first_name: createUserDto.first_name,
+                        last_name: createUserDto.last_name,
+                        organization_id: organization_id || null,
+                        role_id: createUserDto.role_id,
+                        is_active: true,
+                        ubicacion,
+                        adc_asociado_name,
+                        supervisor_id,
+                        supervisor_name,
+                        auxiliar_id,
+                        auxiliar_name,
+                        updated_at: new Date(),
+                    } as any,
+                    include: {
+                        roles: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                    },
+                });
+            }
 
             // Synchronize into ComercialR4PDN.usuarios for direct management & persistence
             try {
@@ -156,6 +188,21 @@ export class UsersService {
                     select: {
                         id: true,
                         name: true,
+                        level: true, // Fixed: snake_case (not hierarchy_level)
+                    },
+                },
+                supervisor: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                    },
+                },
+                auxiliar: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
                     },
                 },
             },
@@ -164,10 +211,18 @@ export class UsersService {
             },
         });
 
-        console.log(`[UsersService.findAll] Found ${users.length} users`);
-
-        // Remove passwords from response
-        return users.map(({ password, ...user }) => user);
+        // Remove passwords and map roles to match frontend expectation
+        return users.map(user => {
+            const { password, roles, ...userWithoutPassword } = user;
+            return {
+                ...userWithoutPassword,
+                role: roles ? {
+                    id: roles.id,
+                    name: roles.name,
+                    level: roles.level, // Fixed: snake_case (not hierarchy_level)
+                } : null,
+            };
+        });
     }
 
     async findOne(id: string, organization_id: string) {
@@ -182,6 +237,30 @@ export class UsersService {
                     select: {
                         id: true,
                         name: true,
+                        level: true, // Fixed: snake_case (not hierarchy_level)
+                        description: true,
+                    },
+                },
+                supervisor: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                    },
+                },
+                auxiliar: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                    },
+                },
+                organizations: {
+                    select: {
+                        id: true,
+                        name: true,
                     },
                 },
             },
@@ -191,79 +270,55 @@ export class UsersService {
             throw new NotFoundException('User not found');
         }
 
-        // Remove password from response
-        const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
+        // Remove password and map roles to match frontend expectation
+        const { password, roles, organizations, ...userWithoutPassword } = user;
+        return {
+            ...userWithoutPassword,
+            role: roles ? {
+                id: roles.id,
+                name: roles.name,
+                level: roles.level, // Fixed: snake_case (not hierarchy_level)
+                description: roles.description,
+            } : null,
+            organization: organizations,
+        };
     }
 
-    async update(id: string, updateUserDto: UpdateUserDto, organization_id: string | null, currentUser: any) {
-        // CRITICAL: Handle SuperAdmin without organization context
-        const isSuperadmin = currentUser?.isSuperadmin === true || currentUser?.roles === 'Superadmin';
-
-        // Build where clause - handle SuperAdmin without org
-        const where: any = {
-            id,
-            deleted_at: null,
-        };
-
-        // For SuperAdmin, allow updating their own profile even without organization
-        if (isSuperadmin && !organization_id && id === currentUser?.id) {
-            // SuperAdmin updating their own profile - no organization filter
-            where.organization_id = null;
-        } else if (organization_id) {
-            // Regular user or SuperAdmin with org - filter by organization
-            where.organization_id = organization_id;
-        } else {
-            // Regular user without organization - should not happen, but handle gracefully
-            throw new BadRequestException('User has no organization assigned');
-        }
-
-        // Find user
+    async update(id: string, updateUserDto: UpdateUserDto, organization_id: string, currentUser?: any) {
+        // Find user and verify it belongs to the organization
         const user = await this.prisma.users.findFirst({
-            where,
+            where: {
+                id,
+                organization_id,
+                deleted_at: null, // Fixed: snake_case
+            },
+            include: {
+                roles: true,
+            },
         });
 
         if (!user) {
-            // More detailed error message
-            if (isSuperadmin && !organization_id) {
-                throw new NotFoundException(`User with ID ${id} not found. SuperAdmin users may need to select an organization.`);
-            }
-            throw new NotFoundException(`User with ID ${id} not found in your organization`);
+            throw new NotFoundException('User not found');
         }
 
-        // Prevent self-deactivation (users can't deactivate themselves)
-        if (updateUserDto.is_active === false && id === currentUser.id) {
-            throw new ForbiddenException('You cannot deactivate your own account');
-        }
-
-        // If email is being updated, check uniqueness
+        // If email is being updated, check that it's unique
         if (updateUserDto.email && updateUserDto.email !== user.email) {
-            // Build where clause for email uniqueness check
-            const emailCheckWhere: any = {
-                email: updateUserDto.email,
-                deleted_at: null,
-                NOT: { id },
-            };
-
-            // For SuperAdmin without org, check globally
-            if (isSuperadmin && !organization_id) {
-                // Check if email exists in any organization
-                emailCheckWhere.organization_id = null;
-            } else if (organization_id) {
-                emailCheckWhere.organization_id = organization_id;
-            }
-
             const existingUser = await this.prisma.users.findFirst({
-                where: emailCheckWhere,
+                where: {
+                    email: updateUserDto.email,
+                    organization_id,
+                    deleted_at: null, // Fixed: snake_case
+                    id: { not: id },
+                },
             });
 
             if (existingUser) {
-                throw new ConflictException('Email already exists');
+                throw new ConflictException('Email already exists in this organization');
             }
         }
 
-        // If role is being updated, validate it belongs to organization
-        if (updateUserDto.role_id && updateUserDto.role_id !== user.role_id) {
+        // If role is being updated, validate it
+        if (updateUserDto.role_id) {
             const role = await this.prisma.roles.findFirst({
                 where: {
                     id: updateUserDto.role_id,
@@ -280,18 +335,17 @@ export class UsersService {
                 throw new ForbiddenException('Only Superadmin users can assign the Superadmin role');
             }
 
-            // SECURITY: CEO cannot assign users to roles higher than level 90
-            if (currentUser && currentUser.isCEO && !currentUser.isSuperadmin && role.level > 90) {
-                throw new ForbiddenException('CEO cannot assign users to roles higher than level 90');
+            // SECURITY: CEO cannot assign roles higher than level 90
+            if (currentUser && currentUser.isCEO && !currentUser.isSuperadmin && (role.level || 0) > 90) {
+                throw new ForbiddenException('CEO cannot assign roles higher than level 90');
             }
 
-            // SECURITY: Only Superadmin can assign level 100+ roles
-            if (role.level >= 100 && (!currentUser || !currentUser.isSuperadmin)) {
-                throw new ForbiddenException('Only Superadmin can assign users to level 100 or higher roles');
+            // SECURITY: CEO cannot assign level 100+ roles
+            if ((role.level || 0) >= 100 && (!currentUser || !currentUser.isSuperadmin)) {
+                throw new ForbiddenException('Only Superadmin can assign level 100 or higher roles');
             }
         }
 
-        // SECURITY: Prevent password updates through regular update endpoint
         // Password changes must go through the dedicated change-password endpoint
         if (updateUserDto.password) {
             throw new BadRequestException('Password cannot be updated through this endpoint. Use /users/:id/change-password instead.');
@@ -302,9 +356,11 @@ export class UsersService {
         // Sanitize empty strings to null for relation fields
         if (updateData.supervisor_id === "") updateData.supervisor_id = null;
         if (updateData.auxiliar_id === "") updateData.auxiliar_id = null;
-        // Optionally sanitize empty names if they shouldn't be empty strings
         if (updateData.supervisor_name === "") updateData.supervisor_name = null;
         if (updateData.auxiliar_name === "") updateData.auxiliar_name = null;
+        if (updateData.adc_asociado_name === "" || updateData.adc_asociado_name === "ninguno") updateData.adc_asociado_name = null;
+        if (updateData.ubicacion === "") updateData.ubicacion = null;
+
         // Update user
         const updatedUser = await this.prisma.users.update({
             where: { id },
@@ -427,13 +483,12 @@ export class UsersService {
             },
         });
 
-        // Also mark as blocked in ComercialR4PDN.usuarios
+        // Also mark as blocked/removed in ComercialR4PDN.usuarios
         try {
             const dbR4 = PrismaDynamicService.clients.r4;
             if (dbR4 && deletedUser.email) {
-                await dbR4.usuario.updateMany({
-                    where: { correo: deletedUser.email },
-                    data: { bloqueado: true }
+                await dbR4.usuario.deleteMany({
+                    where: { correo: deletedUser.email }
                 });
             }
         } catch (err: any) {}
