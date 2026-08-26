@@ -724,13 +724,13 @@ export default function ClientesSitios() {
                             )}
                           </div>
                         </div>
-                        
                       </div>
-                    )) : (
-                      <div className="col-span-2 py-8 text-center text-slate-500 font-medium bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
-                        Este cliente aún no tiene sitios registrados.
-                      </div>
-                    )}
+                    );
+                  }) : (
+                    <div className="col-span-2 py-8 text-center text-slate-500 font-medium bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                      Este cliente aún no tiene sitios registrados.
+                    </div>
+                  )}
                   </div>
                 </div>
               </>
