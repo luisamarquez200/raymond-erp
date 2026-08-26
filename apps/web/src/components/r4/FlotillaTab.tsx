@@ -914,8 +914,10 @@ export default function FlotillaTab({
       await api.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      fetchFlotilla();
+      await fetchFlotilla();
       toast.success(isAdc ? 'Cargue parcial procesado exitosamente.' : 'Carga masiva procesada exitosamente.');
+      setIsUploadModalOpen(false);
+      setFile(null);
     } catch (error) {
       console.error('Error uploading file:', error);
       toast.error('Error al procesar el archivo');

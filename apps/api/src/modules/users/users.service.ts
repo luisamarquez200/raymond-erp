@@ -23,16 +23,11 @@ export class UsersService {
             throw new ConflictException('Email already exists in this organization');
         }
 
-        // Validate that role exists (supporting global roles with organization_id = null or matching org)
+        // Validate that role exists in the organization
         const role = await this.prisma.roles.findFirst({
             where: {
                 id: createUserDto.role_id,
-                ...(organization_id ? {
-                    OR: [
-                        { organization_id },
-                        { organization_id: null },
-                    ]
-                } : {}),
+                ...(organization_id ? { organization_id } : {}),
             },
         });
 

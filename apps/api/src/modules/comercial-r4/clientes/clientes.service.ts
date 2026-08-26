@@ -23,10 +23,11 @@ export class ClientesService {
             const clientes = await db.cliente.findMany({
                 include: {
                     sitios: {
-                        include: { activos: true },
+                        include: { activos: true, rentas: true },
                         orderBy: { nombre: 'asc' }
                     },
-                    activos: true
+                    activos: true,
+                    rentas: true
                 },
                 orderBy: { razon_social: 'asc' }
             });
@@ -37,24 +38,49 @@ export class ClientesService {
             const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleStr.includes(r));
             const isAdc = !isAdministrator && !!user;
 
+            const buildAdcKeywords = (u: any): string[] => {
+                if (!u) return [];
+                const rawPieces = [
+                    u.adc_asociado_name,
+                    u.adcAsociadoName,
+                    `${u.first_name || u.firstName || ''} ${u.last_name || u.lastName || ''}`.trim(),
+                    u.first_name,
+                    u.firstName,
+                    u.last_name,
+                    u.lastName,
+                    u.email ? u.email.split('@')[0] : '',
+                ].filter(Boolean);
+
+                const keywords = new Set<string>();
+                for (const piece of rawPieces) {
+                    const parts = String(piece).split(',').map(p => p.trim().toLowerCase()).filter(p => p.length >= 2);
+                    parts.forEach(p => keywords.add(p));
+                }
+                return Array.from(keywords);
+            };
+
+            const matchesKeyword = (val: string | null | undefined, keywords: string[]): boolean => {
+                if (!val) return false;
+                const clean = String(val).trim().toLowerCase();
+                if (!clean || clean === '-' || clean === 'ninguno' || clean === 'sin adc' || clean === 'null' || clean === 'undefined') return false;
+                return keywords.some(kw => clean === kw || clean.includes(kw) || kw.includes(clean));
+            };
+
             if (isAdc) {
-                const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
-                const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-                const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+                const adcKeywords = buildAdcKeywords(user);
 
                 filteredClientes = clientes.filter(cliente => {
                     const comercial = (cliente.datos_comerciales as any) || {};
-                    const clientAdc = (comercial.adc || '').toLowerCase();
+                    const clientAdcMatch = matchesKeyword(comercial.adc, adcKeywords);
                     const hasMatchingSitio = cliente.sitios?.some(s => {
-                        const sAdc = (s.adc || '').toLowerCase();
-                        return adcKeywords.some(kw => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
+                        return matchesKeyword(s.adc, adcKeywords) ||
+                            s.activos?.some((a: any) => matchesKeyword(a.adc, adcKeywords)) ||
+                            s.rentas?.some((r: any) => matchesKeyword(r.adc, adcKeywords));
                     });
-                    const hasMatchingActivo = cliente.activos?.some(a => {
-                        const aAdc = (a.adc || '').toLowerCase();
-                        return adcKeywords.some(kw => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
-                    });
-                    const matchesClient = adcKeywords.some(kw => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
-                    return matchesClient || hasMatchingSitio || hasMatchingActivo;
+                    const hasMatchingActivo = cliente.activos?.some(a => matchesKeyword(a.adc, adcKeywords));
+                    const hasMatchingRenta = cliente.rentas?.some(r => matchesKeyword(r.adc, adcKeywords));
+
+                    return clientAdcMatch || hasMatchingSitio || hasMatchingActivo || hasMatchingRenta;
                 });
             }
 
@@ -67,37 +93,31 @@ export class ClientesService {
                 let relevantActivos = cliente.activos || [];
 
                 if (isAdc) {
-                    const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
-                    const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-                    const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
-                    const clientAdc = (comercial.adc || '').toLowerCase();
-                    const clientMatches = adcKeywords.some((kw: string) => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
+                    const adcKeywords = buildAdcKeywords(user);
+                    const clientAdcMatch = matchesKeyword(comercial.adc, adcKeywords);
 
                     relevantSitios = relevantSitios.filter((s: any) => {
-                        const sAdc = (s.adc || '').toLowerCase();
-                        const sActivoMatch = s.activos?.some((a: any) => {
-                            const aAdc = (a.adc || '').toLowerCase();
-                            return adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
-                        });
-                        const sMatch = adcKeywords.some((kw: string) => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
-                        return sMatch || sActivoMatch || (clientMatches && (!sAdc || sAdc === '-'));
+                        const sMatch = matchesKeyword(s.adc, adcKeywords);
+                        const sActivoMatch = s.activos?.some((a: any) => matchesKeyword(a.adc, adcKeywords));
+                        const sRentaMatch = s.rentas?.some((r: any) => matchesKeyword(r.adc, adcKeywords));
+                        return sMatch || sActivoMatch || sRentaMatch || (clientAdcMatch && (!s.adc || s.adc === '-'));
                     });
 
                     relevantActivos = relevantActivos.filter((a: any) => {
-                        const aAdc = (a.adc || '').toLowerCase();
-                        const aMatch = adcKeywords.some((kw: string) => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
-                        return aMatch || (clientMatches && (!aAdc || aAdc === '-'));
+                        const aMatch = matchesKeyword(a.adc, adcKeywords);
+                        return aMatch || (clientAdcMatch && (!a.adc || a.adc === '-'));
                     });
                 }
 
                 const firstSiteWithAdc = relevantSitios.find(s => s.adc);
+                const firstActivoWithAdc = relevantActivos.find(a => a.adc);
                 
                 return {
                     id: cliente.id,
                     razonSocial: cliente.razon_social,
                     rfc: cliente.rfc || '-',
                     estatus: cliente.estado || 'ACTIVO',
-                    adc: comercial.adc || firstSiteWithAdc?.adc || '-',
+                    adc: comercial.adc || firstSiteWithAdc?.adc || firstActivoWithAdc?.adc || '-',
                     moneda: comercial.moneda || 'MXN',
                     ciudad: fiscal.ciudad || '-',
                     estado_fiscal: fiscal.estado || '-',
@@ -559,10 +579,11 @@ export class ClientesService {
         const clientes = await db.cliente.findMany({
             include: {
                 sitios: {
-                    include: { activos: true },
+                    include: { activos: true, rentas: true },
                     orderBy: { nombre: 'asc' }
                 },
-                activos: true
+                activos: true,
+                rentas: true
             },
             orderBy: { razon_social: 'asc' }
         });
@@ -571,25 +592,50 @@ export class ClientesService {
         const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleStr.includes(r));
         const isAdc = !isAdministrator && !!user;
 
+        const buildAdcKeywords = (u: any): string[] => {
+            if (!u) return [];
+            const rawPieces = [
+                u.adc_asociado_name,
+                u.adcAsociadoName,
+                `${u.first_name || u.firstName || ''} ${u.last_name || u.lastName || ''}`.trim(),
+                u.first_name,
+                u.firstName,
+                u.last_name,
+                u.lastName,
+                u.email ? u.email.split('@')[0] : '',
+            ].filter(Boolean);
+
+            const keywords = new Set<string>();
+            for (const piece of rawPieces) {
+                const parts = String(piece).split(',').map(p => p.trim().toLowerCase()).filter(p => p.length >= 2);
+                parts.forEach(p => keywords.add(p));
+            }
+            return Array.from(keywords);
+        };
+
+        const matchesKeyword = (val: string | null | undefined, keywords: string[]): boolean => {
+            if (!val) return false;
+            const clean = String(val).trim().toLowerCase();
+            if (!clean || clean === '-' || clean === 'ninguno' || clean === 'sin adc' || clean === 'null' || clean === 'undefined') return false;
+            return keywords.some(kw => clean === kw || clean.includes(kw) || kw.includes(clean));
+        };
+
         let filteredClientes = clientes;
         if (isAdc) {
-            const rawTarget = (user?.adc_asociado_name || user?.adcAsociadoName || `${user?.first_name || user?.firstName || ''} ${user?.last_name || user?.lastName || ''}`.trim() || user?.first_name || user?.firstName || user?.email || '').toLowerCase();
-            const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-            const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
+            const adcKeywords = buildAdcKeywords(user);
 
             filteredClientes = clientes.filter(cliente => {
                 const comercial = (cliente.datos_comerciales as any) || {};
-                const clientAdc = (comercial.adc || '').toLowerCase();
+                const clientAdcMatch = matchesKeyword(comercial.adc, adcKeywords);
                 const hasMatchingSitio = cliente.sitios?.some(s => {
-                    const sAdc = (s.adc || '').toLowerCase();
-                    return adcKeywords.some(kw => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (firstName && sAdc.includes(firstName));
+                    return matchesKeyword(s.adc, adcKeywords) ||
+                        s.activos?.some((a: any) => matchesKeyword(a.adc, adcKeywords)) ||
+                        s.rentas?.some((r: any) => matchesKeyword(r.adc, adcKeywords));
                 });
-                const hasMatchingActivo = cliente.activos?.some(a => {
-                    const aAdc = (a.adc || '').toLowerCase();
-                    return adcKeywords.some(kw => aAdc === kw || aAdc.includes(kw) || kw.includes(aAdc)) || (firstName && aAdc.includes(firstName));
-                });
-                const matchesClient = adcKeywords.some(kw => clientAdc === kw || clientAdc.includes(kw) || kw.includes(clientAdc)) || (firstName && clientAdc.includes(firstName));
-                return matchesClient || hasMatchingSitio || hasMatchingActivo;
+                const hasMatchingActivo = cliente.activos?.some(a => matchesKeyword(a.adc, adcKeywords));
+                const hasMatchingRenta = cliente.rentas?.some(r => matchesKeyword(r.adc, adcKeywords));
+
+                return clientAdcMatch || hasMatchingSitio || hasMatchingActivo || hasMatchingRenta;
             });
         }
 
