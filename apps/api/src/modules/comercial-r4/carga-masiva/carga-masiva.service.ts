@@ -144,30 +144,57 @@ export class CargaMasivaService {
 
             this.logger.log(`Meses detectados: ${activeMonths.map(m => m.name).join(', ')}`);
 
-            const getVal = (row: ExcelJS.Row, colName: string): string | null => {
-                const upperName = colName.toUpperCase();
-                let idx = headers.findIndex(h => h === upperName);
-                if (idx < 0) idx = headers.findIndex(h => h && h.includes(upperName));
-                if (idx > 0) {
-                    const cell = row.getCell(idx);
-                    let val = cell.value;
-                    if (val === null || val === undefined) return null;
-                    if (val instanceof Date) {
-                        return val.toISOString().split('T')[0];
+            const extractCellValue = (cell: ExcelJS.Cell): string | null => {
+                let val = cell.value;
+                if (val === null || val === undefined) return null;
+                if (val instanceof Date) {
+                    return val.toISOString().split('T')[0];
+                }
+                if (typeof val === 'object') {
+                    if ('result' in val && val.result !== undefined && val.result !== null) {
+                        val = val.result;
+                        if (val instanceof Date) return val.toISOString().split('T')[0];
+                    } else if ('text' in val && typeof (val as any).text === 'string') {
+                        val = (val as any).text;
+                    } else if ('hyperlink' in val && typeof (val as any).hyperlink === 'string') {
+                        val = (val as any).hyperlink.replace(/^mailto:/i, '');
+                    } else if ('richText' in val && Array.isArray((val as any).richText)) {
+                        val = (val as any).richText.map((rt: any) => rt.text).join('');
                     }
-                    if (typeof val === 'object') {
-                        if ('result' in val && val.result !== undefined && val.result !== null) {
-                            val = val.result;
-                            if (val instanceof Date) return val.toISOString().split('T')[0];
-                        } else if ('text' in val && typeof (val as any).text === 'string') {
-                            val = (val as any).text;
-                        } else if ('richText' in val && Array.isArray((val as any).richText)) {
-                            val = (val as any).richText.map((rt: any) => rt.text).join('');
-                        }
+                }
+                const str = val ? val.toString().trim() : '';
+                if (str === '[object Object]' || str === '' || str === 'null' || str === 'undefined') return null;
+                return str;
+            };
+
+            const getStrictColVal = (row: ExcelJS.Row, headersList: string[], candidates: string[], excludeWords: string[] = []): string | null => {
+                // 1. Exact match first
+                for (const cand of candidates) {
+                    const upperCand = cand.toUpperCase().trim();
+                    const idx = headersList.findIndex(h => h === upperCand);
+                    if (idx > 0) {
+                        const val = extractCellValue(row.getCell(idx));
+                        if (val) return val;
                     }
-                    return val.toString().trim() || null;
+                }
+                // 2. Partial match without excluded words
+                for (const cand of candidates) {
+                    const upperCand = cand.toUpperCase().trim();
+                    const idx = headersList.findIndex(h => {
+                        if (!h) return false;
+                        if (!h.includes(upperCand)) return false;
+                        return !excludeWords.some(w => h.includes(w.toUpperCase()));
+                    });
+                    if (idx > 0) {
+                        const val = extractCellValue(row.getCell(idx));
+                        if (val) return val;
+                    }
                 }
                 return null;
+            };
+
+            const getVal = (row: ExcelJS.Row, colName: string): string | null => {
+                return getStrictColVal(row, headers, [colName]);
             };
 
             const getDateVal = (row: ExcelJS.Row, colNames: string[], defaultDate: Date): Date => {
@@ -277,30 +304,9 @@ export class CargaMasivaService {
                     dirHeaders[colNumber] = (cell.value?.toString() || '').trim().toUpperCase().replace(/\s+/g, ' ');
                 });
 
-                const getDirVal = (row: ExcelJS.Row, colName: string): string | null => {
-                    const upperName = colName.toUpperCase();
-                    let idx = dirHeaders.findIndex(h => h === upperName);
-                    if (idx < 0) idx = dirHeaders.findIndex(h => h && h.includes(upperName));
-                    if (idx > 0) {
-                        const cell = row.getCell(idx);
-                        let val = cell.value;
-                        if (val === null || val === undefined) return null;
-                        if (val instanceof Date) {
-                            return val.toISOString().split('T')[0];
-                        }
-                        if (typeof val === 'object') {
-                            if ('result' in val && val.result !== undefined && val.result !== null) {
-                                val = val.result;
-                                if (val instanceof Date) return val.toISOString().split('T')[0];
-                            } else if ('text' in val && typeof (val as any).text === 'string') {
-                                val = (val as any).text;
-                            } else if ('richText' in val && Array.isArray((val as any).richText)) {
-                                val = (val as any).richText.map((rt: any) => rt.text).join('');
-                            }
-                        }
-                        return val.toString().trim() || null;
-                    }
-                    return null;
+                const getDirVal = (row: ExcelJS.Row, candidates: string | string[], excludeWords: string[] = []): string | null => {
+                    const candArray = Array.isArray(candidates) ? candidates : [candidates];
+                    return getStrictColVal(row, dirHeaders, candArray, excludeWords);
                 };
 
                 let dirConsecutiveEmpty = 0;
@@ -323,15 +329,16 @@ export class CargaMasivaService {
                     }
                     dirConsecutiveEmpty = 0;
 
-                    const clientName = getDirVal(row, 'CLIENTE') || getDirVal(row, 'RAZON SOCIAL') || getDirVal(row, 'RAZÓN SOCIAL');
-                    const siteName = getDirVal(row, 'SITIO') || getDirVal(row, 'SITE');
+                    const clientName = getDirVal(row, ['CLIENTE', 'RAZON SOCIAL', 'RAZÓN SOCIAL', 'NOMBRE CLIENTE', 'CUENTA']);
+                    const siteName = getDirVal(row, ['SITIO', 'SITE', 'SUCURSAL', 'TIENDA']);
                     
                     if (clientName) {
-                        const rfc = getDirVal(row, 'RFC');
-                        const correoCliente = getDirVal(row, 'CORREO') || getDirVal(row, 'EMAIL') || getDirVal(row, 'MAIL') || getDirVal(row, 'CORREO CLIENTE');
-                        const telefonoCliente = getDirVal(row, 'TELEFONO') || getDirVal(row, 'TELÉFONO') || getDirVal(row, 'TELEFONO CLIENTE');
-                        const contactoCliente = getDirVal(row, 'CONTACTO CLIENTE') || getDirVal(row, 'CONTACTO');
-                        const direccionCliente = getDirVal(row, 'DIRECCION CLIENTE') || getDirVal(row, 'DIRECCIÓN CLIENTE') || getDirVal(row, 'DOMICILIO CLIENTE');
+                        const rfc = getDirVal(row, ['RFC', 'R.F.C.', 'RFC CLIENTE']);
+                        // Correo del CLIENTE (excluyendo dealer, distribuidor, adc, tecnico)
+                        const correoCliente = getDirVal(row, ['CORREO CLIENTE', 'EMAIL CLIENTE', 'MAIL CLIENTE', 'CORREO FACTURACION', 'CORREO', 'EMAIL', 'MAIL'], ['DISTRIBUIDOR', 'DEALER', 'ADC', 'RESPONSABLE', 'TECNICO']);
+                        const telefonoCliente = getDirVal(row, ['TELEFONO CLIENTE', 'TELÉFONO CLIENTE', 'TEL CLIENTE', 'TELEFONO', 'TELÉFONO'], ['DISTRIBUIDOR', 'DEALER', 'ADC', 'RESPONSABLE', 'TECNICO']);
+                        const contactoCliente = getDirVal(row, ['CONTACTO CLIENTE', 'ATENCION', 'ATENCIÓN', 'CONTACTO DE CLIENTE', 'CONTACTO'], ['DISTRIBUIDOR', 'DEALER', 'ADC', 'RESPONSABLE', 'TECNICO']);
+                        const direccionCliente = getDirVal(row, ['DIRECCION CLIENTE', 'DIRECCIÓN CLIENTE', 'DOMICILIO FISCAL', 'DIRECCION FISCAL', 'DOMICILIO CLIENTE']);
 
                         let cliente = clienteCache.get(normalizeClientName(clientName));
                         if (!cliente) {
@@ -360,10 +367,10 @@ export class CargaMasivaService {
                                     data: {
                                         rfc: rfc || cliente.rfc,
                                         datos_comerciales: {
-                                            correo: correoCliente,
-                                            telefono: telefonoCliente,
-                                            contacto: contactoCliente,
-                                            direccion: direccionCliente
+                                            correo: correoCliente || (cliente.datos_comerciales as any)?.correo,
+                                            telefono: telefonoCliente || (cliente.datos_comerciales as any)?.telefono,
+                                            contacto: contactoCliente || (cliente.datos_comerciales as any)?.contacto,
+                                            direccion: direccionCliente || (cliente.datos_comerciales as any)?.direccion
                                         }
                                     }
                                 });
@@ -374,22 +381,22 @@ export class CargaMasivaService {
                         if (siteName) {
                             const cacheKey = `${clientName}::${siteName}`;
                             let sitio = sitioCache.get(cacheKey);
-                            const region = getDirVal(row, 'REGION') || getDirVal(row, 'REGIÓN');
-                            const responsable = normalizeADCName(getDirVal(row, 'RESPONSABLE') || getDirVal(row, 'ADC'));
-                            const distribuidor = getDirVal(row, 'DISTRIBUIDOR') || getDirVal(row, 'DISTRIBUIDOR AUTORIZADO');
-                            const contactoNombre = getDirVal(row, 'CONTACTO') || getDirVal(row, 'CONTACTO TECNICO') || getDirVal(row, 'CONTACTO TÉCNICO') || getDirVal(row, 'CONTACTO DISTRIBUIDOR');
-                            const contactoTelefono = getDirVal(row, 'TELEFONO') || getDirVal(row, 'TELÉFONO') || getDirVal(row, 'TELEFONO DISTRIBUIDOR');
-                            const contactoCorreo = getDirVal(row, 'CORREO') || getDirVal(row, 'EMAIL') || getDirVal(row, 'MAIL') || getDirVal(row, 'CORREO DISTRIBUIDOR');
+                            const region = getDirVal(row, ['REGION', 'REGIÓN']);
+                            const responsable = normalizeADCName(getDirVal(row, ['RESPONSABLE', 'ADC', 'EJECUTIVO ADC', 'EJECUTIVO']));
+                            const distribuidor = getDirVal(row, ['DISTRIBUIDOR', 'DISTRIBUIDOR AUTORIZADO', 'DEALER', 'DEALER ASIGNADO', 'AGENCIA', 'PROVEEDOR']);
+                            const contactoNombre = getDirVal(row, ['CONTACTO DISTRIBUIDOR', 'CONTACTO DEALER', 'PERSONA DEALER', 'RESPONSABLE DEALER', 'CONTACTO TECNICO', 'CONTACTO TÉCNICO', 'TECNICO DEALER', 'TÉCNICO DEALER', 'TECNICO', 'TÉCNICO', 'ASESOR DEALER', 'ASESOR TECNICO', 'CONTACTO DIST']);
+                            const contactoTelefono = getDirVal(row, ['TELEFONO DISTRIBUIDOR', 'TELÉFONO DISTRIBUIDOR', 'TELEFONO DEALER', 'TELÉFONO DEALER', 'TEL DEALER', 'TEL DISTRIBUIDOR', 'TELEFONO TECNICO', 'TELÉFONO TÉCNICO']);
+                            const contactoCorreo = getDirVal(row, ['CORREO DISTRIBUIDOR', 'EMAIL DISTRIBUIDOR', 'MAIL DISTRIBUIDOR', 'CORREO DEALER', 'EMAIL DEALER', 'MAIL DEALER', 'CORREO TECNICO', 'EMAIL TECNICO']);
                             
-                            const adcCorreo = getDirVal(row, 'CORREO ADC') || getDirVal(row, 'EMAIL ADC') || getDirVal(row, 'MAIL ADC') || getDirVal(row, 'CORREO RESPONSABLE');
-                            const adcTelefono = getDirVal(row, 'TELEFONO ADC') || getDirVal(row, 'TELÉFONO ADC') || getDirVal(row, 'TELEFONO RESPONSABLE');
-                            const distribuidorDireccion = getDirVal(row, 'DIRECCION DISTRIBUIDOR') || getDirVal(row, 'DIRECCIÓN DISTRIBUIDOR');
-                            const adcDireccion = getDirVal(row, 'DIRECCION ADC') || getDirVal(row, 'DIRECCIÓN ADC');
+                            const adcCorreo = getDirVal(row, ['CORREO ADC', 'EMAIL ADC', 'MAIL ADC', 'CORREO RESPONSABLE', 'EMAIL RESPONSABLE']);
+                            const adcTelefono = getDirVal(row, ['TELEFONO ADC', 'TELÉFONO ADC', 'TEL ADC', 'TELEFONO RESPONSABLE', 'TELÉFONO RESPONSABLE']);
+                            const distribuidorDireccion = getDirVal(row, ['DIRECCION DISTRIBUIDOR', 'DIRECCIÓN DISTRIBUIDOR', 'DIRECCION DEALER', 'DIRECCIÓN DEALER', 'DOMICILIO DISTRIBUIDOR', 'SUCURSAL DISTRIBUIDOR']);
+                            const adcDireccion = getDirVal(row, ['DIRECCION ADC', 'DIRECCIÓN ADC']);
 
                             const sitioData = {
                                 cliente_id: cliente.id,
                                 nombre: siteName,
-                                direccion: getDirVal(row, 'DIRECCION') || getDirVal(row, 'DIRECCIÓN') || getDirVal(row, 'CALLE') || getDirVal(row, 'CALLE Y NUMERO') || getDirVal(row, 'DOMICILIO') || getDirVal(row, 'DIRECCION SITIO'),
+                                direccion: getDirVal(row, ['DIRECCION', 'DIRECCIÓN', 'CALLE', 'CALLE Y NUMERO', 'DOMICILIO', 'DIRECCION SITIO']),
                                 distribuidor: distribuidor,
                                 adc: responsable,
                                 contacto_operativo: {
@@ -412,7 +419,7 @@ export class CargaMasivaService {
                                     sitiosNuevos++;
                                 } else {
                                     // Update existing site with directory info
-                                    sitio = await db.sitio.update({ where: { id: sitio.id }, data: { direccion: sitioData.direccion || sitio.direccion, distribuidor: sitioData.distribuidor, contacto_operativo: sitioData.contacto_operativo } });
+                                    sitio = await db.sitio.update({ where: { id: sitio.id }, data: { direccion: sitioData.direccion || sitio.direccion, distribuidor: sitioData.distribuidor || sitio.distribuidor, contacto_operativo: sitioData.contacto_operativo } });
                                 }
                                 sitioCache.set(cacheKey, sitio);
                             } else {
@@ -455,7 +462,7 @@ export class CargaMasivaService {
                 if (!hasData) {
                     consecutiveEmpty++;
                     if (consecutiveEmpty >= 20) {
-                        this.logger.log('Se detectaron 20 filas sin datos consecutivas, terminando lectura.');
+                        this.logger.log(`Se detectaron 20 filas sin datos consecutivas a partir de la fila ${rowNumber - 20}, terminando procesamiento.`);
                         break;
                     }
                     continue;
@@ -464,8 +471,8 @@ export class CargaMasivaService {
                 consecutiveEmpty = 0;
 
                 try {
-                    const clienteName = getVal(row, 'CLIENTE');
-                    const serie = getVal(row, 'SERIE');
+                    const clienteName = getStrictColVal(row, headers, ['CLIENTE', 'RAZON SOCIAL', 'RAZÓN SOCIAL', 'CLIENTE / RAZÓN SOCIAL', 'CUENTA']);
+                    const serie = getStrictColVal(row, headers, ['SERIE', 'NÚMERO DE SERIE', 'NUMERO DE SERIE', 'NO. SERIE', 'SERIE EQUIPO', 'S/N', 'SN']);
 
                     if (!clienteName || !serie) {
                         // Se omite el logger para no saturar la consola en caso de filas mal formateadas
@@ -478,11 +485,11 @@ export class CargaMasivaService {
                         const allClientes = await db.cliente.findMany({ select: { id: true, razon_social: true, rfc: true, datos_comerciales: true } });
                         const normalizedInput = normalizeClientName(clienteName);
                         cliente = allClientes.find(c => normalizeClientName(c.razon_social) === normalizedInput) || null;
-                        const rfc = getVal(row, 'RFC') || getVal(row, 'RFC CLIENTE');
-                        const correoCliente = getVal(row, 'CORREO CLIENTE') || getVal(row, 'MAIL CLIENTE') || getVal(row, 'EMAIL CLIENTE');
-                        const telefonoCliente = getVal(row, 'TELEFONO CLIENTE') || getVal(row, 'TELÉFONO CLIENTE');
-                        const direccionCliente = getVal(row, 'DIRECCION CLIENTE') || getVal(row, 'DIRECCIÓN CLIENTE');
-                        const contactoCliente = getVal(row, 'CONTACTO CLIENTE');
+                        const rfc = getStrictColVal(row, headers, ['RFC', 'RFC CLIENTE', 'R.F.C.']);
+                        const correoCliente = getStrictColVal(row, headers, ['CORREO CLIENTE', 'MAIL CLIENTE', 'EMAIL CLIENTE', 'CORREO FACTURACION'], ['DISTRIBUIDOR', 'DEALER', 'ADC', 'RESPONSABLE', 'TECNICO']);
+                        const telefonoCliente = getStrictColVal(row, headers, ['TELEFONO CLIENTE', 'TELÉFONO CLIENTE', 'TEL CLIENTE'], ['DISTRIBUIDOR', 'DEALER', 'ADC', 'RESPONSABLE', 'TECNICO']);
+                        const direccionCliente = getStrictColVal(row, headers, ['DIRECCION CLIENTE', 'DIRECCIÓN CLIENTE', 'DOMICILIO FISCAL', 'DOMICILIO CLIENTE']);
+                        const contactoCliente = getStrictColVal(row, headers, ['CONTACTO CLIENTE', 'CONTACTO_CLIENTE', 'ATENCION', 'ATENCIÓN'], ['DISTRIBUIDOR', 'DEALER', 'ADC', 'RESPONSABLE', 'TECNICO']);
 
                         if (!cliente) {
                             cliente = await db.cliente.create({
@@ -506,10 +513,10 @@ export class CargaMasivaService {
                                 data: {
                                     rfc: rfc || cliente.rfc,
                                     datos_comerciales: {
-                                        correo: correoCliente,
-                                        telefono: telefonoCliente,
-                                        direccion: direccionCliente,
-                                        contacto: contactoCliente
+                                        correo: correoCliente || (cliente.datos_comerciales as any)?.correo,
+                                        telefono: telefonoCliente || (cliente.datos_comerciales as any)?.telefono,
+                                        direccion: direccionCliente || (cliente.datos_comerciales as any)?.direccion,
+                                        contacto: contactoCliente || (cliente.datos_comerciales as any)?.contacto
                                     }
                                 }
                             });
@@ -518,11 +525,11 @@ export class CargaMasivaService {
                     }
 
                     // B: SITIO
-                    const sitioName = getVal(row, 'SITE') || getVal(row, 'SITIO') || 'Sin Sitio';
+                    const sitioName = getStrictColVal(row, headers, ['SITE', 'SITIO', 'SUCURSAL', 'TIENDA']) || 'Sin Sitio';
                     const sitioCacheKey = `${cliente.id}::${sitioName}`;
                     let sitio = sitioCache.get(sitioCacheKey);
                     
-                    const adc = normalizeADCName(getVal(row, 'RESPONSABLE') || getVal(row, 'ADC'));
+                    const adc = normalizeADCName(getStrictColVal(row, headers, ['RESPONSABLE', 'ADC', 'EJECUTIVO ADC', 'EJECUTIVO']));
                     
                     // CARGA PARCIAL: si se especificó un ADC filter, ignorar filas de otros ADCs
                     if (adcFilter) {
@@ -533,21 +540,21 @@ export class CargaMasivaService {
                             continue;
                         }
                     }
-                    const distribuidor = getVal(row, 'DISTRIBUIDOR') || getVal(row, 'DISTRIBUIDOR AUTORIZADO');
+                    const distribuidor = getStrictColVal(row, headers, ['DISTRIBUIDOR', 'DISTRIBUIDOR AUTORIZADO', 'DEALER', 'DEALER ASIGNADO', 'AGENCIA', 'PROVEEDOR']);
                     const sitioData = {
-                        ciudad: getVal(row, 'MUNICIPIO') || getVal(row, 'CIUDAD'),
-                        direccion: getVal(row, 'DIRECCION') || getVal(row, 'DIRECCIÓN') || getVal(row, 'CALLE') || getVal(row, 'CALLE Y NUMERO') || getVal(row, 'DOMICILIO') || getVal(row, 'DIRECCION SITIO'),
-                        cuenta: getVal(row, 'CUENTA'),
+                        ciudad: getStrictColVal(row, headers, ['MUNICIPIO', 'CIUDAD', 'PLAZA']),
+                        direccion: getStrictColVal(row, headers, ['DIRECCION', 'DIRECCIÓN', 'CALLE', 'CALLE Y NUMERO', 'DOMICILIO', 'DIRECCION SITIO']),
+                        cuenta: getStrictColVal(row, headers, ['CUENTA', 'NO. CUENTA', 'NUMERO CUENTA']),
                         adc: adc,
                         distribuidor: distribuidor,
                         contacto_operativo: {
-                            adc_correo: getVal(row, 'CORREO ADC') || getVal(row, 'MAIL ADC') || getVal(row, 'EMAIL ADC') || getVal(row, 'CORREO RESPONSABLE'),
-                            adc_telefono: getVal(row, 'TELEFONO ADC') || getVal(row, 'TELÉFONO ADC') || getVal(row, 'TELEFONO RESPONSABLE'),
-                            adc_direccion: getVal(row, 'DIRECCION ADC') || getVal(row, 'DIRECCIÓN ADC'),
-                            distribuidor_contacto_nombre: getVal(row, 'CONTACTO DISTRIBUIDOR') || getVal(row, 'CONTACTO TECNICO') || getVal(row, 'CONTACTO TÉCNICO') || getVal(row, 'CONTACTO'),
-                            distribuidor_contacto_correo: getVal(row, 'CORREO DISTRIBUIDOR') || getVal(row, 'MAIL DISTRIBUIDOR') || getVal(row, 'EMAIL DISTRIBUIDOR'),
-                            distribuidor_contacto_telefono: getVal(row, 'TELEFONO DISTRIBUIDOR') || getVal(row, 'TELÉFONO DISTRIBUIDOR'),
-                            distribuidor_direccion: getVal(row, 'DIRECCION DISTRIBUIDOR') || getVal(row, 'DIRECCIÓN DISTRIBUIDOR')
+                            adc_correo: getStrictColVal(row, headers, ['CORREO ADC', 'MAIL ADC', 'EMAIL ADC', 'CORREO RESPONSABLE']),
+                            adc_telefono: getStrictColVal(row, headers, ['TELEFONO ADC', 'TELÉFONO ADC', 'TELEFONO RESPONSABLE']),
+                            adc_direccion: getStrictColVal(row, headers, ['DIRECCION ADC', 'DIRECCIÓN ADC']),
+                            distribuidor_contacto_nombre: getStrictColVal(row, headers, ['CONTACTO DISTRIBUIDOR', 'CONTACTO DEALER', 'PERSONA DEALER', 'RESPONSABLE DEALER', 'CONTACTO TECNICO', 'CONTACTO TÉCNICO', 'TECNICO DEALER', 'TÉCNICO DEALER', 'TECNICO', 'TÉCNICO', 'ASESOR DEALER', 'ASESOR TECNICO', 'CONTACTO DIST']),
+                            distribuidor_contacto_correo: getStrictColVal(row, headers, ['CORREO DISTRIBUIDOR', 'MAIL DISTRIBUIDOR', 'EMAIL DISTRIBUIDOR', 'CORREO DEALER', 'EMAIL DEALER', 'CORREO TECNICO', 'EMAIL TECNICO']),
+                            distribuidor_contacto_telefono: getStrictColVal(row, headers, ['TELEFONO DISTRIBUIDOR', 'TELÉFONO DISTRIBUIDOR', 'TELEFONO DEALER', 'TELÉFONO DEALER', 'TEL DEALER', 'TEL DISTRIBUIDOR', 'TELEFONO TECNICO', 'TELÉFONO TÉCNICO']),
+                            distribuidor_direccion: getStrictColVal(row, headers, ['DIRECCION DISTRIBUIDOR', 'DIRECCIÓN DISTRIBUIDOR', 'DIRECCION DEALER', 'DIRECCIÓN DEALER', 'DOMICILIO DISTRIBUIDOR'])
                         }
                     };
 

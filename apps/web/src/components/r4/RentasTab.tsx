@@ -1,7 +1,7 @@
 "use client";
 
 import { 
-  Search, Receipt, Calendar, CalendarDays, Plus, Filter, Download, X, Pencil, Check, ChevronsUpDown, FileText, Building2, MapPin, Truck, FileSpreadsheet, Eye, BatteryCharging, FilePlus, ChevronLeft, ChevronRight
+  Search, Receipt, Calendar, CalendarDays, Plus, Filter, Download, X, Pencil, Check, ChevronsUpDown, FileText, Building2, MapPin, Truck, FileSpreadsheet, Eye, BatteryCharging, FilePlus, ChevronLeft, ChevronRight, Sparkles, Layers, CheckCircle2, Trash2
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -156,10 +156,11 @@ export default function RentasTab({
   const [fichaFolioOc, setFichaFolioOc] = useState("");
   const [fichaPedidoTotvs, setFichaPedidoTotvs] = useState("");
   const [fichaFechaTotvs, setFichaFechaTotvs] = useState("");
-  const [fichaMesCobro, setFichaMesCobro] = useState("");
+  const [fichaMesCobro, setFichaMesCobro] = useState(new Date().toISOString().slice(0, 7));
   const [fichaPdfFile, setFichaPdfFile] = useState<File | null>(null);
   const [isFichaDragging, setIsFichaDragging] = useState(false);
-  const [fichaSeriesGrid, setFichaSeriesGrid] = useState<any[]>([]); // Array of { assetId, serie, modelo, clase, checked, renta_base, dias_caidos, descuento, renta_final }
+  const [fichaSeriesGrid, setFichaSeriesGrid] = useState<any[]>([]); // Array of { assetId, serie, modelo, clase, checked, renta_base, dias_caidos, descuento, renta_final, alreadyHasOrderInMonth, orderInMonthPo, hadOrderInPrevMonth }
+  const [showOnlyAvailableInMonth, setShowOnlyAvailableInMonth] = useState(true);
   const [isSubmittingFicha, setIsSubmittingFicha] = useState(false);
 
   const [openFichaCliente, setOpenFichaCliente] = useState(false);
@@ -180,39 +181,87 @@ export default function RentasTab({
     formData: { estado: '', renta_base: '', moneda: 'MXN', po: '', ordenes: [] }
   });
   const [isSubmittingRenta, setIsSubmittingRenta] = useState(false);
+  const [deleteRentaModal, setDeleteRentaModal] = useState<{
+    isOpen: boolean;
+    renta: any | null;
+    isDeleting: boolean;
+  }>({
+    isOpen: false,
+    renta: null,
+    isDeleting: false,
+  });
 
   // Filter States (Multi-select)
   const [selectedFilterCuenta, setSelectedFilterCuenta] = useState<string[]>([]);
   const [selectedFilterSitio, setSelectedFilterSitio] = useState<string[]>([]);
+  const [selectedFilterAdc, setSelectedFilterAdc] = useState<string[]>([]);
+  const [selectedFilterEquipo, setSelectedFilterEquipo] = useState<string[]>([]);
   const [selectedFilterClase, setSelectedFilterClase] = useState<string[]>([]);
   const [selectedFilterModelo, setSelectedFilterModelo] = useState<string[]>([]);
-  const [selectedFilterDistribuidor, setSelectedFilterDistribuidor] = useState<string[]>([]);
-  const [selectedFilterEquipo, setSelectedFilterEquipo] = useState<string[]>([]);
+  const [selectedFilterSerie, setSelectedFilterSerie] = useState<string[]>([]);
+  const [selectedFilterEstatus, setSelectedFilterEstatus] = useState<string[]>([]);
+  const [selectedFilterOach, setSelectedFilterOach] = useState<string[]>([]);
+  const [selectedFilterAltura, setSelectedFilterAltura] = useState<string[]>([]);
+  const [selectedFilterBc, setSelectedFilterBc] = useState<string[]>([]);
+  const [selectedFilterFolioOc, setSelectedFilterFolioOc] = useState<string[]>([]);
+  const [selectedFilterFEntregado, setSelectedFilterFEntregado] = useState<string[]>([]);
+  const [selectedFilterPlazo, setSelectedFilterPlazo] = useState<string[]>([]);
+  const [selectedFilterFVencimiento, setSelectedFilterFVencimiento] = useState<string[]>([]);
+  const [selectedFilterPropietario, setSelectedFilterPropietario] = useState<string[]>([]);
+  const [selectedFilterPrecioRenta, setSelectedFilterPrecioRenta] = useState<string[]>([]);
   const [selectedFilterMoneda, setSelectedFilterMoneda] = useState<string[]>([]);
   const [selectedFilterPoliza, setSelectedFilterPoliza] = useState<string[]>([]);
-  const [selectedFilterPropietario, setSelectedFilterPropietario] = useState<string[]>([]);
+  const [selectedFilterDistribuidor, setSelectedFilterDistribuidor] = useState<string[]>([]);
+  const [selectedFilterCostoPoliza, setSelectedFilterCostoPoliza] = useState<string[]>([]);
+  const [selectedFilterMonedaPago, setSelectedFilterMonedaPago] = useState<string[]>([]);
 
   // Combobox open states
   const [openFilterCuenta, setOpenFilterCuenta] = useState(false);
   const [openFilterSitio, setOpenFilterSitio] = useState(false);
+  const [openFilterAdc, setOpenFilterAdc] = useState(false);
+  const [openFilterEquipo, setOpenFilterEquipo] = useState(false);
   const [openFilterClase, setOpenFilterClase] = useState(false);
   const [openFilterModelo, setOpenFilterModelo] = useState(false);
-  const [openFilterDistribuidor, setOpenFilterDistribuidor] = useState(false);
-  const [openFilterEquipo, setOpenFilterEquipo] = useState(false);
+  const [openFilterSerie, setOpenFilterSerie] = useState(false);
+  const [openFilterEstatus, setOpenFilterEstatus] = useState(false);
+  const [openFilterOach, setOpenFilterOach] = useState(false);
+  const [openFilterAltura, setOpenFilterAltura] = useState(false);
+  const [openFilterBc, setOpenFilterBc] = useState(false);
+  const [openFilterFolioOc, setOpenFilterFolioOc] = useState(false);
+  const [openFilterFEntregado, setOpenFilterFEntregado] = useState(false);
+  const [openFilterPlazo, setOpenFilterPlazo] = useState(false);
+  const [openFilterFVencimiento, setOpenFilterFVencimiento] = useState(false);
+  const [openFilterPropietario, setOpenFilterPropietario] = useState(false);
+  const [openFilterPrecioRenta, setOpenFilterPrecioRenta] = useState(false);
   const [openFilterMoneda, setOpenFilterMoneda] = useState(false);
   const [openFilterPoliza, setOpenFilterPoliza] = useState(false);
-  const [openFilterPropietario, setOpenFilterPropietario] = useState(false);
+  const [openFilterDistribuidor, setOpenFilterDistribuidor] = useState(false);
+  const [openFilterCostoPoliza, setOpenFilterCostoPoliza] = useState(false);
+  const [openFilterMonedaPago, setOpenFilterMonedaPago] = useState(false);
 
   // Combobox search states
   const [searchCuenta, setSearchCuenta] = useState("");
   const [searchSitio, setSearchSitio] = useState("");
+  const [searchAdc, setSearchAdc] = useState("");
+  const [searchEquipo, setSearchEquipo] = useState("");
   const [searchClase, setSearchClase] = useState("");
   const [searchModelo, setSearchModelo] = useState("");
-  const [searchDistribuidor, setSearchDistribuidor] = useState("");
-  const [searchEquipo, setSearchEquipo] = useState("");
+  const [searchSerie, setSearchSerie] = useState("");
+  const [searchEstatus, setSearchEstatus] = useState("");
+  const [searchOach, setSearchOach] = useState("");
+  const [searchAltura, setSearchAltura] = useState("");
+  const [searchBc, setSearchBc] = useState("");
+  const [searchFolioOc, setSearchFolioOc] = useState("");
+  const [searchFEntregado, setSearchFEntregado] = useState("");
+  const [searchPlazo, setSearchPlazo] = useState("");
+  const [searchFVencimiento, setSearchFVencimiento] = useState("");
+  const [searchPropietario, setSearchPropietario] = useState("");
+  const [searchPrecioRenta, setSearchPrecioRenta] = useState("");
   const [searchMoneda, setSearchMoneda] = useState("");
   const [searchPoliza, setSearchPoliza] = useState("");
-  const [searchPropietario, setSearchPropietario] = useState("");
+  const [searchDistribuidor, setSearchDistribuidor] = useState("");
+  const [searchCostoPoliza, setSearchCostoPoliza] = useState("");
+  const [searchMonedaPago, setSearchMonedaPago] = useState("");
 
   // VIEW MODAL STATE
   const [viewRentaConfig, setViewRentaConfig] = useState({
@@ -522,27 +571,45 @@ export default function RentasTab({
     // Find all assets assigned to this site
     const siteAssets = equiposDisponibles.filter(e => e.sitio_id === selectedFichaSitioId);
     
+    // Calculate previous month string
+    let prevPeriod = '';
+    if (fichaMesCobro && fichaMesCobro.includes('-')) {
+      const [y, m] = fichaMesCobro.split('-').map(Number);
+      const prevDate = new Date(y, m - 2, 1);
+      prevPeriod = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    }
+
     const gridData = siteAssets.map(asset => {
       // Find if this asset has an active renta
       const activeRenta = rentas.find(r => r.activo?.id === asset.id && r.estado !== 'CANCELADA');
       const basePrice = activeRenta?.detalles?.renta_base || activeRenta?.tarifa || 0;
       
+      const orders = activeRenta?.ordenes || [];
+      const orderInCurrentMonth = orders.find((o: any) => o.periodo === fichaMesCobro);
+      const hadOrderInPrev = prevPeriod ? orders.some((o: any) => o.periodo === prevPeriod) : false;
+
+      const alreadyHasOrder = !!orderInCurrentMonth;
+
       return {
         assetId: asset.id,
         serie: asset.serie,
         modelo: asset.modelo || '-',
         clase: asset.clase || '-',
-        checked: siteAssets.length === 1 ? true : false,
+        checked: siteAssets.length === 1 && !alreadyHasOrder ? true : false,
         renta_base: basePrice,
         dias_caidos: 0,
         descuento: 0,
         renta_final: basePrice,
-        existingRenta: activeRenta || null
+        existingRenta: activeRenta || null,
+        alreadyHasOrderInMonth: alreadyHasOrder,
+        orderInMonthPo: orderInCurrentMonth?.po || activeRenta?.orden_compra || null,
+        orderInMonthTotvs: (orderInCurrentMonth?.condiciones as any)?.pedido_totvs || activeRenta?.no_registro_totvs || null,
+        hadOrderInPrevMonth: hadOrderInPrev
       };
     });
 
     setFichaSeriesGrid(gridData);
-  }, [selectedFichaSitioId, equiposDisponibles, rentas]);
+  }, [selectedFichaSitioId, fichaMesCobro, equiposDisponibles, rentas]);
 
   // Recalculate discount when pricing or dias caidos change
   const handleGridFieldChange = (index: number, field: 'checked' | 'renta_base' | 'dias_caidos', value: any) => {
@@ -566,11 +633,46 @@ export default function RentasTab({
     setFichaSeriesGrid(updated);
   };
 
-  // Select-all toggle for OC equipment table
-  const allSeriesChecked = fichaSeriesGrid.length > 0 && fichaSeriesGrid.every(i => i.checked);
-  const someSeriesChecked = fichaSeriesGrid.some(i => i.checked) && !allSeriesChecked;
+  // Copy selection of previous month
+  const handleCopyPrevMonthSelection = () => {
+    if (!fichaMesCobro) {
+      toast.error('Selecciona primero el Mes de Cobertura');
+      return;
+    }
+    const [y, m] = fichaMesCobro.split('-').map(Number);
+    const prevDate = new Date(y, m - 2, 1);
+    const prevMonthName = prevDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+
+    let count = 0;
+    const updated = fichaSeriesGrid.map(item => {
+      // If already billed this month, keep it unchecked
+      if (item.alreadyHasOrderInMonth) return { ...item, checked: false };
+      // If had order in previous month, check it
+      if (item.hadOrderInPrevMonth) {
+        count++;
+        return { ...item, checked: true };
+      }
+      return { ...item, checked: false };
+    });
+
+    setFichaSeriesGrid(updated);
+    if (count > 0) {
+      toast.success(`Se seleccionaron ${count} series cobradas en ${prevMonthName}`);
+    } else {
+      toast.info(`No se encontraron series cobradas en el mes previo (${prevMonthName})`);
+    }
+  };
+
+  // Select-all toggle for OC equipment table (only selects available series)
+  const availableSeries = fichaSeriesGrid.filter(i => !showOnlyAvailableInMonth || !i.alreadyHasOrderInMonth);
+  const allSeriesChecked = availableSeries.length > 0 && availableSeries.every(i => i.checked);
+  const someSeriesChecked = availableSeries.some(i => i.checked) && !allSeriesChecked;
   const handleSelectAllSeries = () => {
-    setFichaSeriesGrid(prev => prev.map(i => ({ ...i, checked: !allSeriesChecked })));
+    const nextChecked = !allSeriesChecked;
+    setFichaSeriesGrid(prev => prev.map(i => {
+      if (i.alreadyHasOrderInMonth) return { ...i, checked: false };
+      return { ...i, checked: nextChecked };
+    }));
   };
 
   // Total a Facturar — suma de renta_final de equipos seleccionados
@@ -585,9 +687,10 @@ export default function RentasTab({
     setFichaFolioOc("");
     setFichaPedidoTotvs("");
     setFichaFechaTotvs("");
-    setFichaMesCobro("");
+    setFichaMesCobro(new Date().toISOString().slice(0, 7));
     setFichaPdfFile(null);
     setIsFichaDragging(false);
+    setShowOnlyAvailableInMonth(true);
     setIsFichaOcModalOpen(false);
   };
 
@@ -669,6 +772,21 @@ export default function RentasTab({
       toast.error(error.response?.data?.message || 'Error al actualizar renta');
     } finally {
       setIsSubmittingRenta(false);
+    }
+  };
+
+  const handleConfirmDeleteRenta = async () => {
+    if (!deleteRentaModal.renta) return;
+    try {
+      setDeleteRentaModal(prev => ({ ...prev, isDeleting: true }));
+      await api.delete(`/r4/rentas/${deleteRentaModal.renta.id}`);
+      toast.success('Renta eliminada correctamente');
+      setDeleteRentaModal({ isOpen: false, renta: null, isDeleting: false });
+      fetchRentasYClientes();
+    } catch (error: any) {
+      console.error('Error deleting renta:', error);
+      toast.error(error.response?.data?.message || 'Error al eliminar la renta');
+      setDeleteRentaModal(prev => ({ ...prev, isDeleting: false }));
     }
   };
 
@@ -812,10 +930,26 @@ export default function RentasTab({
 
   const filterUniqueCuentas = Array.from(new Set(baseRentas.map(r => r.cuenta).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
   const filterUniqueSitios = Array.from(new Set(baseRentas.map(r => r.sitio?.nombre).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueAdcs = Array.from(new Set(baseRentas.map(r => r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueEquipos = Array.from(new Set(baseRentas.map(r => r.activo?.tipo || (r.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas')).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
   const filterUniqueClases = Array.from(new Set(baseRentas.map(r => r.activo?.clase).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
   const filterUniqueModelos = Array.from(new Set(baseRentas.map(r => r.activo?.modelo).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueDistribuidores = Array.from(new Set(baseRentas.map(r => r.distribuidor || r.activo?.distribuidor).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueSeries = Array.from(new Set(baseRentas.map(r => r.activo?.serie).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueEstatus = Array.from(new Set(baseRentas.map(r => r.activo?.estatus).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueOach = Array.from(new Set(baseRentas.map(r => r.activo?.oach).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueAlturas = Array.from(new Set(baseRentas.map(r => r.activo?.altura).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueBc = Array.from(new Set(baseRentas.map(r => r.activo?.bc).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueFolioOc = Array.from(new Set(baseRentas.map(r => r.orden_compra || r.detalles?.oc_cliente).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueFEntregado = Array.from(new Set(baseRentas.map(r => r.fecha_inicio ? new Date(r.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniquePlazos = Array.from(new Set(baseRentas.map(r => r.condiciones?.plazo_meses ? String(r.condiciones.plazo_meses) : null).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueFVencimiento = Array.from(new Set(baseRentas.map(r => r.fecha_fin ? new Date(r.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
   const filterUniquePropietarios = Array.from(new Set(baseRentas.map(r => r.propietario || r.activo?.propietario).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniquePreciosRenta = Array.from(new Set(baseRentas.map(r => `$${(r.detalles?.renta_base || r.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueMonedas = Array.from(new Set(baseRentas.map(r => r.detalles?.moneda || 'MXN').filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniquePolizas = Array.from(new Set(baseRentas.map(r => r.condiciones?.tipo_poliza || r.activo?.tipo_poliza || 'SMP').filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueDistribuidores = Array.from(new Set(baseRentas.map(r => r.distribuidor || r.activo?.distribuidor).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueCostosPoliza = Array.from(new Set(baseRentas.map(r => `$${(r.condiciones?.costo_poliza_distribuidor || r.activo?.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`))).sort((a, b) => a.localeCompare(b));
+  const filterUniqueMonedasPago = Array.from(new Set(baseRentas.map(r => r.condiciones?.moneda_pago_distribuidor || r.activo?.moneda_pago_distribuidor || 'MXN').filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
 
   const isMatchFilter = (filterVals: string[], valToTest: any) => {
     if (!filterVals || filterVals.length === 0 || filterVals.includes('Todos')) return true;
@@ -835,18 +969,63 @@ export default function RentasTab({
       (renta.propietario || renta.activo?.propietario)?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const rAdc = renta.adc || renta.sitio?.adc || (renta.cliente as any)?.datos_comerciales?.adc || '-';
+    const tipoEq = renta.activo?.tipo || (renta.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas');
+    const rPrecioFormatted = `$${(detalles.renta_base || renta.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    const rCostoPolizaFormatted = `$${(cond.costo_poliza_distribuidor || renta.activo?.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    const rFEntregado = renta.fecha_inicio ? new Date(renta.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+    const rFVencimiento = renta.fecha_fin ? new Date(renta.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+    const rPlazo = cond.plazo_meses ? String(cond.plazo_meses) : '-';
+    const rFolioOc = renta.orden_compra || detalles.oc_cliente || '-';
+
     const matchesCuenta = isMatchFilter(selectedFilterCuenta, renta.cuenta);
     const matchesSitio = isMatchFilter(selectedFilterSitio, renta.sitio?.nombre);
+    const matchesAdc = isMatchFilter(selectedFilterAdc, rAdc);
+    const matchesEquipo = isMatchFilter(selectedFilterEquipo, tipoEq);
     const matchesClase = isMatchFilter(selectedFilterClase, renta.activo?.clase);
     const matchesModelo = isMatchFilter(selectedFilterModelo, renta.activo?.modelo);
-    const matchesDistribuidor = isMatchFilter(selectedFilterDistribuidor, renta.distribuidor || renta.activo?.distribuidor);
-    const tipoEq = renta.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas';
-    const matchesEquipo = isMatchFilter(selectedFilterEquipo, tipoEq);
+    const matchesSerie = isMatchFilter(selectedFilterSerie, renta.activo?.serie);
+    const matchesEstatus = isMatchFilter(selectedFilterEstatus, renta.activo?.estatus);
+    const matchesOach = isMatchFilter(selectedFilterOach, renta.activo?.oach);
+    const matchesAltura = isMatchFilter(selectedFilterAltura, renta.activo?.altura);
+    const matchesBc = isMatchFilter(selectedFilterBc, renta.activo?.bc);
+    const matchesFolioOc = isMatchFilter(selectedFilterFolioOc, rFolioOc);
+    const matchesFEntregado = isMatchFilter(selectedFilterFEntregado, rFEntregado);
+    const matchesPlazo = isMatchFilter(selectedFilterPlazo, rPlazo);
+    const matchesFVencimiento = isMatchFilter(selectedFilterFVencimiento, rFVencimiento);
+    const matchesPropietario = isMatchFilter(selectedFilterPropietario, renta.propietario || renta.activo?.propietario);
+    const matchesPrecioRenta = isMatchFilter(selectedFilterPrecioRenta, rPrecioFormatted);
     const matchesMoneda = isMatchFilter(selectedFilterMoneda, detalles.moneda || 'MXN');
     const matchesPoliza = isMatchFilter(selectedFilterPoliza, cond.tipo_poliza || renta.activo?.tipo_poliza || 'SMP');
-    const matchesPropietario = isMatchFilter(selectedFilterPropietario, renta.propietario || renta.activo?.propietario);
+    const matchesDistribuidor = isMatchFilter(selectedFilterDistribuidor, renta.distribuidor || renta.activo?.distribuidor);
+    const matchesCostoPoliza = isMatchFilter(selectedFilterCostoPoliza, rCostoPolizaFormatted);
+    const matchesMonedaPago = isMatchFilter(selectedFilterMonedaPago, cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN');
 
-    return matchesSearch && matchesCuenta && matchesSitio && matchesClase && matchesModelo && matchesDistribuidor && matchesEquipo && matchesMoneda && matchesPoliza && matchesPropietario;
+    return (
+      matchesSearch &&
+      matchesCuenta &&
+      matchesSitio &&
+      matchesAdc &&
+      matchesEquipo &&
+      matchesClase &&
+      matchesModelo &&
+      matchesSerie &&
+      matchesEstatus &&
+      matchesOach &&
+      matchesAltura &&
+      matchesBc &&
+      matchesFolioOc &&
+      matchesFEntregado &&
+      matchesPlazo &&
+      matchesFVencimiento &&
+      matchesPropietario &&
+      matchesPrecioRenta &&
+      matchesMoneda &&
+      matchesPoliza &&
+      matchesDistribuidor &&
+      matchesCostoPoliza &&
+      matchesMonedaPago
+    );
   });
 
   const totalRentas = filteredRentas.length;
@@ -1161,22 +1340,57 @@ export default function RentasTab({
             )}
           </div>
 
-          {(searchTerm || selectedFilterCuenta.length > 0 || selectedFilterSitio.length > 0 || selectedFilterClase.length > 0 || selectedFilterModelo.length > 0 || selectedFilterDistribuidor.length > 0 || selectedFilterPropietario.length > 0 || selectedFilterEquipo.length > 0 || selectedFilterMoneda.length > 0 || selectedFilterPoliza.length > 0) && (
+          {(searchTerm || 
+            selectedFilterCuenta.length > 0 || 
+            selectedFilterSitio.length > 0 || 
+            selectedFilterAdc.length > 0 || 
+            selectedFilterEquipo.length > 0 || 
+            selectedFilterClase.length > 0 || 
+            selectedFilterModelo.length > 0 || 
+            selectedFilterSerie.length > 0 || 
+            selectedFilterEstatus.length > 0 || 
+            selectedFilterOach.length > 0 || 
+            selectedFilterAltura.length > 0 || 
+            selectedFilterBc.length > 0 || 
+            selectedFilterFolioOc.length > 0 || 
+            selectedFilterFEntregado.length > 0 || 
+            selectedFilterPlazo.length > 0 || 
+            selectedFilterFVencimiento.length > 0 || 
+            selectedFilterPropietario.length > 0 || 
+            selectedFilterPrecioRenta.length > 0 || 
+            selectedFilterMoneda.length > 0 || 
+            selectedFilterPoliza.length > 0 || 
+            selectedFilterDistribuidor.length > 0 || 
+            selectedFilterCostoPoliza.length > 0 || 
+            selectedFilterMonedaPago.length > 0) && (
             <button 
               onClick={() => {
                 setSearchTerm('');
                 setSelectedFilterCuenta([]);
                 setSelectedFilterSitio([]);
+                setSelectedFilterAdc([]);
+                setSelectedFilterEquipo([]);
                 setSelectedFilterClase([]);
                 setSelectedFilterModelo([]);
-                setSelectedFilterDistribuidor([]);
+                setSelectedFilterSerie([]);
+                setSelectedFilterEstatus([]);
+                setSelectedFilterOach([]);
+                setSelectedFilterAltura([]);
+                setSelectedFilterBc([]);
+                setSelectedFilterFolioOc([]);
+                setSelectedFilterFEntregado([]);
+                setSelectedFilterPlazo([]);
+                setSelectedFilterFVencimiento([]);
                 setSelectedFilterPropietario([]);
-                setSelectedFilterEquipo([]);
+                setSelectedFilterPrecioRenta([]);
                 setSelectedFilterMoneda([]);
                 setSelectedFilterPoliza([]);
+                setSelectedFilterDistribuidor([]);
+                setSelectedFilterCostoPoliza([]);
+                setSelectedFilterMonedaPago([]);
                 setCurrentPage(1);
               }} 
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border-2 border-red-200 text-xs font-bold transition-all shadow-sm shrink-0" 
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border-2 border-red-200 text-xs font-bold transition-all shadow-sm shrink-0 cursor-pointer" 
               title="Limpiar todos los filtros"
             >
               <X className="w-3.5 h-3.5" />
@@ -1190,14 +1404,14 @@ export default function RentasTab({
           <div className="flex items-center gap-2">
             <button
               onClick={exportRentasToCSV}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-slate-500" />
               <span>Exportar</span>
             </button>
             <button
               onClick={() => setIsFichaOcModalOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-sm hover:opacity-90 whitespace-nowrap"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-sm hover:opacity-90 whitespace-nowrap cursor-pointer"
               style={{ backgroundColor: currentColor, boxShadow: `0 2px 8px 0 ${currentColor}30` }}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -1220,10 +1434,12 @@ export default function RentasTab({
                   <TableHeaderFilter label="Sitio" title="SITE" value={selectedFilterSitio} onChange={(val) => { setSelectedFilterSitio(val); setCurrentPage(1); }} options={filterUniqueSitios} open={openFilterSitio} setOpen={setOpenFilterSitio} search={searchSitio} setSearch={setSearchSitio} currentColor={currentColor} />
                 </th>
                 {!isAdc && (
-                  <th className="px-4 py-4 font-black">Ejecutivo (ADC)</th>
+                  <th className="px-4 py-4">
+                    <TableHeaderFilter label="Ejecutivo (ADC)" title="EJECUTIVO (ADC)" value={selectedFilterAdc} onChange={(val) => { setSelectedFilterAdc(val); setCurrentPage(1); }} options={filterUniqueAdcs} open={openFilterAdc} setOpen={setOpenFilterAdc} search={searchAdc} setSearch={setSearchAdc} currentColor={currentColor} />
+                  </th>
                 )}
                 <th className="px-4 py-4">
-                  <TableHeaderFilter label="Equipo" title="TIPO" value={selectedFilterEquipo} onChange={(val) => { setSelectedFilterEquipo(val); setCurrentPage(1); }} options={['Montacargas', 'Patín']} open={openFilterEquipo} setOpen={setOpenFilterEquipo} search={searchEquipo} setSearch={setSearchEquipo} currentColor={currentColor} />
+                  <TableHeaderFilter label="Equipo" title="TIPO" value={selectedFilterEquipo} onChange={(val) => { setSelectedFilterEquipo(val); setCurrentPage(1); }} options={filterUniqueEquipos} open={openFilterEquipo} setOpen={setOpenFilterEquipo} search={searchEquipo} setSearch={setSearchEquipo} currentColor={currentColor} />
                 </th>
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Clase" title="CLASE" value={selectedFilterClase} onChange={(val) => { setSelectedFilterClase(val); setCurrentPage(1); }} options={filterUniqueClases} open={openFilterClase} setOpen={setOpenFilterClase} search={searchClase} setSearch={setSearchClase} currentColor={currentColor} />
@@ -1231,30 +1447,54 @@ export default function RentasTab({
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Modelo" title="MODELO" value={selectedFilterModelo} onChange={(val) => { setSelectedFilterModelo(val); setCurrentPage(1); }} options={filterUniqueModelos} open={openFilterModelo} setOpen={setOpenFilterModelo} search={searchModelo} setSearch={setSearchModelo} currentColor={currentColor} />
                 </th>
-                <th className="px-4 py-4 font-black">Serie</th>
-                <th className="px-4 py-4 font-black">Estatus Equipo</th>
-                <th className="px-4 py-4 font-black">OACH</th>
-                <th className="px-4 py-4 font-black">Altura</th>
-                <th className="px-4 py-4 font-black">BC</th>
-                <th className="px-4 py-4 font-black">Folio OC</th>
-                <th className="px-4 py-4 font-black">F. Entregado</th>
-                <th className="px-4 py-4 font-black">Plazo (meses)</th>
-                <th className="px-4 py-4 font-black">F. Vencimiento</th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="Serie" title="SERIE" value={selectedFilterSerie} onChange={(val) => { setSelectedFilterSerie(val); setCurrentPage(1); }} options={filterUniqueSeries} open={openFilterSerie} setOpen={setOpenFilterSerie} search={searchSerie} setSearch={setSearchSerie} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="Estatus" title="ESTATUS EQUIPO" value={selectedFilterEstatus} onChange={(val) => { setSelectedFilterEstatus(val); setCurrentPage(1); }} options={filterUniqueEstatus} open={openFilterEstatus} setOpen={setOpenFilterEstatus} search={searchEstatus} setSearch={setSearchEstatus} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="OACH" title="OACH" value={selectedFilterOach} onChange={(val) => { setSelectedFilterOach(val); setCurrentPage(1); }} options={filterUniqueOach} open={openFilterOach} setOpen={setOpenFilterOach} search={searchOach} setSearch={setSearchOach} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="Altura" title="ALTURA" value={selectedFilterAltura} onChange={(val) => { setSelectedFilterAltura(val); setCurrentPage(1); }} options={filterUniqueAlturas} open={openFilterAltura} setOpen={setOpenFilterAltura} search={searchAltura} setSearch={setSearchAltura} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="BC" title="BC" value={selectedFilterBc} onChange={(val) => { setSelectedFilterBc(val); setCurrentPage(1); }} options={filterUniqueBc} open={openFilterBc} setOpen={setOpenFilterBc} search={searchBc} setSearch={setSearchBc} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="Folio OC" title="FOLIO OC" value={selectedFilterFolioOc} onChange={(val) => { setSelectedFilterFolioOc(val); setCurrentPage(1); }} options={filterUniqueFolioOc} open={openFilterFolioOc} setOpen={setOpenFilterFolioOc} search={searchFolioOc} setSearch={setSearchFolioOc} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="F. Entregado" title="F. ENTREGADO" value={selectedFilterFEntregado} onChange={(val) => { setSelectedFilterFEntregado(val); setCurrentPage(1); }} options={filterUniqueFEntregado} open={openFilterFEntregado} setOpen={setOpenFilterFEntregado} search={searchFEntregado} setSearch={setSearchFEntregado} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="Plazo" title="PLAZO (MESES)" value={selectedFilterPlazo} onChange={(val) => { setSelectedFilterPlazo(val); setCurrentPage(1); }} options={filterUniquePlazos} open={openFilterPlazo} setOpen={setOpenFilterPlazo} search={searchPlazo} setSearch={setSearchPlazo} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="F. Vencimiento" title="F. VENCIMIENTO" value={selectedFilterFVencimiento} onChange={(val) => { setSelectedFilterFVencimiento(val); setCurrentPage(1); }} options={filterUniqueFVencimiento} open={openFilterFVencimiento} setOpen={setOpenFilterFVencimiento} search={searchFVencimiento} setSearch={setSearchFVencimiento} currentColor={currentColor} />
+                </th>
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Propietario" title="PROPIETARIO" value={selectedFilterPropietario} onChange={(val) => { setSelectedFilterPropietario(val); setCurrentPage(1); }} options={filterUniquePropietarios} open={openFilterPropietario} setOpen={setOpenFilterPropietario} search={searchPropietario} setSearch={setSearchPropietario} currentColor={currentColor} />
                 </th>
-                <th className="px-4 py-4 font-black text-right">Precio Renta</th>
-                <th className="px-4 py-4">
-                  <TableHeaderFilter label="Moneda" title="MONEDA" value={selectedFilterMoneda} onChange={(val) => { setSelectedFilterMoneda(val); setCurrentPage(1); }} options={['MXN', 'USD']} open={openFilterMoneda} setOpen={setOpenFilterMoneda} search={searchMoneda} setSearch={setSearchMoneda} currentColor={currentColor} />
+                <th className="px-4 py-4 text-right">
+                  <TableHeaderFilter label="Precio Renta" title="PRECIO RENTA" value={selectedFilterPrecioRenta} onChange={(val) => { setSelectedFilterPrecioRenta(val); setCurrentPage(1); }} options={filterUniquePreciosRenta} open={openFilterPrecioRenta} setOpen={setOpenFilterPrecioRenta} search={searchPrecioRenta} setSearch={setSearchPrecioRenta} currentColor={currentColor} />
                 </th>
                 <th className="px-4 py-4">
-                  <TableHeaderFilter label="Póliza" title="PÓLIZA" value={selectedFilterPoliza} onChange={(val) => { setSelectedFilterPoliza(val); setCurrentPage(1); }} options={['CFPM', 'NA', 'SMP']} open={openFilterPoliza} setOpen={setOpenFilterPoliza} search={searchPoliza} setSearch={setSearchPoliza} currentColor={currentColor} />
+                  <TableHeaderFilter label="Moneda" title="MONEDA" value={selectedFilterMoneda} onChange={(val) => { setSelectedFilterMoneda(val); setCurrentPage(1); }} options={filterUniqueMonedas} open={openFilterMoneda} setOpen={setOpenFilterMoneda} search={searchMoneda} setSearch={setSearchMoneda} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="Póliza" title="PÓLIZA" value={selectedFilterPoliza} onChange={(val) => { setSelectedFilterPoliza(val); setCurrentPage(1); }} options={filterUniquePolizas} open={openFilterPoliza} setOpen={setOpenFilterPoliza} search={searchPoliza} setSearch={setSearchPoliza} currentColor={currentColor} />
                 </th>
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Distribuidor" title="DISTRIBUIDOR" value={selectedFilterDistribuidor} onChange={(val) => { setSelectedFilterDistribuidor(val); setCurrentPage(1); }} options={filterUniqueDistribuidores} open={openFilterDistribuidor} setOpen={setOpenFilterDistribuidor} search={searchDistribuidor} setSearch={setSearchDistribuidor} currentColor={currentColor} />
                 </th>
-                <th className="px-4 py-4 font-black text-right">Costo Póliza</th>
-                <th className="px-4 py-4 font-black">Moneda Pago</th>
+                <th className="px-4 py-4 text-right">
+                  <TableHeaderFilter label="Costo Póliza" title="COSTO PÓLIZA" value={selectedFilterCostoPoliza} onChange={(val) => { setSelectedFilterCostoPoliza(val); setCurrentPage(1); }} options={filterUniqueCostosPoliza} open={openFilterCostoPoliza} setOpen={setOpenFilterCostoPoliza} search={searchCostoPoliza} setSearch={setSearchCostoPoliza} currentColor={currentColor} />
+                </th>
+                <th className="px-4 py-4">
+                  <TableHeaderFilter label="Moneda Pago" title="MONEDA PAGO" value={selectedFilterMonedaPago} onChange={(val) => { setSelectedFilterMonedaPago(val); setCurrentPage(1); }} options={filterUniqueMonedasPago} open={openFilterMonedaPago} setOpen={setOpenFilterMonedaPago} search={searchMonedaPago} setSearch={setSearchMonedaPago} currentColor={currentColor} />
+                </th>
                 <th className="px-4 py-4 font-black text-right">Acciones</th>
               </tr>
             </thead>
@@ -1364,6 +1604,18 @@ export default function RentasTab({
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
+                            {isAdministrator && (
+                              <button
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setDeleteRentaModal({ isOpen: true, renta, isDeleting: false });
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                                title="Eliminar Renta"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2026,11 +2278,66 @@ export default function RentasTab({
 
                   {/* Grid of Series & Days Discount Calculator */}
                   {selectedFichaSitioId && (
-                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6">
-                  <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2" style={{ color: currentColor }}>
-                    <Truck className="w-4 h-4"/> 2. Selección de Equipo
-                  </h3>
-                      <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2" style={{ color: currentColor }}>
+                            <Truck className="w-4 h-4"/> 2. Selección de Equipos para la OC
+                          </h3>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            Mes de cobertura: <strong className="text-slate-800 font-bold">{fichaMesCobro || 'Sin mes seleccionado'}</strong>
+                          </p>
+                        </div>
+
+                        {/* Quick action buttons */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCopyPrevMonthSelection}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+                            title="Seleccionar automáticamente las series que tuvieron cobro el mes anterior"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Copiar selección mes previo</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowOnlyAvailableInMonth(prev => !prev)}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-xs cursor-pointer",
+                              showOnlyAvailableInMonth
+                                ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                                : "bg-slate-200 border-slate-300 text-slate-800"
+                            )}
+                          >
+                            <Layers className="w-3.5 h-3.5 text-slate-500" />
+                            <span>{showOnlyAvailableInMonth ? "Ver todas las series" : "Ocultar ya registradas"}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Summary counters bar */}
+                      {(() => {
+                        const totalCount = fichaSeriesGrid.length;
+                        const alreadyCount = fichaSeriesGrid.filter(i => i.alreadyHasOrderInMonth).length;
+                        const availCount = totalCount - alreadyCount;
+                        return (
+                          <div className="flex flex-wrap items-center gap-3 text-xs bg-white border border-slate-200/80 rounded-xl px-4 py-2">
+                            <span className="text-slate-500">Total en sitio: <strong className="text-slate-900 font-bold">{totalCount}</strong></span>
+                            <span className="text-slate-300">|</span>
+                            <span className="text-emerald-700 font-bold">Disponibles sin OC este mes: {availCount}</span>
+                            {alreadyCount > 0 && (
+                              <>
+                                <span className="text-slate-300">|</span>
+                                <span className="text-amber-700 font-bold">Ya con OC en {fichaMesCobro}: {alreadyCount}</span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
                         <table className="w-full text-left text-xs whitespace-nowrap">
                           <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-wider border-b border-slate-100">
                             <tr>
@@ -2039,7 +2346,7 @@ export default function RentasTab({
                                   type="button"
                                   onClick={handleSelectAllSeries}
                                   className={cn(
-                                    "text-[9px] font-black uppercase tracking-wider transition-colors whitespace-nowrap px-1.5 py-0.5 rounded",
+                                    "text-[9px] font-black uppercase tracking-wider transition-colors whitespace-nowrap px-1.5 py-0.5 rounded cursor-pointer",
                                     allSeriesChecked
                                       ? "text-red-600 bg-red-50 hover:bg-red-100"
                                       : someSeriesChecked
@@ -2052,6 +2359,7 @@ export default function RentasTab({
                               </th>
                               <th className="p-3">Serie</th>
                               <th className="p-3">Clase / Modelo</th>
+                              <th className="p-3">Estatus en Mes</th>
                               <th className="p-3 w-28">Tarifa Renta</th>
                               <th className="p-3 w-24">Días Caídos</th>
                               <th className="p-3 w-28">Descuento</th>
@@ -2059,59 +2367,88 @@ export default function RentasTab({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {fichaSeriesGrid.map((item, index) => (
-                              <tr key={item.assetId} className={cn("hover:bg-slate-50/50 transition-colors", item.checked && "bg-red-50/10")}>
-                                <td className="p-3 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={item.checked}
-                                    onChange={e => handleGridFieldChange(index, 'checked', e.target.checked)}
-                                    className="w-4.5 h-4.5 rounded text-red-600 focus:ring-red-500 cursor-pointer"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <div className="font-bold text-slate-800">{item.serie}</div>
-                                  {item.existingRenta && (
-                                    <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-50 border border-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded mt-0.5 inline-block">Renta Activa</span>
-                                  )}
-                                </td>
-                                <td className="p-3 text-slate-600">
-                                  <div className="flex flex-col text-xs mt-0.5">
-                                    <span className="font-bold text-slate-800">{item.modelo || '-'}</span>
-                                    <span style={{ color: currentColor }}>{item.clase || '-'}</span>
-                                  </div>
-                                </td>
-                                <td className="p-3">
-                                  <input
-                                    type="number"
-                                    value={item.renta_base || ""}
-                                    readOnly
-                                    className="w-24 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 focus:outline-none text-xs font-bold cursor-not-allowed"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="30"
-                                    value={item.dias_caidos || ""}
-                                    onChange={e => handleGridFieldChange(index, 'dias_caidos', e.target.value)}
-                                    placeholder="0"
-                                    className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold"
-                                  />
-                                </td>
-                                <td className="p-3 font-semibold text-slate-500">
-                                  ${item.descuento.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </td>
-                                <td className="p-3 font-black text-slate-900 text-sm">
-                                  ${item.renta_final.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </td>
-                              </tr>
-                            ))}
+                            {fichaSeriesGrid
+                              .filter(item => !showOnlyAvailableInMonth || !item.alreadyHasOrderInMonth)
+                              .map((item, index) => {
+                                const realIdx = fichaSeriesGrid.findIndex(g => g.assetId === item.assetId);
+                                return (
+                                  <tr 
+                                    key={item.assetId} 
+                                    className={cn(
+                                      "hover:bg-slate-50/50 transition-colors", 
+                                      item.checked && "bg-red-50/15",
+                                      item.alreadyHasOrderInMonth && "bg-slate-50/70 opacity-70"
+                                    )}
+                                  >
+                                    <td className="p-3 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.checked}
+                                        disabled={item.alreadyHasOrderInMonth}
+                                        onChange={e => handleGridFieldChange(realIdx, 'checked', e.target.checked)}
+                                        className="w-4.5 h-4.5 rounded text-red-600 focus:ring-red-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                      />
+                                    </td>
+                                    <td className="p-3">
+                                      <div className="font-bold text-slate-800">{item.serie}</div>
+                                      {item.existingRenta && (
+                                        <span className="text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded mt-0.5 inline-block">Renta Activa</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3 text-slate-600">
+                                      <div className="flex flex-col text-xs mt-0.5">
+                                        <span className="font-bold text-slate-800">{item.modelo || '-'}</span>
+                                        <span style={{ color: currentColor }}>{item.clase || '-'}</span>
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      {item.alreadyHasOrderInMonth ? (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1 rounded-lg">
+                                          <Check className="w-3 h-3 text-amber-600" />
+                                          OC: {item.orderInMonthPo || 'Registrada'}
+                                        </span>
+                                      ) : item.hadOrderInPrevMonth ? (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-1 rounded-lg">
+                                          <Sparkles className="w-3 h-3 text-emerald-600" />
+                                          Cobrada mes anterior
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] font-bold text-slate-400">Disponible</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3">
+                                      <input
+                                        type="number"
+                                        value={item.renta_base || ""}
+                                        readOnly
+                                        className="w-24 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 focus:outline-none text-xs font-bold cursor-not-allowed"
+                                      />
+                                    </td>
+                                    <td className="p-3">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="30"
+                                        disabled={item.alreadyHasOrderInMonth}
+                                        value={item.dias_caidos || ""}
+                                        onChange={e => handleGridFieldChange(realIdx, 'dias_caidos', e.target.value)}
+                                        placeholder="0"
+                                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                      />
+                                    </td>
+                                    <td className="p-3 font-semibold text-slate-500">
+                                      ${item.descuento.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-3 font-black text-slate-900 text-sm">
+                                      ${item.renta_final.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                           </tbody>
                           <tfoot className="border-t-2 border-slate-200 bg-slate-50/80">
                             <tr>
-                              <td colSpan={5} className="p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">
+                              <td colSpan={6} className="p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">
                                 Total a Facturar
                                 <span className="text-slate-400 font-medium ml-1">
                                   ({fichaSeriesGrid.filter(i => i.checked).length} equipo{fichaSeriesGrid.filter(i => i.checked).length !== 1 ? 's' : ''})
@@ -3041,10 +3378,88 @@ export default function RentasTab({
                 </div>
 
                 <div className="space-y-4">
-                  <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-800">4</span>
-                    Historial de Pedidos (Renta)
+                  <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-800 font-bold">4</span>
+                      <span>Historial de Pedidos TOTVS y Órdenes Emitidas</span>
+                    </div>
+                    {viewRentaConfig.renta.ordenes?.length > 0 && (
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-200">
+                        {viewRentaConfig.renta.ordenes.length} pedido{viewRentaConfig.renta.ordenes.length > 1 ? 's' : ''} registrado{viewRentaConfig.renta.ordenes.length > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </h3>
+
+                  {/* Tabla de Pedidos TOTVS emitidos */}
+                  {(() => {
+                    const ordenes = (viewRentaConfig.renta.ordenes || []).sort((a: any, b: any) => (b.periodo || '').localeCompare(a.periodo || ''));
+                    if (ordenes.length === 0) {
+                      return (
+                        <div className="p-6 text-center text-sm text-slate-500 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl space-y-1">
+                          <p className="font-bold text-slate-700">Sin historial de pedidos TOTVS u órdenes previas.</p>
+                          <p className="text-xs text-slate-400">Aún no se han registrado órdenes mensuales para esta renta.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                        <table className="w-full text-left text-xs whitespace-nowrap">
+                          <thead className="bg-slate-50 text-[10px] text-slate-500 font-black uppercase tracking-wider border-b border-slate-100">
+                            <tr>
+                              <th className="p-3.5">Periodo</th>
+                              <th className="p-3.5">Folio OC Cliente</th>
+                              <th className="p-3.5">No. Pedido TOTVS</th>
+                              <th className="p-3.5">Fecha Pedido TOTVS</th>
+                              <th className="p-3.5 text-right">Tarifa Facturada</th>
+                              <th className="p-3.5 text-center">Estado</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                            {ordenes.map((ord: any) => {
+                              const cond = ord.condiciones || {};
+                              const noTotvs = ord.pedido_totvs || cond.pedido_totvs || viewRentaConfig.renta.no_registro_totvs || '-';
+                              const fTotvs = ord.fecha_pedido_totvs || cond.fecha_pedido_totvs || viewRentaConfig.renta.fecha_pedido_totvs;
+                              return (
+                                <tr key={ord.id} className="hover:bg-slate-50/60 transition-colors">
+                                  <td className="p-3.5 font-bold text-slate-900">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-mono text-xs">
+                                      {ord.periodo}
+                                    </span>
+                                  </td>
+                                  <td className="p-3.5 font-black text-[#E5222D]">
+                                    {ord.po || viewRentaConfig.renta.orden_compra || '-'}
+                                  </td>
+                                  <td className="p-3.5">
+                                    <span className={cn(
+                                      "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold",
+                                      noTotvs !== '-' ? "bg-blue-50 text-blue-800 border border-blue-200" : "text-slate-400"
+                                    )}>
+                                      {noTotvs}
+                                    </span>
+                                  </td>
+                                  <td className="p-3.5 text-slate-500">
+                                    {fTotvs ? new Date(fTotvs).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                  </td>
+                                  <td className="p-3.5 text-right font-black text-slate-900">
+                                    ${(Number(ord.tarifa) || Number(viewRentaConfig.renta.detalles?.renta_base) || Number(viewRentaConfig.renta.tarifa) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {ord.moneda || viewRentaConfig.renta.detalles?.moneda || 'MXN'}
+                                  </td>
+                                  <td className="p-3.5 text-center">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      {ord.estado || 'REGISTRADA'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Proyección y Presupuesto por Vigencia */}
                   {(() => {
                     const ordenes = viewRentaConfig.renta.ordenes || [];
                     const fechaInicio = viewRentaConfig.renta.fecha_inicio;
@@ -3066,9 +3481,7 @@ export default function RentasTab({
                        projection.sort();
                     }
                     
-                    if (projection.length === 0) {
-                      return <p className="text-sm font-medium text-slate-500 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center">No hay proyección ni pedidos para esta renta.</p>;
-                    }
+                    if (projection.length === 0) return null;
 
                     const yearsMap = new Map();
                     let totalVigencia = 0;
@@ -3100,41 +3513,37 @@ export default function RentasTab({
                     const sortedYears = Array.from(yearsMap.keys()).sort((a, b) => b.localeCompare(a));
 
                     return (
-                      <div className="space-y-4">
-                        <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center justify-between">
-                          <span className="text-sm font-black text-emerald-900 uppercase tracking-widest">Presupuesto Total Proyectado</span>
-                          <span className="text-lg font-black text-emerald-700">${totalVigencia.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      <div className="space-y-3 pt-2">
+                        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-700 uppercase tracking-widest">Presupuesto Proyectado Vigencia ({plazoMeses || projection.length} meses)</span>
+                          <span className="text-base font-black text-slate-900">${totalVigencia.toLocaleString(undefined, { minimumFractionDigits: 2 })} {moneda}</span>
                         </div>
                         
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           {sortedYears.map((year: string) => {
                             const yData = yearsMap.get(year);
                             const sortedMonths = [...yData.months].sort((a: any, b: any) => b.periodo.localeCompare(a.periodo));
                             return (
-                              <div key={year} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                                <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                                  <span className="text-sm font-black text-slate-800">{year}</span>
-                                  <span className="text-xs font-bold text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                              <div key={year} className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                                <div className="bg-slate-100/70 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+                                  <span className="text-xs font-black text-slate-800">{year}</span>
+                                  <span className="text-xs font-bold text-slate-600">
                                     Subtotal: ${yData.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </span>
                                 </div>
                                 <div className="divide-y divide-slate-100">
                                   {sortedMonths.map((m: any, idx: number) => (
-                                    <div key={`${m.periodo}-${idx}`} className="p-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors">
-                                      <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Período</span>
-                                        <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                          {m.periodo}
-                                          {m.hasOc ? (
-                                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase tracking-wider">Subida</span>
-                                          ) : (
-                                            <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded uppercase tracking-wider">Pendiente</span>
-                                          )}
-                                        </span>
+                                    <div key={`${m.periodo}-${idx}`} className="px-4 py-2.5 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors text-xs">
+                                      <div className="flex items-center gap-3">
+                                        <span className="font-bold text-slate-800">{m.periodo}</span>
+                                        {m.hasOc ? (
+                                          <span className="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded uppercase">OC: {m.ocNumber}</span>
+                                        ) : (
+                                          <span className="text-[9px] bg-slate-100 text-slate-500 font-medium px-2 py-0.5 rounded uppercase">Sin OC</span>
+                                        )}
                                       </div>
-                                      <div className="flex flex-col items-end">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Presupuesto Mensual</span>
-                                        <span className="text-sm font-bold text-[#E5222D]">${m.tarifa.toLocaleString(undefined, { minimumFractionDigits: 2 })} {m.moneda}</span>
+                                      <div className="font-bold text-slate-700">
+                                        ${m.tarifa.toLocaleString(undefined, { minimumFractionDigits: 2 })} {m.moneda}
                                       </div>
                                     </div>
                                   ))}
@@ -3160,6 +3569,68 @@ export default function RentasTab({
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Confirmación de Eliminación de Renta */}
+      <AnimatePresence>
+        {deleteRentaModal.isOpen && deleteRentaModal.renta && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-red-50/50">
+                <h3 className="text-base font-black flex items-center gap-2 text-red-600">
+                  <Trash2 className="w-5 h-5" />
+                  Eliminar Renta
+                </h3>
+                <button 
+                  onClick={() => setDeleteRentaModal({ isOpen: false, renta: null, isDeleting: false })} 
+                  className="p-1.5 hover:bg-red-100 rounded-xl text-slate-400 hover:text-slate-700 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-3 font-medium text-sm text-slate-600">
+                <p>
+                  ¿Estás seguro de que deseas eliminar permanentemente la renta de la serie <strong className="font-bold text-slate-900">{deleteRentaModal.renta.activo?.serie || deleteRentaModal.renta.id}</strong>?
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1 text-slate-700">
+                  <div><strong>Cliente:</strong> {deleteRentaModal.renta.cliente?.razon_social || '-'}</div>
+                  <div><strong>Sitio:</strong> {deleteRentaModal.renta.sitio?.nombre || '-'}</div>
+                  <div><strong>Cuenta:</strong> {deleteRentaModal.renta.cuenta || '-'}</div>
+                  <div><strong>Tarifa:</strong> ${Number(deleteRentaModal.renta.detalles?.renta_base || deleteRentaModal.renta.tarifa || 0).toLocaleString()} {deleteRentaModal.renta.detalles?.moneda || 'MXN'}</div>
+                </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 font-medium">
+                  ⚠️ Esta acción eliminará la renta y sus órdenes mensuales asociadas. Esta acción no se puede deshacer.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button 
+                  type="button"
+                  disabled={deleteRentaModal.isDeleting}
+                  onClick={() => setDeleteRentaModal({ isOpen: false, renta: null, isDeleting: false })} 
+                  className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  disabled={deleteRentaModal.isDeleting}
+                  onClick={handleConfirmDeleteRenta} 
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors cursor-pointer"
+                >
+                  {deleteRentaModal.isDeleting ? 'Eliminando...' : 'Sí, Eliminar Renta'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

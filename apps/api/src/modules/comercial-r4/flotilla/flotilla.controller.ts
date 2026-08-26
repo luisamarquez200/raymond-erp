@@ -266,5 +266,14 @@ export class FlotillaController {
         const userId = this.getUserId(req);
         return await this.flotillaService.desvincularAccesorio(id, accesorioId, userId);
     }
+
+    @Delete(':id')
+    async eliminarActivo(
+        @Param('id') id: string,
+        @Request() req: any
+    ) {
+        const userId = this.getUserId(req);
+        return await this.flotillaService.eliminarActivo(id, userId);
+    }
 }
 

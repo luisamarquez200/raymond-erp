@@ -21,12 +21,14 @@ export default function PresupuestosPage() {
     const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleName.toLowerCase().includes(r));
     
     // Resolve logged in ADC's assigned/profile name
-    const resolvedAdcName = 
-        freshUserProfile?.adcAsociadoName ||
-        (user as any)?.adc_asociado_name || 
-        (user as any)?.adcAsociadoName || 
-        `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 
-        (user as any)?.name || '';
+    const rawAdcAsoc = 
+        (freshUserProfile?.adcAsociadoName && freshUserProfile.adcAsociadoName.toLowerCase() !== 'ninguno' ? freshUserProfile.adcAsociadoName : '') ||
+        ((user as any)?.adc_asociado_name && (user as any).adc_asociado_name.toLowerCase() !== 'ninguno' ? (user as any).adc_asociado_name : '') || 
+        ((user as any)?.adcAsociadoName && (user as any).adcAsociadoName.toLowerCase() !== 'ninguno' ? (user as any).adcAsociadoName : '');
+
+    const userFullName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || (user as any)?.name || (user?.email ? user.email.split('@')[0] : '') || '';
+    
+    const resolvedAdcName = rawAdcAsoc || userFullName;
 
     const [adminAdcScope, setAdminAdcScope] = useState<'todos' | 'mis_adcs'>('todos');
 
@@ -57,14 +59,14 @@ export default function PresupuestosPage() {
 
             if (!isAdministrator) {
                 // Restricted ADC user: ONLY view information for their own assigned ADC
-                adcFilter = resolvedAdcName && resolvedAdcName !== 'ninguno' ? resolvedAdcName : 'SIN_ADC_ASIGNADO';
+                adcFilter = resolvedAdcName || 'SIN_ADC_ASIGNADO';
             } else if (adminAdcScope === 'mis_adcs') {
                 const rawAdcAsociado = 
-                    freshUserProfile?.adcAsociadoName ||
-                    (user as any)?.adc_asociado_name || 
-                    (user as any)?.adcAsociadoName || '';
+                    (freshUserProfile?.adcAsociadoName && freshUserProfile.adcAsociadoName.toLowerCase() !== 'ninguno' ? freshUserProfile.adcAsociadoName : '') ||
+                    ((user as any)?.adc_asociado_name && (user as any).adc_asociado_name.toLowerCase() !== 'ninguno' ? (user as any).adc_asociado_name : '') || 
+                    ((user as any)?.adcAsociadoName && (user as any).adcAsociadoName.toLowerCase() !== 'ninguno' ? (user as any).adcAsociadoName : '');
 
-                if (rawAdcAsociado && rawAdcAsociado !== 'ninguno') {
+                if (rawAdcAsociado) {
                     adcFilter = rawAdcAsociado;
                 } else {
                     adcFilter = 'SIN_ADC_ASIGNADO';

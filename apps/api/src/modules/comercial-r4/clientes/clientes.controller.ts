@@ -55,10 +55,6 @@ export class ClientesController {
     @UseGuards(JwtAuthGuard)
     async crearCliente(@Body() body: CreateClienteDto, @Req() req: any, @Res() res: Response) {
         try {
-            const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
             const data = await this.clientesService.crearCliente(body);
             return res.status(HttpStatus.CREATED).json({ success: true, data });
         } catch (error: any) {
@@ -71,10 +67,6 @@ export class ClientesController {
     @UseGuards(JwtAuthGuard)
     async actualizarCliente(@Param('id') id: string, @Body() body: UpdateClienteDto, @Req() req: any, @Res() res: Response) {
         try {
-            const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
             const data = await this.clientesService.actualizarCliente(id, body);
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
@@ -87,10 +79,6 @@ export class ClientesController {
     @UseGuards(JwtAuthGuard)
     async agregarSitio(@Param('clienteId') clienteId: string, @Body() body: CreateSitioDto, @Req() req: any, @Res() res: Response) {
         try {
-            const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
             const data = await this.clientesService.agregarSitio(clienteId, body);
             return res.status(HttpStatus.CREATED).json({ success: true, data });
         } catch (error: any) {
@@ -103,10 +91,6 @@ export class ClientesController {
     @UseGuards(JwtAuthGuard)
     async fusionarClientes(@Param('id') id: string, @Param('targetId') targetId: string, @Req() req: any, @Res() res: Response) {
         try {
-            const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
             const data = await this.clientesService.fusionarClientes(id, targetId);
             return res.status(HttpStatus.OK).json({ success: true, data });
         } catch (error: any) {
@@ -119,10 +103,6 @@ export class ClientesController {
     @UseGuards(JwtAuthGuard)
     async eliminarCliente(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
         try {
-            const role = req.user?.roles;
-            if (role?.toUpperCase() === 'ADMINISTRADOR') {
-                throw new ForbiddenException('Los usuarios con rol Administrador no tienen permiso para realizar esta operación');
-            }
             await this.clientesService.eliminarCliente(id);
             return res.status(HttpStatus.OK).json({ success: true, message: 'Cliente eliminado exitosamente' });
         } catch (error: any) {

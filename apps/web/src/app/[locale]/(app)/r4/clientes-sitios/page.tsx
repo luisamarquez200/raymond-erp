@@ -13,7 +13,7 @@ import { useConfigStore } from "@/store/config.store";
 
 export default function ClientesSitios() {
   const { user } = useAuthStore();
-  const isReadOnly = user?.role?.toUpperCase() === 'ADMINISTRADOR';
+  const isReadOnly = ['VISITANTE'].includes(user?.role?.toUpperCase() || '');
   const { roleColors } = useConfigStore();
   const currentColor = user?.role ? (roleColors[user.role.toLowerCase()] || roleColors.administrador) : roleColors.administrador;
 
@@ -52,11 +52,17 @@ export default function ClientesSitios() {
   const [deleteModalConfig, setDeleteModalConfig] = useState<{ isOpen: boolean, type: 'cliente' | 'sitio', id: string, name: string, sitiosCount?: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Modal Fusionar
+  // Modal Fusionar Clientes
   const [fusionarModal, setFusionarModal] = useState<{ isOpen: boolean, sourceId: string, sourceName: string } | null>(null);
   const [fusionarSearch, setFusionarSearch] = useState('');
   const [fusionarTargetId, setFusionarTargetId] = useState<string | null>(null);
   const [isFusionando, setIsFusionando] = useState(false);
+
+  // Modal Fusionar Sitios
+  const [fusionarSitioModal, setFusionarSitioModal] = useState<{ isOpen: boolean, sourceId: string, sourceName: string, clienteId?: string, clienteNombre?: string } | null>(null);
+  const [fusionarSitioSearch, setFusionarSitioSearch] = useState('');
+  const [fusionarSitioTargetId, setFusionarSitioTargetId] = useState<string | null>(null);
+  const [isFusionandoSitio, setIsFusionandoSitio] = useState(false);
 
   // Pagination for Directory
   const [currentPage, setCurrentPage] = useState(1);
@@ -270,6 +276,24 @@ export default function ClientesSitios() {
       toast.error(error.response?.data?.message || 'Error al fusionar clientes');
     } finally {
       setIsFusionando(false);
+    }
+  };
+
+  const handleFusionarSitios = async () => {
+    if (!fusionarSitioModal || !fusionarSitioTargetId) return;
+    try {
+      setIsFusionandoSitio(true);
+      const res = await api.post(`/r4/sitios/${fusionarSitioModal.sourceId}/fusionar/${fusionarSitioTargetId}`);
+      const result = res.data?.data;
+      toast.success(result?.message || 'Sitios fusionados exitosamente');
+      setFusionarSitioModal(null);
+      setFusionarSitioTargetId(null);
+      setFusionarSitioSearch('');
+      fetchClientes();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al fusionar sitios');
+    } finally {
+      setIsFusionandoSitio(false);
     }
   };
 
@@ -688,13 +712,32 @@ export default function ClientesSitios() {
                               </div>
                             <div className="flex items-center gap-2">
                               {!isReadOnly && (
-                                <button
-                                  onClick={() => requestDeleteSitio(sitio.id, sitio.nombre)}
-                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-transparent"
-                                  title="Eliminar sitio"
-                                >
-                                  <Trash className="w-4 h-4" />
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setFusionarSitioSearch('');
+                                      setFusionarSitioTargetId(null);
+                                      setFusionarSitioModal({
+                                        isOpen: true,
+                                        sourceId: sitio.id,
+                                        sourceName: displayTitle,
+                                        clienteId: selectedCliente.id,
+                                        clienteNombre: selectedCliente.razonSocial || selectedCliente.nombre
+                                      });
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-colors border border-transparent"
+                                    title="Fusionar sitio con otro"
+                                  >
+                                    <GitMerge className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => requestDeleteSitio(sitio.id, sitio.nombre)}
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-transparent"
+                                    title="Eliminar sitio"
+                                  >
+                                    <Trash className="w-4 h-4" />
+                                  </button>
+                                </>
                               )}
                               <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-center min-w-[60px]">
                                 <p className="text-sm font-black text-slate-900">{sitio.activosCount || 0}</p>
@@ -1292,6 +1335,163 @@ export default function ClientesSitios() {
               >
                 <GitMerge className="w-4 h-4" />
                 {isFusionando ? 'Fusionando...' : 'Confirmar Fusión'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Fusionar Sitio */}
+      {fusionarSitioModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center">
+                  <GitMerge className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Fusionar Sitio</h2>
+                  <p className="text-xs text-slate-500 font-medium">Selecciona el sitio destino</p>
+                </div>
+              </div>
+              <button onClick={() => setFusionarSitioModal(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Source info */}
+            <div className="px-6 pt-4 pb-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-1">Sitio a eliminar (duplicado)</p>
+                <p className="font-black text-slate-900 text-base">{fusionarSitioModal.sourceName}</p>
+                {fusionarSitioModal.clienteNombre && (
+                  <p className="text-xs font-bold text-slate-500 mt-0.5">Cliente actual: {fusionarSitioModal.clienteNombre}</p>
+                )}
+                <p className="text-xs text-amber-700 mt-2 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Sus activos, rentas y contratos serán migrados al sitio destino seleccionado y este sitio será eliminado.
+                </p>
+              </div>
+
+              {/* Search target */}
+              <p className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Fusionar en...</p>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar sitio por nombre, código TOTVS o cliente..."
+                  value={fusionarSitioSearch}
+                  onChange={(e) => { setFusionarSitioSearch(e.target.value); setFusionarSitioTargetId(null); }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-medium focus:border-amber-200 focus:bg-white focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Sites list */}
+            <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-2">
+              {allSites
+                .filter(s => s.id !== fusionarSitioModal.sourceId)
+                .filter(s => {
+                  if (!fusionarSitioSearch) return true;
+                  const query = fusionarSitioSearch.toLowerCase();
+                  return (
+                    (s.nombre && s.nombre.toLowerCase().includes(query)) ||
+                    (s.tienda && s.tienda.toLowerCase().includes(query)) ||
+                    (s.cuenta && s.cuenta.toLowerCase().includes(query)) ||
+                    (s.no_totvs && s.no_totvs.toLowerCase().includes(query)) ||
+                    (s.direccion && s.direccion.toLowerCase().includes(query)) ||
+                    (s.distribuidor && s.distribuidor.toLowerCase().includes(query)) ||
+                    (s.clienteRazonSocial && s.clienteRazonSocial.toLowerCase().includes(query))
+                  );
+                })
+                .sort((a, b) => {
+                  // Prioritize sites from the same client
+                  const aSameClient = a.clienteId === fusionarSitioModal.clienteId ? 1 : 0;
+                  const bSameClient = b.clienteId === fusionarSitioModal.clienteId ? 1 : 0;
+                  if (aSameClient !== bSameClient) return bSameClient - aSameClient;
+                  const nameA = a.nombre || a.tienda || '';
+                  const nameB = b.nombre || b.tienda || '';
+                  return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+                })
+                .slice(0, 30)
+                .map(s => {
+                  const isSameClient = s.clienteId === fusionarSitioModal.clienteId;
+                  const displayTitle = (s.cuenta && s.tienda && s.cuenta !== s.tienda && s.cuenta !== '-' && s.tienda !== '-')
+                    ? `${s.cuenta} / ${s.tienda}`
+                    : (s.tienda || s.cuenta || s.nombre || 'Sitio de Operación');
+
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setFusionarSitioTargetId(s.id)}
+                      className={`w-full text-left p-3.5 rounded-2xl border-2 transition-all ${
+                        fusionarSitioTargetId === s.id
+                          ? 'border-amber-400 bg-amber-50'
+                          : 'border-slate-100 hover:border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0 pr-3">
+                          <div className="flex items-center gap-2">
+                            <p className="font-black text-slate-900 text-sm truncate">{displayTitle}</p>
+                            {isSameClient && (
+                              <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded shrink-0">
+                                Mismo Cliente
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                            {s.no_totvs && s.no_totvs !== '-' && (
+                              <span>TOTVS: {s.no_totvs}</span>
+                            )}
+                            {s.clienteRazonSocial && !isSameClient && (
+                              <span className="truncate">Cliente: {s.clienteRazonSocial}</span>
+                            )}
+                          </div>
+                          {s.direccion && s.direccion !== '-' && (
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{s.direccion}</p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="text-[10px] font-bold text-slate-400">{s.activosCount || 0} activos</span>
+                          {fusionarSitioTargetId === s.id && (
+                            <span className="text-[9px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-widest">Seleccionado</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              {allSites.filter(s => s.id !== fusionarSitioModal.sourceId && (!fusionarSitioSearch || (
+                (s.nombre && s.nombre.toLowerCase().includes(fusionarSitioSearch.toLowerCase())) ||
+                (s.tienda && s.tienda.toLowerCase().includes(fusionarSitioSearch.toLowerCase())) ||
+                (s.cuenta && s.cuenta.toLowerCase().includes(fusionarSitioSearch.toLowerCase())) ||
+                (s.no_totvs && s.no_totvs.toLowerCase().includes(fusionarSitioSearch.toLowerCase())) ||
+                (s.direccion && s.direccion.toLowerCase().includes(fusionarSitioSearch.toLowerCase())) ||
+                (s.clienteRazonSocial && s.clienteRazonSocial.toLowerCase().includes(fusionarSitioSearch.toLowerCase()))
+              ))).length === 0 && (
+                <p className="text-center text-slate-400 font-medium text-sm py-8">No se encontraron sitios</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-6 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setFusionarSitioModal(null)}
+                className="flex-1 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleFusionarSitios}
+                disabled={!fusionarSitioTargetId || isFusionandoSitio}
+                className="flex-1 py-3 text-white rounded-xl font-black text-sm transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                style={{ backgroundColor: '#D97706' }}
+              >
+                <GitMerge className="w-4 h-4" />
+                {isFusionandoSitio ? 'Fusionando...' : 'Confirmar Fusión'}
               </button>
             </div>
           </div>

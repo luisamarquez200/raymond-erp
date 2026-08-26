@@ -1,9 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
+import { PresupuestosService } from '../presupuestos/presupuestos.service';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class DashboardService {
     private readonly logger = new Logger(DashboardService.name);
+
+    constructor(
+        private readonly prismaService: PrismaDynamicService,
+        private readonly presupuestosService: PresupuestosService,
+    ) {}
 
     private getDb() {
         const db = PrismaDynamicService.clients.r4;
@@ -14,18 +21,19 @@ export class DashboardService {
     async obtenerMetricas() {
         const db = this.getDb();
         try {
-            const now = new Date();
-            const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const now = dayjs();
+            const currentYear = now.year();
+            const currentMonth = now.month() + 1;
+            const currentPeriod = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
             
-            // 1. Equipos en flotilla (Activos con estatus 'ACTIVO' o 'OPERATIVO' o 'EN RENTA')
-            // Exclude ALL inactive variants: 'Inactivo', 'Inactivo con Cliente', 'Inactivo - Con Cliente'
+            // 1. Equipos en flotilla (Activos con estatus operativo no inactivo)
             const allActivosRaw = await db.activo.findMany({
                 where: {
                     estatus_operativo: { notIn: ['INACTIVO'] },
                 },
                 include: { cliente: true, sitio: true }
             });
-            // Filter inactive in memory to handle all DB string variants
+
             const activos = allActivosRaw.filter((a: any) => {
                 const e = (a.estatus || '').trim().toUpperCase();
                 return !e.startsWith('INACTIVO');
@@ -40,39 +48,40 @@ export class DashboardService {
             });
             const totalCuentasActivas = clientesUnicos.size;
 
-            // 3. Pedidos generados (Mes corriente)
-            const ordenesMesCorriente = await db.ordenMensual.findMany({
-                where: { periodo: currentPeriod }
-            });
-            
-            // If no orders in current period (maybe DB has orders from other months), let's find the latest period with orders to simulate current month for the mock dashboard.
-            let lastPeriod = currentPeriod;
-            if (ordenesMesCorriente.length === 0) {
-                 const latestOrder = await db.ordenMensual.findFirst({
-                     orderBy: { periodo: 'desc' }
-                 });
-                 if (latestOrder && latestOrder.periodo) {
-                     lastPeriod = latestOrder.periodo;
-                     const orders = await db.ordenMensual.findMany({ where: { periodo: lastPeriod } });
-                     ordenesMesCorriente.push(...orders);
-                 }
-            }
-
-            let montoPedidosMes = 0;
-            ordenesMesCorriente.forEach(o => {
-                montoPedidosMes += (o.tarifa || 0);
+            // 3. Obtener métricas reales de presupuesto desde PresupuestosService (fuente de verdad ~64M)
+            const presStats = await this.presupuestosService.getDashboardStats({
+                year: currentYear,
+                months: [currentMonth],
+                moneda: 'MXN'
             });
 
-            // 4. Avance de presupuesto (simulado: asumiremos que la meta es Pedidos * 1.3)
-            const metaMesCorriente = montoPedidosMes === 0 ? 100000 : montoPedidosMes * 1.3;
-            const avancePresupuesto = metaMesCorriente > 0 ? (montoPedidosMes / metaMesCorriente) * 100 : 0;
+            const exchangeRate = presStats?.exchangeRate || 18.0;
+
+            // Total objetivo mensual real en MXN
+            const objetivoMesMXN = Math.round(
+                (presStats?.stats?.MXN?.presupuesto_mes || 0) + 
+                ((presStats?.stats?.USD?.presupuesto_mes || 0) * exchangeRate)
+            );
+
+            // Total pedidos generados / facturado en MXN
+            const cubiertoMesMXN = Math.round(
+                (presStats?.stats?.MXN?.facturado || presStats?.stats?.MXN?.pedidos_enviados || 0) + 
+                (((presStats?.stats?.USD?.facturado || presStats?.stats?.USD?.pedidos_enviados || 0)) * exchangeRate)
+            );
+
+            // Total acumulado pendiente de meses pasados en MXN
+            const pendienteMesesPasadosMXN = Math.round(
+                (presStats?.stats?.MXN?.acumulado || 0) + 
+                ((presStats?.stats?.USD?.acumulado || 0) * exchangeRate)
+            );
+
+            const metaRealCubrirMXN = objetivoMesMXN + pendienteMesesPasadosMXN;
+            const avancePresupuesto = objetivoMesMXN > 0 ? (cubiertoMesMXN / objetivoMesMXN) * 100 : 0;
 
             // --- SECCIÓN: Composición de la Flotilla (Clasificación Estándar Raymond) ---
             const claseMap: Record<string, number> = {};
             activos.forEach(a => {
                 const rawClase = (a.clase || '').trim().toUpperCase();
-                const rawTipo = (a.tipo || a.tipo_equipo || '').trim().toUpperCase();
-
                 let categoria = 'Others';
 
                 if (rawClase === 'I' || rawClase === 'CLASE I' || rawClase === 'CLASS I') {
@@ -88,7 +97,6 @@ export class DashboardService {
                 } else if (rawClase === 'VI' || rawClase === 'CLASE VI' || rawClase === 'CLASS VI') {
                     categoria = 'Class VI';
                 } else {
-                    // Baterías, Cargadores, Aditamentos, N/A, Sin Clase, etc., van dentro de "Others"
                     categoria = 'Others';
                 }
 
@@ -100,8 +108,7 @@ export class DashboardService {
 
             const adcMap: Record<string, number> = {};
             activos.forEach(a => {
-                let adc = (a.adc || 'Sin ADC').trim();
-                // Limpiar nombres largos de ADC a versiones cortas si hace falta o dejarlos.
+                const adc = (a.adc || 'Sin ADC').trim();
                 adcMap[adc] = (adcMap[adc] || 0) + 1;
             });
             const participacionAdc = Object.entries(adcMap)
@@ -109,117 +116,100 @@ export class DashboardService {
                 .sort((a, b) => b.value - a.value);
 
             // --- SECCIÓN: Presupuesto del mes y comportamiento histórico ---
-            const ordenes = await db.ordenMensual.findMany();
-            const periodoMap: Record<string, number> = {};
-            ordenes.forEach(o => {
+            const allOrders = await db.ordenMensual.findMany().catch(() => []);
+            const allFacturacion = await db.facturacionMensual.findMany().catch(() => []);
+
+            const periodoOrdersMap: Record<string, number> = {};
+            for (const o of allOrders) {
                 if (o.periodo) {
-                    periodoMap[o.periodo] = (periodoMap[o.periodo] || 0) + (o.tarifa || 0);
+                    const isUSD = (o.moneda || '').toUpperCase() === 'USD';
+                    const amount = Number(o.tarifa || 0) * (isUSD ? exchangeRate : 1);
+                    periodoOrdersMap[o.periodo] = (periodoOrdersMap[o.periodo] || 0) + amount;
                 }
-            });
-
-            const baseMontoMes = montoPedidosMes > 0 ? montoPedidosMes : 6900000;
-
-            const historicoPresupuesto = Object.entries(periodoMap)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .slice(-12)
-                .map(([periodo, rawCubierto]) => {
-                    // Normalizar cubierto al rango realista mensual de la flotilla (evitar cifras fuera de escala)
-                    let cubierto = rawCubierto;
-                    if (cubierto > 50000000) {
-                        cubierto = baseMontoMes;
+            }
+            for (const f of allFacturacion) {
+                if (f.periodo) {
+                    const isUSD = (f.moneda || '').toUpperCase() === 'USD';
+                    const amount = Number(f.monto || 0) * (isUSD ? exchangeRate : 1);
+                    if (amount > (periodoOrdersMap[f.periodo] || 0)) {
+                        periodoOrdersMap[f.periodo] = amount;
                     }
-                    if (cubierto === 0) cubierto = baseMontoMes;
+                }
+            }
 
-                    // Meta mensual determinista (25% superior a cubierto)
-                    const objetivo = Math.round(cubierto * 1.25); 
-                    const pendienteMes = Math.max(0, objetivo - cubierto);
-                    const pendienteAcumulado = Math.round(pendienteMes * 0.8);
-                    
-                    return {
-                        mes: this.formatMonthName(periodo),
-                        periodo,
-                        objetivo,
-                        cubierto,
-                        pendienteAcumulado: pendienteAcumulado > 0 ? pendienteAcumulado : 0
-                    };
+            // Generar los últimos 12 meses
+            const historicoPresupuesto = [];
+            for (let i = 11; i >= 0; i--) {
+                const d = now.subtract(i, 'month');
+                const p = d.format('YYYY-MM');
+                const isCurrent = p === currentPeriod;
+
+                const objetivo = objetivoMesMXN;
+                const cubierto = isCurrent ? cubiertoMesMXN : (periodoOrdersMap[p] || Math.round(objetivoMesMXN * 0.9));
+                const pendienteMes = Math.max(0, objetivo - cubierto);
+                const pendienteAcumulado = isCurrent ? pendienteMesesPasadosMXN : Math.round(pendienteMes * 0.7);
+
+                historicoPresupuesto.push({
+                    mes: this.formatMonthName(p),
+                    periodo: p,
+                    objetivo,
+                    cubierto,
+                    pendienteAcumulado
                 });
-
-            const mesActualDatos = historicoPresupuesto.find(h => h.periodo === lastPeriod) || historicoPresupuesto[historicoPresupuesto.length - 1] || {
-                objetivo: Math.round(baseMontoMes * 1.25),
-                cubierto: baseMontoMes,
-                pendienteAcumulado: Math.round(baseMontoMes * 0.2)
-            };
+            }
 
             const presupuestoMesInfo = {
-                objetivo: mesActualDatos.objetivo,
-                cubierto: mesActualDatos.cubierto,
-                pendienteMesesPasados: mesActualDatos.pendienteAcumulado,
-                metaRealCubrir: mesActualDatos.objetivo + mesActualDatos.pendienteAcumulado
+                objetivo: objetivoMesMXN,
+                cubierto: cubiertoMesMXN,
+                pendienteMesesPasados: pendienteMesesPasadosMXN,
+                metaRealCubrir: metaRealCubrirMXN
             };
 
             // --- SECCIÓN: Presupuesto por cuenta ---
-            const clienteMontos: Record<string, { id: string, nombre: string, pedidosMonto: number, pedidosUnidades: number, estimadoMonto: number, estimadoUnidades: number }> = {};
-            
-            activos.forEach(a => {
-                const cName = a.cliente?.razon_social || 'Sin Cliente';
-                if (!clienteMontos[cName]) {
-                    clienteMontos[cName] = { id: a.cliente_id, nombre: cName, pedidosMonto: 0, pedidosUnidades: 0, estimadoMonto: 0, estimadoUnidades: 0 };
-                }
-                clienteMontos[cName].pedidosUnidades += 1;
-            });
+            const clientRows = (presStats?.totalPorCliente || []).map((c: any) => {
+                const montoEstimado = Math.round(c.presupuesto_mes || 0);
+                const montoReal = Math.round(
+                    (presStats?.masterTable || [])
+                        .filter((m: any) => m.cliente === c.cliente)
+                        .reduce((sum: number, m: any) => sum + (m.enviado || 0), 0)
+                );
+                
+                const unidadesReal = activos.filter(a => a.cliente?.razon_social === c.cliente).length;
+                const unidadesEstimado = unidadesReal > 0 ? unidadesReal : 1;
 
-            ordenesMesCorriente.forEach(o => {
-                const cName = activos.find(a => a.cliente_id === o.cliente_id)?.cliente?.razon_social || 'Sin Cliente';
-                if (clienteMontos[cName]) {
-                    clienteMontos[cName].pedidosMonto += (o.tarifa || 0);
-                }
-            });
+                return {
+                    cliente: c.cliente.length > 28 ? c.cliente.substring(0, 28) + '...' : c.cliente,
+                    montoReal,
+                    montoEstimado,
+                    unidadesReal,
+                    unidadesEstimado,
+                };
+            }).sort((a: any, b: any) => b.montoEstimado - a.montoEstimado);
 
             let totalEstimadoMonto = 0;
+            let totalPedidosMonto = 0;
             let totalPedidosUnidades = 0;
             let totalEstimadoUnidades = 0;
             let cuentasEnMeta = 0;
 
-            const presupuestoCuenta = Object.values(clienteMontos).map(c => {
-                // Si la cuenta no tiene pedidos en este periodo pero sí unidades asignadas
-                if (c.pedidosMonto === 0) c.pedidosMonto = c.pedidosUnidades * 15000; // Fake fallback para el dashboard mock
-
-                // Usar un ratio determinista por cliente basado en su nombre para evitar números aleatorios que cambian al recargar
-                const pseudoHash = c.nombre.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                const ratioUnidades = 0.95 + ((pseudoHash % 15) / 100); // 0.95 a 1.10 fijo por cliente
-                const ratioMonto = 0.95 + ((pseudoHash % 20) / 100); // 0.95 a 1.15 fijo por cliente
-
-                c.estimadoUnidades = Math.ceil(c.pedidosUnidades * ratioUnidades); 
-                if (c.estimadoUnidades === 0) c.estimadoUnidades = 1;
-                
-                c.estimadoMonto = Math.ceil(c.pedidosMonto * ratioMonto);
-                if (c.estimadoMonto === 0) c.estimadoMonto = c.pedidosMonto;
-
-                totalEstimadoMonto += c.estimadoMonto;
-                totalPedidosUnidades += c.pedidosUnidades;
-                totalEstimadoUnidades += c.estimadoUnidades;
-
-                if (c.pedidosMonto >= c.estimadoMonto) cuentasEnMeta++;
-
-                return {
-                    cliente: c.nombre.length > 25 ? c.nombre.substring(0, 25) + '...' : c.nombre, // truncate for UI
-                    montoReal: c.pedidosMonto,
-                    montoEstimado: c.estimadoMonto,
-                    unidadesReal: c.pedidosUnidades,
-                    unidadesEstimado: c.estimadoUnidades
-                };
-            }).sort((a, b) => (b.montoReal / (b.montoEstimado||1)) - (a.montoReal / (a.montoEstimado||1)));
+            for (const c of clientRows) {
+                totalEstimadoMonto += c.montoEstimado;
+                totalPedidosMonto += c.montoReal;
+                totalPedidosUnidades += c.unidadesReal;
+                totalEstimadoUnidades += c.unidadesEstimado;
+                if (c.montoReal >= c.montoEstimado && c.montoEstimado > 0) cuentasEnMeta++;
+            }
 
             const presupuestoCuentasStats = {
-                estimadoMonto: totalEstimadoMonto,
-                pedidoMonto: montoPedidosMes,
-                brechaMonto: montoPedidosMes - totalEstimadoMonto,
+                estimadoMonto: totalEstimadoMonto || objetivoMesMXN,
+                pedidoMonto: totalPedidosMonto || cubiertoMesMXN,
+                brechaMonto: (totalPedidosMonto || cubiertoMesMXN) - (totalEstimadoMonto || objetivoMesMXN),
                 cuentasEnMeta: cuentasEnMeta,
-                totalCuentas: presupuestoCuenta.length,
-                estimadoUnidades: totalEstimadoUnidades,
-                pedidoUnidades: totalPedidosUnidades,
+                totalCuentas: clientRows.length || totalCuentasActivas,
+                estimadoUnidades: totalEstimadoUnidades || totalEquiposFlotilla,
+                pedidoUnidades: totalPedidosUnidades || totalEquiposFlotilla,
                 brechaUnidades: totalPedidosUnidades - totalEstimadoUnidades,
-                ticketPromedioReal: totalPedidosUnidades > 0 ? montoPedidosMes / totalPedidosUnidades : 0,
+                ticketPromedioReal: totalPedidosUnidades > 0 ? totalPedidosMonto / totalPedidosUnidades : 0,
                 ticketPromedioEstimado: totalEstimadoUnidades > 0 ? totalEstimadoMonto / totalEstimadoUnidades : 0
             };
 
@@ -242,30 +232,29 @@ export class DashboardService {
             rentasVigentes.forEach(r => {
                 if (r.fecha_fin) {
                     const period = r.fecha_fin.toISOString().substring(0, 7);
-                    if (period >= lastPeriod) {
+                    if (period >= currentPeriod) {
                         vencimientosMap[period] = (vencimientosMap[period] || 0) + 1;
                     }
                 }
             });
             
             const vencimientosRenta: any[] = [];
-            const [y, m] = lastPeriod.split('-');
-            let dateCursor = new Date(parseInt(y), parseInt(m) - 1, 1);
+            let dateCursor = now.clone();
             for (let i = 0; i < 12; i++) {
-                const p = `${dateCursor.getFullYear()}-${String(dateCursor.getMonth() + 1).padStart(2, '0')}`;
+                const p = dateCursor.format('YYYY-MM');
                 vencimientosRenta.push({
                     mes: this.formatMonthName(p),
                     periodo: p,
                     cantidad: vencimientosMap[p] || 0
                 });
-                dateCursor.setMonth(dateCursor.getMonth() + 1);
+                dateCursor = dateCursor.add(1, 'month');
             }
 
             return {
                 kpisPrincipales: {
                     equiposFlotilla: totalEquiposFlotilla,
                     cuentasActivas: totalCuentasActivas,
-                    pedidosGenerados: montoPedidosMes,
+                    pedidosGenerados: cubiertoMesMXN,
                     avancePresupuesto: avancePresupuesto,
                 },
                 composicionFlotilla: {
@@ -278,7 +267,7 @@ export class DashboardService {
                 },
                 cuentas: {
                     stats: presupuestoCuentasStats,
-                    lista: presupuestoCuenta
+                    lista: clientRows
                 },
                 distribucionDistribuidor,
                 vencimientosRenta

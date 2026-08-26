@@ -77,7 +77,18 @@ export class RentasService {
             condiciones: renta.condiciones ?? null,
             propietario: renta.propietario || renta.activo?.propietario || '-',
             detalles: renta.detalles ?? null,
-            ordenes: renta.ordenes ?? [],
+            ordenes: (renta.ordenes || []).map((o: any) => ({
+                id: o.id,
+                periodo: o.periodo,
+                po: o.po,
+                tarifa: o.tarifa,
+                moneda: o.moneda,
+                estado: o.estado,
+                condiciones: o.condiciones,
+                pedido_totvs: (o.condiciones as any)?.pedido_totvs || renta.no_registro_totvs || null,
+                fecha_pedido_totvs: (o.condiciones as any)?.fecha_pedido_totvs || renta.fecha_pedido_totvs || null,
+                created_at: o.created_at
+            })),
         };
     }
 
@@ -332,7 +343,15 @@ export class RentasService {
         const db = this.getDb();
         const existente = await db.renta.findUnique({ where: { id } });
         if (!existente) throw new NotFoundException(`Renta ${id} no encontrada`);
-        return db.renta.update({ where: { id }, data: { estado: 'CANCELADA' } });
+        
+        await db.$transaction(async (tx) => {
+            await tx.ordenMensual.deleteMany({ where: { renta_id: id } });
+            await tx.detallesRenta.deleteMany({ where: { renta_id: id } });
+            await tx.documento.deleteMany({ where: { modulo_relacionado: 'rentas', registro_id: id } });
+            await tx.renta.delete({ where: { id } });
+        });
+
+        return { success: true, message: 'Renta eliminada correctamente' };
     }
 
     async subirDocumento(rentaId: string, file: Express.Multer.File) {

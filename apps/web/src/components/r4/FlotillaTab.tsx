@@ -3,7 +3,7 @@
 import { 
   Search, Filter, Download, Grid3x3, List, Plus, Eye, Edit, 
   FileText, Clock, CheckCircle, Upload, X, FileSpreadsheet, 
-  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ChevronLeft, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2
+  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ChevronLeft, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2, Trash2
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -177,10 +177,12 @@ export default function FlotillaTab({
   const [newAssetAltura, setNewAssetAltura] = useState('');
   const [newAssetBc, setNewAssetBc] = useState('');
   const [newAssetCliente, setNewAssetCliente] = useState('');
+  const [newAssetCuenta, setNewAssetCuenta] = useState('');
   const [newAssetSitio, setNewAssetSitio] = useState('');
   const [newAssetDistribuidor, setNewAssetDistribuidor] = useState('');
   const [newAssetAdc, setNewAssetAdc] = useState('');
   const [newAssetPropietario, setNewAssetPropietario] = useState('');
+  const [newAssetIwarehouse, setNewAssetIwarehouse] = useState('');
   // Renta opcional — sección colapsable
   const [showRentaSection, setShowRentaSection] = useState(false);
   const [newRentaPrecio, setNewRentaPrecio] = useState('');
@@ -191,10 +193,24 @@ export default function FlotillaTab({
   const [newRentaFechaInicio, setNewRentaFechaInicio] = useState('');
   const [newRentaPlazo, setNewRentaPlazo] = useState('');
   const [newRentaFechaFin, setNewRentaFechaFin] = useState('');
+  const [newRentaFolioOc, setNewRentaFolioOc] = useState('');
+  const [newRentaPedidoTotvs, setNewRentaPedidoTotvs] = useState('');
+  const [newRentaFechaTotvs, setNewRentaFechaTotvs] = useState('');
 
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<any>({});
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Delete Modal State
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    asset: any | null;
+    isDeleting: boolean;
+  }>({
+    isOpen: false,
+    asset: null,
+    isDeleting: false,
+  });
 
   // Transfer Modal State
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -574,7 +590,7 @@ export default function FlotillaTab({
 
     try {
       // Build renta section only if user filled at least precio or tipo poliza
-      const hasRentaData = newRentaPrecio || newRentaPoliza !== 'SMP' || newRentaFechaInicio;
+      const hasRentaData = newRentaPrecio || newRentaPoliza !== 'SMP' || newRentaFechaInicio || newRentaFolioOc || newRentaPedidoTotvs;
       const rentaPayload = hasRentaData ? {
         renta_precio: newRentaPrecio ? parseFloat(newRentaPrecio) : undefined,
         renta_moneda: newRentaMoneda,
@@ -584,7 +600,13 @@ export default function FlotillaTab({
         fecha_inicio: newRentaFechaInicio || undefined,
         plazo_meses: newRentaPlazo ? parseInt(newRentaPlazo) : undefined,
         fecha_fin: newRentaFechaFin || undefined,
+        oc_cliente: newRentaFolioOc || undefined,
+        no_registro_totvs: newRentaPedidoTotvs || undefined,
+        fecha_pedido_totvs: newRentaFechaTotvs || undefined,
       } : undefined;
+
+      const selectedSiteObj = (clientesDisponibles.find(c => c.id === newAssetCliente)?.sitios || []).find((s: any) => s.id === newAssetSitio);
+      const computedCuenta = newAssetCuenta || selectedSiteObj?.cuenta || undefined;
 
       const payload = {
         serie: newAssetSerie,
@@ -596,10 +618,12 @@ export default function FlotillaTab({
         bc: newAssetBc,
         estatus_operativo: newAssetEstatus,
         cliente_id: newAssetCliente,
+        cuenta: computedCuenta,
         sitio_id: newAssetSitio,
         adc: isAdc ? (loggedInAdcName || newAssetAdc) : (newAssetAdc || loggedInAdcName),
         distribuidor: newAssetDistribuidor,
         propietario: newAssetPropietario,
+        ...(newAssetIwarehouse && { info_tecnica: { iwarehouse: newAssetIwarehouse } }),
         ...(rentaPayload && { renta: rentaPayload }),
       };
 
@@ -612,12 +636,12 @@ export default function FlotillaTab({
         await api.post('/r4/flotilla', payload);
         toast.success(hasRentaData ? 'Equipo y Renta registrados con éxito' : 'Equipo registrado con éxito');
       }
-      setIsNewAssetModalOpen(false);
+      handleCloseNewAssetModal();
       fetchFlotilla();
       fetchPendingApprovals();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating asset:', error);
-      toast.error('Error al procesar el alta del equipo');
+      toast.error(error.response?.data?.message || 'Error al procesar el alta del equipo');
     }
   };
 
@@ -627,10 +651,15 @@ export default function FlotillaTab({
     setNewAssetModelo('');
     setNewAssetClase('I');
     setNewAssetCliente('');
+    setNewAssetCuenta('');
     setNewAssetSitio('');
     setNewAssetAdc('');
     setNewAssetDistribuidor('');
     setNewAssetPropietario('');
+    setNewAssetIwarehouse('');
+    setNewAssetOach('');
+    setNewAssetAltura('');
+    setNewAssetBc('');
     // Reset renta section
     setShowRentaSection(false);
     setNewRentaPrecio('');
@@ -641,6 +670,33 @@ export default function FlotillaTab({
     setNewRentaFechaInicio('');
     setNewRentaPlazo('');
     setNewRentaFechaFin('');
+    setNewRentaFolioOc('');
+    setNewRentaPedidoTotvs('');
+    setNewRentaFechaTotvs('');
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, asset: any) => {
+    e.stopPropagation();
+    setDeleteConfirmModal({
+      isOpen: true,
+      asset,
+      isDeleting: false,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmModal.asset) return;
+    try {
+      setDeleteConfirmModal(prev => ({ ...prev, isDeleting: true }));
+      await api.delete(`/r4/flotilla/${deleteConfirmModal.asset.serie}`);
+      toast.success(`Equipo ${deleteConfirmModal.asset.serie} eliminado correctamente`);
+      setDeleteConfirmModal({ isOpen: false, asset: null, isDeleting: false });
+      fetchFlotilla();
+    } catch (error: any) {
+      console.error('Error deleting asset:', error);
+      toast.error(error.response?.data?.message || 'Error al eliminar el equipo');
+      setDeleteConfirmModal(prev => ({ ...prev, isDeleting: false }));
+    }
   };
 
   // ADC Visual Filtering Logic
@@ -1295,15 +1351,20 @@ export default function FlotillaTab({
                     {!isAdc && <td className={`px-4 ${cellPy} font-bold text-slate-500`}>{asset.adc}</td>}
                     <td className={`px-4 ${cellPy} text-right`} onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
-                        <Link href={`/r4/flotilla/${asset.serie}`} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors">
+                        <Link href={`/r4/flotilla/${asset.serie}`} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors" title="Ver detalle">
                           <Eye className="w-3.5 h-3.5" />
                         </Link>
-                        <button onClick={(e) => startEditing(e, asset)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors">
+                        <button onClick={(e) => startEditing(e, asset)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors" title="Editar">
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={(e) => openTransferModal(e, asset)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors">
+                        <button onClick={(e) => openTransferModal(e, asset)} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg transition-colors" title="Transferir de sitio">
                           <MapPin className="w-3.5 h-3.5" />
                         </button>
+                        {isAdministrator && (
+                          <button onClick={(e) => handleDeleteClick(e, asset)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar equipo">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1552,16 +1613,70 @@ export default function FlotillaTab({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Cliente *</label>
-                    <select value={newAssetCliente} onChange={(e) => { setNewAssetCliente(e.target.value); setNewAssetSitio(''); }} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                    <select 
+                      value={newAssetCliente} 
+                      onChange={(e) => { 
+                        setNewAssetCliente(e.target.value); 
+                        setNewAssetCuenta('');
+                        setNewAssetSitio(''); 
+                      }} 
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer"
+                    >
                       <option value="">Seleccionar Cliente</option>
                       {[...clientesDisponibles].sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || '')).map((c: any) => <option key={c.id} value={c.id}>{c.razonSocial || c.razon_social}</option>)}
                     </select>
                   </div>
                   <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-bold text-slate-700">Cuenta</label>
+                    {(() => {
+                      const clientSitios = clientesDisponibles.find((c: any) => c.id === newAssetCliente)?.sitios || [];
+                      const clientCuentas = Array.from(new Set(clientSitios.map((s: any) => s.cuenta).filter(Boolean))) as string[];
+                      
+                      return (
+                        <div className="flex gap-2">
+                          <select 
+                            value={newAssetCuenta} 
+                            onChange={(e) => {
+                              setNewAssetCuenta(e.target.value);
+                              setNewAssetSitio('');
+                            }}
+                            disabled={!newAssetCliente}
+                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50"
+                          >
+                            <option value="">Todas / Sin Cuenta específica</option>
+                            {clientCuentas.map(cta => (
+                              <option key={cta} value={cta}>{cta}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Sitio *</label>
-                    <select value={newAssetSitio} onChange={(e) => setNewAssetSitio(e.target.value)} disabled={!newAssetCliente} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50">
+                    <select 
+                      value={newAssetSitio} 
+                      onChange={(e) => {
+                        const sId = e.target.value;
+                        setNewAssetSitio(sId);
+                        const sObj = (clientesDisponibles.find((c: any) => c.id === newAssetCliente)?.sitios || []).find((s: any) => s.id === sId);
+                        if (sObj?.cuenta && !newAssetCuenta) {
+                          setNewAssetCuenta(sObj.cuenta);
+                        }
+                      }} 
+                      disabled={!newAssetCliente} 
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50"
+                    >
                       <option value="">Seleccionar Sitio</option>
-                      {[...(clientesDisponibles.find((c: any) => c.id === newAssetCliente)?.sitios || [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                      {(() => {
+                        const clientSitios = clientesDisponibles.find((c: any) => c.id === newAssetCliente)?.sitios || [];
+                        const filtered = newAssetCuenta 
+                          ? clientSitios.filter((s: any) => s.cuenta === newAssetCuenta)
+                          : clientSitios;
+                        return [...filtered].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.nombre} {s.cuenta ? `(${s.cuenta})` : ''}</option>
+                        ));
+                      })()}
                     </select>
                   </div>
                   <div>
@@ -1608,15 +1723,19 @@ export default function FlotillaTab({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">OACH</label>
-                    <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
+                    <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 95 in" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Altura</label>
-                    <input type="text" value={newAssetAltura} onChange={(e) => setNewAssetAltura(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
+                    <input type="text" value={newAssetAltura} onChange={(e) => setNewAssetAltura(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 240 in" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">BC</label>
-                    <input type="text" value={newAssetBc} onChange={(e) => setNewAssetBc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
+                    <input type="text" value={newAssetBc} onChange={(e) => setNewAssetBc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 36 in" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider mb-1">iWarehouse S/N</label>
+                    <input type="text" value={newAssetIwarehouse} onChange={(e) => setNewAssetIwarehouse(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: IW-98210" />
                   </div>
                 </div>
 
@@ -1629,7 +1748,7 @@ export default function FlotillaTab({
                   >
                     <span className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-black">R</span>
-                      Datos de Renta (opcional)
+                      Datos de Renta y Orden de Compra (opcional)
                     </span>
                     <span className="text-slate-400 text-lg">{showRentaSection ? '−' : '+'}</span>
                   </button>
@@ -1641,14 +1760,14 @@ export default function FlotillaTab({
                         <input type="number" value={newRentaPrecio} onChange={(e) => setNewRentaPrecio(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 5500" />
                       </div>
                       <div>
-                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Moneda</label>
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Moneda Renta</label>
                         <select value={newRentaMoneda} onChange={(e) => setNewRentaMoneda(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
                           <option value="MXN">MXN</option>
                           <option value="USD">USD</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">CFPM / SMP</label>
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">CFPM / SMP (Póliza)</label>
                         <select value={newRentaPoliza} onChange={(e) => setNewRentaPoliza(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
                           <option value="SMP">SMP</option>
                           <option value="CFPM">CFPM</option>
@@ -1668,12 +1787,26 @@ export default function FlotillaTab({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Fecha Entregado</label>
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Fecha Entregado (Inicio)</label>
                         <input type="date" value={newRentaFechaInicio} onChange={(e) => setNewRentaFechaInicio(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" />
                       </div>
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Plazo (meses)</label>
-                        <input type="number" value={newRentaPlazo} onChange={(e) => setNewRentaPlazo(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 36" />
+                        <input 
+                          type="number" 
+                          value={newRentaPlazo} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewRentaPlazo(val);
+                            if (newRentaFechaInicio && val && Number(val) > 0) {
+                              const [y, m, d] = newRentaFechaInicio.split('-').map(Number);
+                              const fin = new Date(y, m - 1 + Number(val), d);
+                              setNewRentaFechaFin(fin.toISOString().split('T')[0]);
+                            }
+                          }} 
+                          className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" 
+                          placeholder="Ej: 36" 
+                        />
                       </div>
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700 font-bold flex items-center justify-between">
@@ -1685,6 +1818,35 @@ export default function FlotillaTab({
                           value={newRentaFechaFin} 
                           onChange={(e) => setNewRentaFechaFin(e.target.value)} 
                           className="w-full px-3.5 py-2.5 bg-red-50/50 border border-red-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-red-500" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700 font-bold">Folio OC Cliente</label>
+                        <input 
+                          type="text" 
+                          value={newRentaFolioOc} 
+                          onChange={(e) => setNewRentaFolioOc(e.target.value)} 
+                          className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" 
+                          placeholder="Ej: OC-9872" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700 font-bold">No. Pedido TOTVS</label>
+                        <input 
+                          type="text" 
+                          value={newRentaPedidoTotvs} 
+                          onChange={(e) => setNewRentaPedidoTotvs(e.target.value)} 
+                          className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" 
+                          placeholder="Ej: PED-10293" 
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700 font-bold">Fecha Registro TOTVS</label>
+                        <input 
+                          type="date" 
+                          value={newRentaFechaTotvs} 
+                          onChange={(e) => setNewRentaFechaTotvs(e.target.value)} 
+                          className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" 
                         />
                       </div>
                     </div>
@@ -1945,6 +2107,68 @@ export default function FlotillaTab({
                 </button>
                 <button onClick={handleTransfer} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
                   Ejecutar Transferencia
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Confirmación de Eliminación de Activo */}
+      <AnimatePresence>
+        {deleteConfirmModal.isOpen && deleteConfirmModal.asset && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-red-50/50">
+                <h3 className="text-base font-black flex items-center gap-2 text-red-600">
+                  <Trash2 className="w-5 h-5" />
+                  Eliminar Equipo
+                </h3>
+                <button 
+                  onClick={() => setDeleteConfirmModal({ isOpen: false, asset: null, isDeleting: false })} 
+                  className="p-1.5 hover:bg-red-100 rounded-xl text-slate-400 hover:text-slate-700 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-3 font-medium text-sm text-slate-600">
+                <p>
+                  ¿Estás seguro de que deseas eliminar permanentemente el equipo con serie <strong className="font-bold text-slate-900">{deleteConfirmModal.asset.serie}</strong>?
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1 text-slate-700">
+                  <div><strong>Modelo:</strong> {deleteConfirmModal.asset.modelo || '-'}</div>
+                  <div><strong>Cliente:</strong> {deleteConfirmModal.asset.cliente || '-'}</div>
+                  <div><strong>Sitio:</strong> {deleteConfirmModal.asset.site || '-'}</div>
+                  {deleteConfirmModal.asset.cuenta && <div><strong>Cuenta:</strong> {deleteConfirmModal.asset.cuenta}</div>}
+                </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 font-medium">
+                  ⚠️ Esta acción eliminará el registro del equipo, sus configuraciones de renta y órdenes asociadas. Esta acción no se puede deshacer.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button 
+                  type="button"
+                  disabled={deleteConfirmModal.isDeleting}
+                  onClick={() => setDeleteConfirmModal({ isOpen: false, asset: null, isDeleting: false })} 
+                  className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  disabled={deleteConfirmModal.isDeleting}
+                  onClick={handleConfirmDelete} 
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors cursor-pointer"
+                >
+                  {deleteConfirmModal.isDeleting ? 'Eliminando...' : 'Sí, Eliminar Equipo'}
                 </button>
               </div>
             </motion.div>

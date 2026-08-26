@@ -151,15 +151,46 @@ export class ClientesService {
                             return str;
                         };
 
-                        // Extract distribuidor string safely
+                        // Extract distribuidor string safely with fallback to active equipment
                         let distName = cleanStr(s.distribuidor);
+                        if (distName === '-' || distName === '' || distName.toLowerCase() === 'sin distribuidor' || distName.toLowerCase() === 'no asignado') {
+                            const actWithDist = s.activos?.find((a: any) => a.distribuidor && a.distribuidor !== '-' && a.distribuidor.toLowerCase() !== 'sin distribuidor');
+                            if (actWithDist) distName = cleanStr(actWithDist.distribuidor);
+                        }
 
-                        // Extract contact info
-                        const cNombre = cleanStr(contacto.distribuidor_contacto_nombre || contacto.contacto_nombre || contacto.nombre || contacto.tecnico);
-                        const cTelefono = cleanStr(contacto.distribuidor_contacto_telefono || contacto.telefono || contacto.tel);
-                        const cCorreo = cleanStr(contacto.distribuidor_contacto_correo || contacto.contacto_correo || contacto.correo || contacto.email);
+                        // Extract contact info checking all dealer / technician / distributor aliases
+                        const cNombre = cleanStr(
+                            contacto.distribuidor_contacto_nombre || 
+                            contacto.contacto_distribuidor || 
+                            contacto.dealer_contacto_nombre || 
+                            contacto.tecnico_dealer || 
+                            contacto.tecnico || 
+                            contacto.contacto_tecnico ||
+                            contacto.contacto_nombre ||
+                            contacto.nombre
+                        );
+                        const cTelefono = cleanStr(
+                            contacto.distribuidor_contacto_telefono || 
+                            contacto.telefono_distribuidor || 
+                            contacto.dealer_contacto_telefono || 
+                            contacto.telefono_dealer ||
+                            contacto.telefono_tecnico ||
+                            contacto.telefono || 
+                            contacto.tel
+                        );
+                        const cCorreo = cleanStr(
+                            contacto.distribuidor_contacto_correo || 
+                            contacto.correo_distribuidor || 
+                            contacto.email_distribuidor || 
+                            contacto.dealer_contacto_correo || 
+                            contacto.correo_dealer || 
+                            contacto.email_dealer || 
+                            contacto.contacto_correo || 
+                            contacto.correo || 
+                            contacto.email
+                        );
 
-                        const siteCuenta = (s.cuenta && s.cuenta.trim() !== '' && s.cuenta !== '-') ? s.cuenta.trim() : (cliente.razon_social || cliente.nombre || '-');
+                        const siteCuenta = (s.cuenta && s.cuenta.trim() !== '' && s.cuenta !== '-') ? s.cuenta.trim() : (cliente.razon_social || (cliente as any).nombre || '-');
                         const siteTienda = (s.tienda && s.tienda.trim() !== '' && s.tienda !== '-') ? s.tienda.trim() : (s.nombre && s.nombre.trim() !== '' && s.nombre !== '-' ? s.nombre.trim() : '-');
 
                         return {
@@ -527,6 +558,83 @@ export class ClientesService {
             targetId,
             sitiosMigrados: source.sitios.length,
             activosMigrados: source.activos.length,
+        };
+    }
+
+    async fusionarSitios(sourceId: string, targetId: string) {
+        const db = this.getDb();
+
+        if (sourceId === targetId) {
+            throw new ConflictException('No puedes fusionar un sitio consigo mismo');
+        }
+
+        const [source, target] = await Promise.all([
+            db.sitio.findUnique({ 
+                where: { id: sourceId }, 
+                include: { activos: true, rentas: true, contratos: true, cliente: true } 
+            }),
+            db.sitio.findUnique({ 
+                where: { id: targetId },
+                include: { cliente: true }
+            }),
+        ]);
+
+        if (!source) throw new NotFoundException(`Sitio origen ${sourceId} no encontrado`);
+        if (!target) throw new NotFoundException(`Sitio destino ${targetId} no encontrado`);
+
+        this.logger.log(`[Fusión Sitios] Migrando "${source.nombre}" (${source.id}) → "${target.nombre}" (${target.id})`);
+
+        // 1. Mover activos al sitio destino y actualizar cliente_id si difiere
+        await db.activo.updateMany({
+            where: { sitio_id: sourceId },
+            data: { 
+                sitio_id: targetId,
+                cliente_id: target.cliente_id 
+            }
+        });
+
+        // 2. Mover rentas
+        await db.renta.updateMany({
+            where: { sitio_id: sourceId },
+            data: { 
+                sitio_id: targetId,
+                cliente_id: target.cliente_id 
+            }
+        });
+
+        // 3. Mover contratos
+        await db.contrato.updateMany({
+            where: { sitio_id: sourceId },
+            data: { 
+                sitio_id: targetId,
+                cliente_id: target.cliente_id 
+            }
+        });
+
+        // 4. Mover historial de cambios de sitio si la tabla existe
+        try {
+            await db.cambioSitioLog.updateMany({
+                where: { sitio_anterior_id: sourceId },
+                data: { sitio_anterior_id: targetId }
+            });
+            await db.cambioSitioLog.updateMany({
+                where: { sitio_nuevo_id: sourceId },
+                data: { sitio_nuevo_id: targetId }
+            });
+        } catch (_) { /* si no aplica */ }
+
+        // 5. Eliminar sitio origen (ya sin relaciones dependientes)
+        await db.sitio.delete({ where: { id: sourceId } });
+
+        this.logger.log(`[Fusión Sitios] Completada. Sitio "${source.nombre}" fusionado en "${target.nombre}"`);
+
+        return {
+            success: true,
+            message: `Sitio "${source.nombre}" fusionado exitosamente en "${target.nombre}"`,
+            targetId,
+            activosMigrados: source.activos?.length || 0,
+            rentasMigradas: source.rentas?.length || 0,
+            contratosMigrados: source.contratos?.length || 0,
         };
     }
 

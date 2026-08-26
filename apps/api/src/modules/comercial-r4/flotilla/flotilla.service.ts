@@ -1572,5 +1572,68 @@ export class FlotillaService {
 
         return { success: true, message: 'Accesorio desvinculado exitosamente' };
     }
+
+    async eliminarActivo(id: string, usuarioId: string) {
+        const db = this.getDb();
+        const activo = await db.activo.findFirst({
+            where: {
+                OR: [
+                    { id },
+                    { serie: id }
+                ]
+            },
+            include: { rentas: true }
+        });
+
+        if (!activo) {
+            throw new NotFoundException(`Equipo con identificador o serie "${id}" no encontrado`);
+        }
+
+        const detalleUsuario = await this.obtenerDetalleUsuario(usuarioId);
+
+        // Borrar dependencias en cascada segura
+        await db.$transaction(async (tx) => {
+            // 1. Accesorios vinculados
+            await tx.activoAccesorio.deleteMany({ where: { OR: [{ activo_id: activo.id }, { accesorio_id: activo.id }] } });
+            
+            // 2. Ordenes mensuales
+            await tx.ordenMensual.deleteMany({ where: { activo_id: activo.id } });
+
+            // 3. Detalles de renta & Rentas
+            const rentaIds = activo.rentas.map(r => r.id);
+            if (rentaIds.length > 0) {
+                await tx.detallesRenta.deleteMany({ where: { renta_id: { in: rentaIds } } });
+                await tx.renta.deleteMany({ where: { id: { in: rentaIds } } });
+            }
+
+            // 4. Logs de cambio de sitio y solicitudes
+            await tx.cambioSitioLog.deleteMany({ where: { activo_id: activo.id } });
+            await tx.solicitudCambio.deleteMany({ where: { activo_id: activo.id } });
+
+            // 5. Borrar el Activo
+            await tx.activo.delete({ where: { id: activo.id } });
+
+            // 6. Auditoría
+            await tx.auditoria.create({
+                data: {
+                    modulo: 'FLOTILLA',
+                    registro_id: activo.id,
+                    accion: 'BAJA_DIRECTA',
+                    usuario_id: usuarioId || 'sistema',
+                    valor_anterior: {
+                        serie: activo.serie,
+                        modelo: activo.modelo,
+                        cliente_id: activo.cliente_id,
+                        sitio_id: activo.sitio_id,
+                        cuenta: activo.cuenta
+                    },
+                    valor_nuevo: null,
+                    observaciones: `Eliminación de equipo (Serie: ${activo.serie}). Realizado por: ${detalleUsuario}`
+                }
+            });
+        });
+
+        return { success: true, message: `Equipo ${activo.serie} eliminado correctamente` };
+    }
 }
 

@@ -6,5 +6,6 @@ import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 @Module({
     controllers: [PresupuestosController],
     providers: [PresupuestosService, PrismaDynamicService],
+    exports: [PresupuestosService],
 })
 export class PresupuestosModule {}

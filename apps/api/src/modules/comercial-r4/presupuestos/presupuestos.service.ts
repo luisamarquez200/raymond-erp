@@ -11,13 +11,57 @@ interface DashboardFilters {
     adc?: string;
 }
 
+const ADC_ALIASES: Record<string, string[]> = {
+    'daniel': ['daniel', 'daniel romero', 'romero'],
+    'romero': ['daniel', 'daniel romero', 'romero'],
+    'alejandra': ['alejandra', 'alejandra arellanes', 'arellanes'],
+    'arellanes': ['alejandra', 'alejandra arellanes', 'arellanes'],
+    'andrea': ['andrea', 'andrea esquivel', 'esquivel'],
+    'esquivel': ['andrea', 'andrea esquivel', 'esquivel'],
+    'montserrat': ['montserrat', 'montserrat covarrubias', 'covarrubias', 'montse'],
+    'covarrubias': ['montserrat', 'montserrat covarrubias', 'covarrubias', 'montse'],
+    'simalu': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+    'simalú': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+    'leon': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+    'león': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+};
+
+function stripAccents(str: string): string {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: string[]): boolean {
     if (keywords.length === 0) return true;
+
+    // Expand keywords with aliases and normalized forms
+    const cleanKeywords = new Set<string>();
+    for (const kw of keywords) {
+        if (!kw) continue;
+        const norm = stripAccents(kw.trim().toLowerCase());
+        if (!norm) continue;
+        cleanKeywords.add(norm);
+
+        // Check single tokens
+        const parts = norm.split(/\s+/).filter(p => p.length >= 3);
+        for (const p of parts) {
+            cleanKeywords.add(p);
+            if (ADC_ALIASES[p]) {
+                ADC_ALIASES[p].forEach(a => cleanKeywords.add(stripAccents(a.toLowerCase())));
+            }
+        }
+        if (ADC_ALIASES[norm]) {
+            ADC_ALIASES[norm].forEach(a => cleanKeywords.add(stripAccents(a.toLowerCase())));
+        }
+    }
+
+    const keywordList = Array.from(cleanKeywords);
+
     for (const raw of candidates) {
         if (!raw) continue;
-        const norm = raw.trim().toLowerCase();
+        const norm = stripAccents(raw.trim().toLowerCase());
         if (!norm) continue;
-        for (const kw of keywords) {
+
+        for (const kw of keywordList) {
             if (!kw) continue;
             if (norm === kw || norm.includes(kw) || kw.includes(norm)) {
                 return true;
@@ -113,7 +157,9 @@ export class PresupuestosService {
                 cliente: true,
                 renta: {
                     include: {
-                        sitio: true
+                        sitio: true,
+                        activo: true,
+                        detalles: true,
                     }
                 }
             }
@@ -146,7 +192,8 @@ export class PresupuestosService {
         for (const r of allRentas) {
             // Apply ADC and Sitio filters manually
             if (adcKeywords.length > 0) {
-                if (!matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
+                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
                     continue;
                 }
             }
@@ -174,7 +221,7 @@ export class PresupuestosService {
                     currencyStat.presupuesto_mes += budgetAmount * months.length;
 
                     // ADC Compliance tracking
-                    const adcName = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+                    const adcName = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
                     const clientName = r.cliente.razon_social;
                     const adcKey = `${adcName}___${clientName}___${rMoneda}`;
                     if (!adcsMap.has(adcKey)) {
@@ -192,7 +239,8 @@ export class PresupuestosService {
         // Processing Orders
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
-                if (!matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
+                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
                     continue;
                 }
             }
@@ -223,7 +271,7 @@ export class PresupuestosService {
                 currencyStat.acumulado += pending;
                 
                 const clientName = r.cliente.razon_social;
-                const adcName = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+                const adcName = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
                 
                 pendingByClientAdc.push({
                     cliente: clientName,
@@ -324,14 +372,14 @@ export class PresupuestosService {
             const createdM = dayjs(o.created_at).format('YYYY-MM');
             if (!currentPeriodStrs.includes(createdM)) return false;
             if (adcKeywords.length > 0) {
-                const adcCandidates = [o.renta?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc];
+                const adcCandidates = [o.renta?.adc, o.renta?.activo?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.adc, (o.cliente as any)?.datos_comerciales?.adc];
                 if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
                     return false;
                 }
             }
             return true;
         }).map(o => ({
-            adc: o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC',
+            adc: o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC',
             cliente: o.cliente.razon_social,
             periodo_original: o.periodo,
             po: o.po,
@@ -381,14 +429,15 @@ export class PresupuestosService {
 
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
-                if (!matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
+                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
                     continue;
                 }
             }
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
 
-            const adcName = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            const adcName = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
             const clientName = r.cliente.razon_social;
             const key = `${adcName}___${clientName}___${rMoneda}`;
 
@@ -442,9 +491,10 @@ export class PresupuestosService {
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
 
-            const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            const adcName = o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
             if (adcKeywords.length > 0) {
-                if (!matchAdcKeywords([adcName, o.renta?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                const adcCandidates = [adcName, o.renta?.adc, o.renta?.activo?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.adc, (o.cliente as any)?.datos_comerciales?.adc];
+                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
                     continue;
                 }
             }
