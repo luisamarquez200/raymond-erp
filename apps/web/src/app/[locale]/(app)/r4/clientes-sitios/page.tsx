@@ -664,18 +664,28 @@ export default function ClientesSitios() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {selectedCliente.sitios?.length > 0 ? [...selectedCliente.sitios].sort((a: any, b: any) => {
-                      // Construct the EXACT title displayed on the card: "{sitio.cuenta || selectedCliente.razonSocial} / {sitio.tienda || sitio.nombre}"
-                      const titleA = `${a.cuenta || selectedCliente?.razonSocial || ''} / ${a.tienda || a.nombre || ''}`.trim();
-                      const titleB = `${b.cuenta || selectedCliente?.razonSocial || ''} / ${b.tienda || b.nombre || ''}`.trim();
-                      return titleA.localeCompare(titleB, 'es', { sensitivity: 'base', numeric: true });
-                    }).map((sitio: any, idx: number) => (
-                      <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
-                        <div className="p-5 flex-1 space-y-3" style={{ borderLeft: `4px solid ${currentColor}` }}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h4 className="font-black text-slate-900 text-lg">{sitio.cuenta || selectedCliente.razonSocial} / {sitio.tienda || sitio.nombre}</h4>
-                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Código TOTVS: {sitio.no_totvs || '-'}</p>
-                            </div>
+                      const getTitle = (s: any) => {
+                        const cuenta = (s.cuenta && s.cuenta !== '-') ? s.cuenta : (selectedCliente?.razonSocial || selectedCliente?.nombre || '');
+                        const tienda = (s.tienda && s.tienda !== '-') ? s.tienda : (s.nombre && s.nombre !== '-' ? s.nombre : '');
+                        if (cuenta && tienda && cuenta !== tienda) return `${cuenta} / ${tienda}`;
+                        return tienda || cuenta || s.nombre || 'Sitio de Operación';
+                      };
+                      return getTitle(a).localeCompare(getTitle(b), 'es', { sensitivity: 'base', numeric: true });
+                    }).map((sitio: any, idx: number) => {
+                      const cuentaVal = (sitio.cuenta && sitio.cuenta !== '-') ? sitio.cuenta : (selectedCliente?.razonSocial || selectedCliente?.nombre || '');
+                      const tiendaVal = (sitio.tienda && sitio.tienda !== '-') ? sitio.tienda : (sitio.nombre && sitio.nombre !== '-' ? sitio.nombre : '');
+                      const displayTitle = (cuentaVal && tiendaVal && cuentaVal !== tiendaVal) 
+                        ? `${cuentaVal} / ${tiendaVal}` 
+                        : (tiendaVal || cuentaVal || sitio.nombre || 'Sitio de Operación');
+
+                      return (
+                        <div key={sitio.id} className="border-2 border-slate-100 rounded-2xl overflow-hidden hover:border-slate-200 transition-all shadow-sm flex flex-col">
+                          <div className="p-5 flex-1 space-y-3" style={{ borderLeft: `4px solid ${currentColor}` }}>
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-black text-slate-900 text-lg">{displayTitle}</h4>
+                                <p className="text-[10px] font-bold text-slate-500 mt-0.5">Código TOTVS: {sitio.no_totvs && sitio.no_totvs !== '-' ? sitio.no_totvs : '-'}</p>
+                              </div>
                             <div className="flex items-center gap-2">
                               {!isReadOnly && (
                                 <button
