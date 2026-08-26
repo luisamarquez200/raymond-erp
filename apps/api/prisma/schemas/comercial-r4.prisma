@@ -14,15 +14,17 @@ datasource db {
 // -----------------------------------------------------------------------------
 
 model Usuario {
-  id              String   @id @default(cuid()) @db.VarChar(50)
-  correo          String   @unique @db.VarChar(150)
-  nombre          String?  @db.VarChar(150)
-  rol             String   @default("USUARIO") @db.VarChar(50)
-  bloqueado       Boolean  @default(false)
-  created_at      DateTime @default(now())
+  id                String   @id @default(cuid()) @db.VarChar(50)
+  correo            String   @unique @db.VarChar(150)
+  nombre            String?  @db.VarChar(150)
+  rol               String   @default("USUARIO") @db.VarChar(50)
+  adc_asociado_name String?  @db.VarChar(255)
+  auxiliar_name     String?  @db.VarChar(255)
+  bloqueado         Boolean  @default(false)
+  created_at        DateTime @default(now())
   
-  auditorias      Auditoria[]
-  documentos      Documento[]
+  auditorias        Auditoria[]
+  documentos        Documento[]
 
   @@map("usuarios")
 }

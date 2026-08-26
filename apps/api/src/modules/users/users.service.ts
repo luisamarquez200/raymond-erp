@@ -101,6 +101,8 @@ export class UsersService {
                         update: {
                             nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
                             rol: role.name || 'USUARIO',
+                            adc_asociado_name: user.adc_asociado_name || null,
+                            auxiliar_name: user.auxiliar_name || null,
                             bloqueado: !user.is_active,
                         },
                         create: {
@@ -108,6 +110,8 @@ export class UsersService {
                             correo: user.email,
                             nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
                             rol: role.name || 'USUARIO',
+                            adc_asociado_name: user.adc_asociado_name || null,
+                            auxiliar_name: user.auxiliar_name || null,
                             bloqueado: false,
                         },
                     });
@@ -324,6 +328,8 @@ export class UsersService {
                     update: {
                         nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
                         rol: updatedUser.roles?.name || 'USUARIO',
+                        adc_asociado_name: updatedUser.adc_asociado_name || null,
+                        auxiliar_name: updatedUser.auxiliar_name || null,
                         bloqueado: updatedUser.is_active === false,
                     },
                     create: {
@@ -331,6 +337,8 @@ export class UsersService {
                         correo: updatedUser.email,
                         nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
                         rol: updatedUser.roles?.name || 'USUARIO',
+                        adc_asociado_name: updatedUser.adc_asociado_name || null,
+                        auxiliar_name: updatedUser.auxiliar_name || null,
                         bloqueado: updatedUser.is_active === false,
                     },
                 });
