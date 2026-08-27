@@ -3,7 +3,7 @@
 import { 
   Search, Filter, Download, Grid3x3, List, Plus, Eye, Edit, 
   FileText, Clock, CheckCircle, Upload, X, FileSpreadsheet, 
-  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ChevronLeft, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2, Trash2
+  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ChevronLeft, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2, Trash2, ChevronDown, ChevronUp, Layers
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -154,6 +154,7 @@ export default function FlotillaTab({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
   const [openFilters, setOpenFilters] = useState<Record<string, boolean>>({});
@@ -1462,7 +1463,7 @@ export default function FlotillaTab({
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden"
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-xl overflow-hidden max-h-[90vh] flex flex-col"
             >
               <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
@@ -1470,23 +1471,23 @@ export default function FlotillaTab({
                   {isAdc ? 'Cargue Parcial de Flotilla' : 'Carga Masiva de Flotilla'}
                 </h3>
                 <button 
-                  onClick={() => { setIsUploadModalOpen(false); setFile(null); setUploadResult(null); setUploadError(null); }} 
+                  onClick={() => { setIsUploadModalOpen(false); setFile(null); setUploadResult(null); setUploadError(null); setShowDuplicates(false); }} 
                   className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
-              <div className="p-6 space-y-6">
+              <div className="p-6 space-y-5 overflow-y-auto">
                 {uploadResult ? (
                   /* SUCCESS RESULT STATE */
-                  <div className="flex flex-col items-center justify-center py-4 space-y-5">
-                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-md">
-                      <CheckCircle2 className="w-10 h-10 animate-in zoom-in-50 duration-300" />
+                  <div className="flex flex-col items-center justify-center py-2 space-y-4">
+                    <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-md">
+                      <CheckCircle2 className="w-9 h-9 animate-in zoom-in-50 duration-300" />
                     </div>
                     <div className="text-center space-y-1">
-                      <h3 className="text-xl font-black text-slate-900">¡Carga Procesada Exitosamente!</h3>
-                      <p className="text-xs text-slate-500 font-medium max-w-xs mx-auto">
+                      <h3 className="text-lg font-black text-slate-900">¡Carga Procesada Exitosamente!</h3>
+                      <p className="text-xs text-slate-500 font-medium max-w-sm mx-auto">
                         {isAdc 
                           ? 'Tus equipos y registros asignados se han actualizado en la base de datos.'
                           : 'La flotilla, rentas y directorio se sincronizaron con éxito en la plataforma.'
@@ -1494,24 +1495,75 @@ export default function FlotillaTab({
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 w-full pt-2">
-                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Filas Procesadas</span>
-                        <span className="text-2xl font-black text-slate-900">{uploadResult.processed || 0}</span>
+                    {/* Resumen de Métricas */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full pt-1">
+                      <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl text-center">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">Filas en Archivo</span>
+                        <span className="text-xl font-black text-slate-900">{uploadResult.processed || 0}</span>
                       </div>
-                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 block mb-1">Rentas Generadas</span>
-                        <span className="text-2xl font-black text-emerald-600">{uploadResult.details?.rentasCreadas || 0}</span>
+                      <div className="bg-indigo-50/60 border border-indigo-100 p-3 rounded-2xl text-center">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600 block mb-0.5">Equipos Únicos</span>
+                        <span className="text-xl font-black text-indigo-700">{uploadResult.details?.equiposUnicos ?? uploadResult.processed ?? 0}</span>
                       </div>
-                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 block mb-1">Sitios Sincronizados</span>
-                        <span className="text-2xl font-black text-indigo-600">{uploadResult.details?.sitiosNuevos || 0}</span>
+                      <div className="bg-emerald-50/60 border border-emerald-100 p-3 rounded-2xl text-center">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 block mb-0.5">Rentas Generadas</span>
+                        <span className="text-xl font-black text-emerald-700">{uploadResult.details?.rentasCreadas || 0}</span>
                       </div>
-                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-red-600 block mb-1">Clientes Sincronizados</span>
-                        <span className="text-2xl font-black text-red-600">{uploadResult.details?.clientesNuevos || 0}</span>
+                      <div className="bg-amber-50/60 border border-amber-100 p-3 rounded-2xl text-center">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 block mb-0.5">Sitios Sincronizados</span>
+                        <span className="text-xl font-black text-amber-700">{uploadResult.details?.sitiosNuevos || 0}</span>
                       </div>
                     </div>
+
+                    {/* Desglose de Series Duplicadas si existen */}
+                    {uploadResult.details?.duplicados && uploadResult.details.duplicados.length > 0 && (
+                      <div className="w-full bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 text-left space-y-2.5 mt-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200/80 text-amber-900 text-[10px] font-black">
+                              {uploadResult.details.duplicados.length}
+                            </span>
+                            <span>Series con filas repetidas ({uploadResult.details.totalFilasDuplicadas || uploadResult.details.duplicados.length} filas consolidadas)</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowDuplicates(!showDuplicates)}
+                            className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline underline-offset-2 transition-colors flex items-center gap-1"
+                          >
+                            {showDuplicates ? (
+                              <><span>Ocultar</span><ChevronUp className="w-3.5 h-3.5" /></>
+                            ) : (
+                              <><span>Ver detalle</span><ChevronDown className="w-3.5 h-3.5" /></>
+                            )}
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-amber-800/80 leading-relaxed">
+                          Estas series aparecen más de una vez en el Excel. El sistema las consolidó en un único equipo activo para no duplicar inventario:
+                        </p>
+
+                        {showDuplicates && (
+                          <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1 pt-1">
+                            {uploadResult.details.duplicados.map((dup: any, idx: number) => (
+                              <div key={idx} className="bg-white border border-amber-200/70 rounded-xl p-2.5 text-xs flex flex-col gap-1 shadow-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-mono font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                                    {dup.serie}
+                                  </span>
+                                  <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md">
+                                    {dup.count} veces en Excel
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-600 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                  <span><strong className="text-slate-700">Filas:</strong> {dup.rows.join(', ')}</span>
+                                  <span><strong className="text-slate-700">Cliente(s):</strong> {dup.clientes.join(', ')}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : isUploading ? (
                   /* LOADING STATE */

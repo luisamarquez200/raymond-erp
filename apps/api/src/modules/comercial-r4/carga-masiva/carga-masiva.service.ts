@@ -46,6 +46,33 @@ const normalizeClientName = (name: string | null | undefined): string => {
         .replace(/[^A-Z0-9]/g, '');  // quitar espacios, puntos, comas, S.A., etc.
 };
 
+/**
+ * Determina dinámicamente si una fila corresponde a un aditamento, batería, plataforma o accesorio.
+ * Los montacargas industriales pertenecen a las clases estándar (Clase I, II, III, IV, V).
+ * Los aditamentos y accesorios (Clase "Others", tipos de batería/stand/clamp, o donde la Serie es igual al Modelo)
+ * no cuentan con número de serie único de fabricante y pueden repetirse en el inventario.
+ */
+const isAditamentoOrAccesorio = (tipo?: string | null, clase?: string | null, modelo?: string | null, serie?: string | null): boolean => {
+    const t = (tipo || '').toLowerCase().trim();
+    const c = (clase || '').toLowerCase().trim();
+    const m = (modelo || '').toLowerCase().trim();
+    const s = (serie || '').toLowerCase().trim();
+
+    // 1. Por Clasificación: Si la clase es "Others", "Accesorios" o "Aditamentos"
+    if (c.includes('other') || c.includes('accesorio') || c.includes('aditamento')) return true;
+
+    // 2. Por Tipo de equipo: Componentes de soporte, baterías, plataformas, cargadores, aditamentos
+    const tiposAditamentos = ['battery', 'bater', 'stand', 'plataforma', 'aditamento', 'cargador', 'clamp', 'pushpull', 'caseta', 'patin', 'patín', 'accesorio'];
+    if (tiposAditamentos.some(tipoAdit => t.includes(tipoAdit))) return true;
+
+    // 3. Cuando la Serie registrada es idéntica al Modelo (típico en accesorios genéricos sin serie de fábrica)
+    // y no pertenece a las clases principales de montacargas (Clase I, II, III, IV, V)
+    const esClaseMontacargas = /\b(i|ii|iii|iv|v)\b/i.test(c) || c.includes('clase 1') || c.includes('clase 2') || c.includes('clase 3');
+    if (s && m && s === m && !esClaseMontacargas) return true;
+
+    return false;
+};
+
 @Injectable()
 export class CargaMasivaService {
     private readonly logger = new Logger(CargaMasivaService.name);
@@ -501,6 +528,8 @@ export class CargaMasivaService {
             let errors = 0;
             let rentasCreadas = 0;
             const errorDetails: string[] = [];
+            const seenSeriesMap = new Map<string, { rows: number[]; clientes: Set<string>; modelos: Set<string>; adcs: Set<string> }>();
+            const aditamentoCountMap = new Map<string, number>();
 
             this.logger.log('Iniciando procesamiento de filas...');
             let consecutiveEmpty = 0;
@@ -533,6 +562,51 @@ export class CargaMasivaService {
                     if (!clienteName || !serie) {
                         // Se omite el logger para no saturar la consola en caso de filas mal formateadas
                         continue;
+                    }
+
+                    const rawTipo = getVal(row, 'TIPO');
+                    const rawClase = getVal(row, 'CLASE');
+                    const rawModelo = getVal(row, 'MODELO');
+
+                    // Regla de Aditamentos / Accesorios: si no tienen serie única de fábrica y repiten nombre en Excel,
+                    // se genera un identificador correlativo (ej. "IS-3-21 #2") para que se guarden como activos independientes.
+                    let effectiveSerie = serie;
+                    const isAdit = isAditamentoOrAccesorio(rawTipo, rawClase, rawModelo, serie);
+                    if (isAdit) {
+                        const count = (aditamentoCountMap.get(serie) || 0) + 1;
+                        aditamentoCountMap.set(serie, count);
+                        if (count > 1) {
+                            effectiveSerie = `${serie} #${count}`;
+                        }
+                    }
+
+                    const rawRowAdc = getStrictColVal(row, headers, ['RESPONSABLE', 'ADC', 'EJECUTIVO ADC', 'EJECUTIVO']);
+                    const adc = normalizeADCName(rawRowAdc);
+                    
+                    // CARGA PARCIAL: si se especificó un ADC filter, ignorar filas de otros ADCs
+                    if (adcFilter) {
+                        const normRowAdc = (adc || '').toLowerCase().trim();
+                        const normFilter = normalizeADCName(adcFilter)?.toLowerCase().trim() || adcFilter.toLowerCase().trim();
+                        if (normRowAdc && normFilter && normRowAdc !== normFilter && !normRowAdc.includes(normFilter) && !normFilter.includes(normRowAdc)) {
+                            this.logger.log(`Fila ${rowNumber}: ADC "${adc}" omitido (carga parcial para "${adcFilter}")`);
+                            continue;
+                        }
+                    }
+
+                    // Registrar serie para conteo de únicos y detección de duplicados
+                    if (!seenSeriesMap.has(effectiveSerie)) {
+                        seenSeriesMap.set(effectiveSerie, {
+                            rows: [rowNumber],
+                            clientes: new Set([clienteName]),
+                            modelos: new Set([rawModelo || '-']),
+                            adcs: new Set([adc || 'Sin ADC']),
+                        });
+                    } else {
+                        const entry = seenSeriesMap.get(effectiveSerie)!;
+                        entry.rows.push(rowNumber);
+                        if (clienteName) entry.clientes.add(clienteName);
+                        if (rawModelo) entry.modelos.add(rawModelo);
+                        if (adc) entry.adcs.add(adc);
                     }
 
                     // A: CLIENTE (con búsqueda fuzzy para evitar duplicados como "MERCADO LIBRE" vs "MERCADOLIBRE")
@@ -586,18 +660,6 @@ export class CargaMasivaService {
                     const sitioCacheKey2 = `${cliente.id}::${sitioName.trim()}`;
                     let sitio = sitioCache.get(sitioCacheKey1) || sitioCache.get(sitioCacheKey2);
                     
-                    const rawRowAdc = getStrictColVal(row, headers, ['RESPONSABLE', 'ADC', 'EJECUTIVO ADC', 'EJECUTIVO']);
-                    const adc = normalizeADCName(rawRowAdc);
-                    
-                    // CARGA PARCIAL: si se especificó un ADC filter, ignorar filas de otros ADCs
-                    if (adcFilter) {
-                        const normRowAdc = (adc || '').toLowerCase().trim();
-                        const normFilter = normalizeADCName(adcFilter)?.toLowerCase().trim() || adcFilter.toLowerCase().trim();
-                        if (normRowAdc && normFilter && normRowAdc !== normFilter && !normRowAdc.includes(normFilter) && !normFilter.includes(normRowAdc)) {
-                            this.logger.log(`Fila ${rowNumber}: ADC "${adc}" omitido (carga parcial para "${adcFilter}")`);
-                            continue;
-                        }
-                    }
                     const distribuidor = getStrictColVal(row, headers, ['DISTRIBUIDOR', 'DISTRIBUIDOR AUTORIZADO', 'DEALER', 'DEALER ASIGNADO', 'AGENCIA', 'PROVEEDOR']);
                     
                     const mainContactoNombre = getStrictColVal(row, headers, candDistContactoNombre);
@@ -639,25 +701,27 @@ export class CargaMasivaService {
                             });
                             sitiosNuevos++;
                         } else {
-                            const existingContacto = (sitio.contacto_operativo as any) || {};
-                            const mergedContacto = {
-                                ...existingContacto,
-                                ...(mainAdcCorreo ? { adc_correo: mainAdcCorreo } : {}),
-                                ...(mainAdcTel ? { adc_telefono: mainAdcTel } : {}),
-                                ...(mainAdcDir ? { adc_direccion: mainAdcDir } : {}),
-                                ...(mainContactoNombre ? { distribuidor_contacto_nombre: mainContactoNombre } : {}),
-                                ...(mainContactoCorreo ? { distribuidor_contacto_correo: mainContactoCorreo } : {}),
-                                ...(mainContactoTel ? { distribuidor_contacto_telefono: mainContactoTel } : {}),
-                                ...(mainDistDir ? { distribuidor_direccion: mainDistDir } : {}),
-                            };
-                            const updateData: any = { contacto_operativo: mergedContacto };
-                            if (mainCiudad) updateData.ciudad = mainCiudad;
-                            if (mainDireccion) updateData.direccion = mainDireccion;
-                            if (mainCuenta) updateData.cuenta = mainCuenta;
-                            if (adc) updateData.adc = adc;
-                            if (distribuidor) updateData.distribuidor = distribuidor;
-
-                            sitio = await db.sitio.update({ where: { id: sitio.id }, data: updateData });
+                            // Update existing site
+                            sitio = await db.sitio.update({
+                                where: { id: sitio.id },
+                                data: {
+                                    ciudad: mainCiudad || sitio.ciudad,
+                                    direccion: mainDireccion || sitio.direccion,
+                                    cuenta: mainCuenta || sitio.cuenta,
+                                    adc: adc || sitio.adc,
+                                    distribuidor: distribuidor || sitio.distribuidor,
+                                    contacto_operativo: {
+                                        ...((sitio.contacto_operativo as any) || {}),
+                                        ...(mainAdcCorreo ? { adc_correo: mainAdcCorreo } : {}),
+                                        ...(mainAdcTel ? { adc_telefono: mainAdcTel } : {}),
+                                        ...(mainAdcDir ? { adc_direccion: mainAdcDir } : {}),
+                                        ...(mainContactoNombre ? { distribuidor_contacto_nombre: mainContactoNombre } : {}),
+                                        ...(mainContactoCorreo ? { distribuidor_contacto_correo: mainContactoCorreo } : {}),
+                                        ...(mainContactoTel ? { distribuidor_contacto_telefono: mainContactoTel } : {}),
+                                        ...(mainDistDir ? { distribuidor_direccion: mainDistDir } : {}),
+                                    }
+                                }
+                            });
                         }
                     } else {
                         // Site was found in cache (e.g. from Directorio): ONLY update non-empty fields and MERGE contacto_operativo
@@ -685,13 +749,13 @@ export class CargaMasivaService {
                     sitioCache.set(sitioCacheKey2, sitio);
 
                     // C: ACTIVO
-                    let activo = activoCache.get(serie);
+                    let activo = activoCache.get(effectiveSerie);
                     if (!activo) {
                         const activoData = {
-                            id: serie.substring(0, 50),
-                            tipo: getVal(row, 'TIPO')?.substring(0, 100) || null,
-                            clase: getVal(row, 'CLASE')?.substring(0, 100) || null,
-                            modelo: getVal(row, 'MODELO')?.substring(0, 100) || null,
+                            id: effectiveSerie.substring(0, 50),
+                            tipo: rawTipo?.substring(0, 100) || null,
+                            clase: rawClase?.substring(0, 100) || null,
+                            modelo: rawModelo?.substring(0, 100) || null,
                             oach: getVal(row, 'OACH')?.substring(0, 100) || null,
                             altura: getVal(row, 'ALTURA')?.substring(0, 50) || null,
                             bc: getVal(row, 'BC')?.substring(0, 50) || null,
@@ -708,11 +772,11 @@ export class CargaMasivaService {
                             },
                         };
                         activo = await db.activo.upsert({
-                            where: { id: serie },
+                            where: { id: effectiveSerie },
                             update: activoData,
-                            create: { serie, ...activoData },
+                            create: { serie: effectiveSerie, ...activoData },
                         });
-                        activoCache.set(serie, activo);
+                        activoCache.set(effectiveSerie, activo);
                     }
 
                     // D: RENTA
@@ -723,7 +787,7 @@ export class CargaMasivaService {
                     if (tarifaParsed !== null && !isNaN(tarifaParsed)) {
                         if (!renta) {
                             renta = await db.renta.findFirst({ where: { activo_id: activo.id } });
-                            const codRentaCli = getVal(row, 'CÓD RENTA CLI') || getVal(row, 'COD RENTA CLI') || `RENTA-${serie}`;
+                            const codRentaCli = getVal(row, 'CÓD RENTA CLI') || getVal(row, 'COD RENTA CLI') || `RENTA-${effectiveSerie}`;
                             
                             const rentaData = {
                                 cuenta: getVal(row, 'CUENTA'),
@@ -860,6 +924,26 @@ export class CargaMasivaService {
                 });
             }
 
+            // Calcular series duplicadas y equipos únicos consolidados
+            const duplicados: Array<{ serie: string; count: number; rows: number[]; clientes: string[]; modelos: string[]; adcs: string[] }> = [];
+            let totalFilasDuplicadas = 0;
+
+            for (const [s, data] of seenSeriesMap.entries()) {
+                if (data.rows.length > 1) {
+                    duplicados.push({
+                        serie: s,
+                        count: data.rows.length,
+                        rows: data.rows,
+                        clientes: Array.from(data.clientes),
+                        modelos: Array.from(data.modelos),
+                        adcs: Array.from(data.adcs),
+                    });
+                    totalFilasDuplicadas += (data.rows.length - 1);
+                }
+            }
+
+            const equiposUnicos = seenSeriesMap.size;
+
             // --- 7. Registrar historial de carga ---
             await db.cargaMasivaLog.create({
                 data: {
@@ -872,20 +956,30 @@ export class CargaMasivaService {
                         clientesNuevos,
                         sitiosNuevos,
                         rentasCreadas,
+                        equiposUnicos,
+                        totalFilasDuplicadas,
+                        duplicados,
                         mesesProcesados: activeMonths.map(m => m.name),
                         errorDetails,
                     },
                 },
             });
 
-            this.logger.log(`Proceso finalizado. Procesados: ${processed}, Creados: ${rentasCreadas}`);
+            this.logger.log(`Proceso finalizado. Procesados: ${processed}, Equipos Únicos: ${equiposUnicos}, Duplicados: ${duplicados.length}, Creados: ${rentasCreadas}`);
 
             return {
                 success: true,
-                message: `Carga masiva completada: ${processed} filas procesadas, ${rentasCreadas} rentas detectadas.`,
+                message: `Carga masiva completada: ${processed} filas procesadas, ${equiposUnicos} equipos únicos registrados (${duplicados.length} series con filas duplicadas consolidadas).`,
                 processed,
                 errors,
-                details: { clientesNuevos, sitiosNuevos, rentasCreadas },
+                details: {
+                    clientesNuevos,
+                    sitiosNuevos,
+                    rentasCreadas,
+                    equiposUnicos,
+                    totalFilasDuplicadas,
+                    duplicados,
+                },
                 errorDetails,
             };
 
