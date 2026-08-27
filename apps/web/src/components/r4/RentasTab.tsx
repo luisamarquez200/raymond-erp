@@ -852,6 +852,22 @@ export default function RentasTab({
           rentaId = createRes.data?.data?.id || createRes.data?.id;
         }
 
+        // Sincronizar orden mensual con el mes de cobertura, tarifa final y datos de TOTVS
+        if (fichaMesCobro && rentaId) {
+          try {
+            await api.post('/r4/ordenes', {
+              renta_id: rentaId,
+              periodo: fichaMesCobro,
+              po: fichaFolioOc,
+              tarifa: item.renta_final,
+              pedido_totvs: fichaPedidoTotvs || undefined,
+              fecha_pedido_totvs: fichaFechaTotvs || undefined,
+            });
+          } catch (ordErr) {
+            console.warn('No se pudo sincronizar orden mensual:', ordErr);
+          }
+        }
+
         // Upload PDF if loaded
         if (fichaPdfFile && rentaId) {
           const fileData = new FormData();

@@ -56,30 +56,47 @@ export class OrdenesService {
         }
     }
 
-    async registrarOrdenManual(dto: { renta_id: string, periodo: string, po: string }) {
+    async registrarOrdenManual(dto: { renta_id: string, periodo: string, po: string, tarifa?: number, pedido_totvs?: string, fecha_pedido_totvs?: string }) {
         const db = this.getDb();
         try {
             // First verify the renta exists
             const renta = await db.renta.findUnique({
                 where: { id: dto.renta_id },
-                include: { activo: true, cliente: true }
+                include: { activo: true, cliente: true, detalles: true }
             });
 
             if (!renta) {
                 throw new NotFoundException('Renta no encontrada');
             }
 
-            // Check if order already exists for this active + period + PO
+            const tarifaFinal = dto.tarifa ?? Number(renta.detalles?.renta_real || renta.detalles?.renta_base || renta.tarifa || 0);
+
+            // Check if order already exists for this active + period
             const existing = await db.ordenMensual.findFirst({
                 where: {
                     activo_id: renta.activo_id,
                     periodo: dto.periodo,
-                    po: dto.po
                 }
             });
 
+            const condiciones = {
+                ...((existing?.condiciones as any) || {}),
+                ...(dto.pedido_totvs ? { pedido_totvs: dto.pedido_totvs } : {}),
+                ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: dto.fecha_pedido_totvs } : {}),
+            };
+
             if (existing) {
-                throw new ConflictException('Ya existe una orden de compra para este equipo, periodo y PO.');
+                const updated = await db.ordenMensual.update({
+                    where: { id: existing.id },
+                    data: {
+                        po: dto.po,
+                        tarifa: tarifaFinal,
+                        moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
+                        estado: 'GENERADA',
+                        condiciones
+                    }
+                });
+                return updated;
             }
 
             // Create new order inheriting properties from Renta
@@ -91,9 +108,10 @@ export class OrdenesService {
                     contrato_id: renta.contrato_id,
                     periodo: dto.periodo,
                     po: dto.po,
-                    tarifa: renta.renta_base,
-                    moneda: renta.moneda || 'MXN',
-                    estado: 'GENERADA'
+                    tarifa: tarifaFinal,
+                    moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
+                    estado: 'GENERADA',
+                    condiciones
                 }
             });
 

@@ -305,7 +305,8 @@ export class PresupuestosService {
 
             const currencyStat = stats[oMoneda as keyof typeof stats];
             if (currencyStat) {
-                const amount = o.tarifa || 0;
+                const rentaTarifa = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.renta?.tarifa || 0);
+                const amount = (o.tarifa && o.tarifa > 0 && o.tarifa <= (rentaTarifa * 3 || 300000)) ? o.tarifa : (rentaTarifa || o.tarifa || 0);
                 currencyStat.pedidos_enviados += amount;
                 
                 // Add to ADC compliance
@@ -334,30 +335,33 @@ export class PresupuestosService {
                     moneda: oMoneda,
                     importe: amount,
                     po: o.po,
-                    pedido_tovts: condicionesObj.pedido_tovts || o.po || '-'
+                    pedido_totvs: condicionesObj.pedido_totvs || condicionesObj.pedido_tovts || o.renta?.no_registro_totvs || '-'
                 });
             }
         }
 
-        // Calculate totals
+        // Calculate totals according to business rule: (Presupuesto + Pendiente acumulado) - Equipos Detenidos = Total a facturar
         const isAdcFiltered = adcKeywords.length > 0;
         for (const key of ['MXN', 'USD'] as const) {
             const s = stats[key];
-            s.total_a_facturar = s.presupuesto_mes + s.acumulado;
+            s.total_a_facturar = (s.presupuesto_mes + s.acumulado) - s.equipos_detenidos;
             // Use manually entered facturado value from Gerente when not filtered by ADC; fallback to pedidos_enviados
             s.facturado = (!isAdcFiltered && facturadoByMoneda[key] > 0) ? facturadoByMoneda[key] : s.pedidos_enviados;
             s.faltante = s.total_a_facturar - s.pedidos_enviados;
-            s.cumplimiento_general = s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0;
+            s.cumplimiento_general = s.total_a_facturar > 0 ? (s.pedidos_enviados / s.total_a_facturar) * 100 : (s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0);
         }
 
-        const adcs = Array.from(adcsMap.values()).map((data) => ({
-            adc: data.adc,
-            cliente: data.cliente,
-            moneda: data.moneda,
-            presupuesto: data.budget,
-            enviado: data.sentPOs,
-            cumplimiento: data.budget > 0 ? (data.sentPOs / data.budget) * 100 : 0
-        }));
+        const adcs = Array.from(adcsMap.values()).map((data) => {
+            const totalFacturar = data.budget; // Base budget for this ADC
+            return {
+                adc: data.adc,
+                cliente: data.cliente,
+                moneda: data.moneda,
+                presupuesto: data.budget,
+                enviado: data.sentPOs,
+                cumplimiento: data.budget > 0 ? (data.sentPOs / data.budget) * 100 : 0
+            };
+        });
 
         const totalPorCliente = Array.from(clientTotals.entries()).map(([cliente, data]) => ({
             cliente,
@@ -502,13 +506,16 @@ export class PresupuestosService {
             const clientName = o.cliente?.razon_social || '';
             const key = `${adcName}___${clientName}___${oMoneda}`;
 
+            const rentaTarifa = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.renta?.tarifa || 0);
+            const orderAmount = (o.tarifa && o.tarifa > 0 && o.tarifa <= (rentaTarifa * 3 || 300000)) ? o.tarifa : (rentaTarifa || o.tarifa || 0);
+
             if (masterMap.has(key)) {
-                masterMap.get(key)!.enviado += (o.tarifa || 0);
+                masterMap.get(key)!.enviado += orderAmount;
             } else {
                 let found = false;
                 for (const item of masterMap.values()) {
                     if (item.moneda === oMoneda && item.cliente.trim().toUpperCase() === clientName.trim().toUpperCase()) {
-                        item.enviado += (o.tarifa || 0);
+                        item.enviado += orderAmount;
                         found = true;
                         break;
                     }
@@ -519,7 +526,7 @@ export class PresupuestosService {
                         cliente: clientName,
                         moneda: oMoneda,
                         presupuesto: 0,
-                        enviado: o.tarifa || 0,
+                        enviado: orderAmount,
                         equipos_detenidos: 0,
                         pendiente_acumulado: 0
                     });
@@ -528,8 +535,8 @@ export class PresupuestosService {
         }
 
         const tabla_maestra = Array.from(masterMap.values()).map(item => {
-            const cumplimiento = item.presupuesto > 0 ? (item.enviado / item.presupuesto) * 100 : 0;
-            const total_facturar = item.presupuesto + item.pendiente_acumulado;
+            const total_facturar = (item.presupuesto + item.pendiente_acumulado) - item.equipos_detenidos;
+            const cumplimiento = total_facturar > 0 ? (item.enviado / total_facturar) * 100 : (item.presupuesto > 0 ? (item.enviado / item.presupuesto) * 100 : 0);
             return {
                 ...item,
                 cumplimiento,
