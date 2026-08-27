@@ -627,15 +627,9 @@ export default function FlotillaTab({
         ...(rentaPayload && { renta: rentaPayload }),
       };
 
-      if (isAdc) {
-        // Altas solicitadas por ADC requieren aprobación de Administrador / Gerencia
-        await api.post('/r4/flotilla/solicitar-alta', payload);
-        toast.success('Solicitud de alta enviada para aprobación de Administración/Gerencia');
-      } else {
-        // Creación directa permitida para Administradores, Gerencia y Coordinación
-        await api.post('/r4/flotilla', payload);
-        toast.success(hasRentaData ? 'Equipo y Renta registrados con éxito' : 'Equipo registrado con éxito');
-      }
+      // Creación directa de alta de equipo para todos los roles (incluidos ADC) sin requerir aprobación ni notificar administradores
+      await api.post('/r4/flotilla', payload);
+      toast.success(hasRentaData ? 'Equipo y Renta registrados con éxito' : 'Equipo registrado con éxito');
       handleCloseNewAssetModal();
       fetchFlotilla();
       fetchPendingApprovals();

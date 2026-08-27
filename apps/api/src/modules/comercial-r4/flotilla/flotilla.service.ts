@@ -816,95 +816,12 @@ export class FlotillaService {
     }
 
     async solicitarAlta(dto: any, usuarioId: string) {
-        const db = this.getDb();
-        const estatusLimpio = this.unificarEstatus(dto.estatus_operativo);
-
-        const nuevoActivo = await db.activo.create({
-            data: {
-                serie: dto.serie,
-                tipo: dto.tipo,
-                clase: dto.clase,
-                modelo: dto.modelo,
-                oach: dto.oach,
-                altura: dto.altura,
-                bc: dto.bc,
-                estatus: 'Inactivo',         // En espera de aprobación
-                estatus_operativo: 'Inactivo', // keep legacy in sync
-                cliente_id: dto.cliente_id,
-                sitio_id: dto.sitio_id,
-                cuenta: dto.cuenta,
-                adc: dto.adc,
-                distribuidor: dto.distribuidor,
-                propietario: dto.propietario
-            }
-        });
-
-        const detalleAutor = await this.obtenerDetalleUsuario(usuarioId);
-        const sitioDestino = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : null;
-        const clienteObj = dto.cliente_id ? await db.cliente.findUnique({ where: { id: dto.cliente_id } }) : null;
-        const fechaEnvio = new Date();
-        const fechaEnvioFormatted = this.formatFechaLarga(fechaEnvio);
-        const accionNombre = 'Alta de Equipo Nuevo';
-
-        const motivoData = {
-            tipo: 'ALTA',
-            accion_nombre: accionNombre,
-            solicitante: detalleAutor,
-            solicitante_id: usuarioId,
-            equipo_serie: dto.serie,
-            equipo_modelo: dto.modelo || '-',
-            cliente_nombre: clienteObj?.razon_social || '-',
-            sitio_anterior_nombre: 'N/A (Equipo Nuevo)',
-            sitio_nuevo_nombre: sitioDestino?.nombre || 'Sin sitio asignado',
-            fecha_envio: fechaEnvio.toISOString(),
-            fecha_envio_formatted: fechaEnvioFormatted,
-            datos: {
-                ...dto,
-                estatus_operativo: estatusLimpio
-            }
-        };
-
-        // Auditoría de solicitud de alta
-        await db.auditoria.create({
-            data: {
-                modulo: 'FLOTILLA',
-                registro_id: nuevoActivo.id,
-                accion: 'SOLICITUD_ALTA',
-                usuario_id: usuarioId,
-                valor_anterior: null,
-                valor_nuevo: { serie: dto.serie, tipo: dto.tipo, clase: dto.clase },
-                observaciones: `Solicitud de alta enviada por ${detalleAutor} para equipo ${dto.serie} el ${fechaEnvioFormatted}`
-            }
-        });
-
-        const log = await db.cambioSitioLog.create({
-            data: {
-                activo_id: nuevoActivo.id,
-                sitio_anterior_id: null,
-                sitio_nuevo_id: dto.sitio_id || 'sin_sitio',
-                motivo: JSON.stringify(motivoData),
-                aprobado: false,
-                usuario_id: usuarioId
-            }
-        });
-
-        await this.notificarAdmins(
-            `📋 Nueva Solicitud: ${accionNombre} - Serie: ${dto.serie}`,
-            `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
-            `• Acción: ${accionNombre}\n` +
-            `• Solicitante / ADC: ${detalleAutor}\n` +
-            `• Equipo: Serie ${dto.serie} (Modelo: ${dto.modelo || '-'})\n` +
-            `• Cliente: ${clienteObj?.razon_social || '-'}\n` +
-            `• Sitio Anterior: N/A (Equipo Nuevo)\n` +
-            `• Sitio Propuesto (Nuevo): ${sitioDestino?.nombre || 'Sin sitio asignado'}\n` +
-            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
-        );
-
+        // Altas de equipo son directas para todos los roles (ADC y Admin) sin requerir aprobación ni notificar a administradores
+        const activo = await this.crearActivo(dto, usuarioId);
         return {
             success: true,
-            message: 'Solicitud de alta enviada para aprobación del Administrador',
-            data: nuevoActivo,
-            logId: log.id
+            message: 'Equipo registrado con éxito',
+            data: activo
         };
     }
 
