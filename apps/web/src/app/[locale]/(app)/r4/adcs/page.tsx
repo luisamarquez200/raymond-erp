@@ -12,6 +12,7 @@ import { Info } from 'lucide-react';
 
 interface AdcEntry {
     name: string;
+    email?: string | null;
     status: 'Usuario Creado' | 'Sin Usuario';
 }
 
@@ -145,7 +146,12 @@ export default function AdcsPage() {
                                                 <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600">
                                                     {adc.name.charAt(0).toUpperCase()}
                                                 </div>
-                                                <span className="font-bold text-slate-900">{adc.name}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-slate-900">{adc.name}</span>
+                                                    {adc.email && (
+                                                        <span className="text-xs text-slate-400 font-medium">{adc.email}</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="p-4 text-center">

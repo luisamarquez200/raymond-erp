@@ -754,17 +754,26 @@ export default function ClientesSitios() {
                               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Distribuidor</span>
                               <span className="text-xs font-bold flex items-center gap-1" style={{ color: currentColor }}><Truck className="w-3.5 h-3.5"/> {sitio.distribuidor && String(sitio.distribuidor) !== '[object Object]' && String(sitio.distribuidor) !== '-' ? sitio.distribuidor : 'No asignado'}</span>
                             </div>
-                            {sitio.distribuidor_contacto_nombre && sitio.distribuidor_contacto_nombre !== '-' && (
-                              <div className="pt-2 border-t border-slate-200/50 space-y-1.5">
-                                <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                  <User className="w-3 h-3 text-slate-400"/> {sitio.distribuidor_contacto_nombre}
-                                </p>
-                                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-[11px] text-slate-500 font-medium">
-                                  <span className="flex items-center gap-1"><Phone className="w-3 h-3"/> {sitio.distribuidor_contacto_telefono || '-'}</span>
-                                  <span className="flex items-center gap-1"><Mail className="w-3 h-3"/> {sitio.distribuidor_contacto_correo || '-'}</span>
+                            {(() => {
+                              const cNom = sitio.distribuidor_contacto_nombre && sitio.distribuidor_contacto_nombre !== '-' ? sitio.distribuidor_contacto_nombre : (sitio.contacto_operativo?.distribuidor_contacto_nombre && sitio.contacto_operativo.distribuidor_contacto_nombre !== '-' ? sitio.contacto_operativo.distribuidor_contacto_nombre : null);
+                              const cTl = sitio.distribuidor_contacto_telefono && sitio.distribuidor_contacto_telefono !== '-' ? sitio.distribuidor_contacto_telefono : (sitio.contacto_operativo?.distribuidor_contacto_telefono && sitio.contacto_operativo.distribuidor_contacto_telefono !== '-' ? sitio.contacto_operativo.distribuidor_contacto_telefono : null);
+                              const cMl = sitio.distribuidor_contacto_correo && sitio.distribuidor_contacto_correo !== '-' ? sitio.distribuidor_contacto_correo : (sitio.contacto_operativo?.distribuidor_contacto_correo && sitio.contacto_operativo.distribuidor_contacto_correo !== '-' ? sitio.contacto_operativo.distribuidor_contacto_correo : null);
+                              
+                              if (!cNom && !cTl && !cMl) return null;
+                              return (
+                                <div className="pt-2 border-t border-slate-200/50 space-y-1.5">
+                                  {cNom && (
+                                    <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                      <User className="w-3 h-3 text-slate-400"/> {cNom}
+                                    </p>
+                                  )}
+                                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-[11px] text-slate-500 font-medium">
+                                    {cTl && <span className="flex items-center gap-1"><Phone className="w-3 h-3"/> {cTl}</span>}
+                                    {cMl && <span className="flex items-center gap-1"><Mail className="w-3 h-3"/> {cMl}</span>}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -833,9 +842,9 @@ export default function ClientesSitios() {
                   const adcTel = safeStr(site.contacto_operativo?.adc_telefono);
                   const adcMail = safeStr(site.contacto_operativo?.adc_correo);
                   const distNombre = safeStr(site.distribuidor);
-                  const cNombre = safeStr(site.distribuidor_contacto_nombre);
-                  const cTel = safeStr(site.distribuidor_contacto_telefono);
-                  const cMail = safeStr(site.distribuidor_contacto_correo);
+                  const cNombre = safeStr(site.distribuidor_contacto_nombre && site.distribuidor_contacto_nombre !== '-' ? site.distribuidor_contacto_nombre : site.contacto_operativo?.distribuidor_contacto_nombre);
+                  const cTel = safeStr(site.distribuidor_contacto_telefono && site.distribuidor_contacto_telefono !== '-' ? site.distribuidor_contacto_telefono : site.contacto_operativo?.distribuidor_contacto_telefono);
+                  const cMail = safeStr(site.distribuidor_contacto_correo && site.distribuidor_contacto_correo !== '-' ? site.distribuidor_contacto_correo : site.contacto_operativo?.distribuidor_contacto_correo);
 
                   return (
                   <tr key={site.id} className="hover:bg-slate-50/50 transition-colors">

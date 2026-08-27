@@ -18,6 +18,99 @@ export class AdcsService {
         return db;
     }
 
+    private normalizeADCName(name: string | null | undefined): string {
+        if (!name) return '';
+        const cleanName = name.trim().replace(/\s+/g, ' ');
+        const upperName = cleanName.toUpperCase();
+        if (upperName === 'ALEJANDRA' || upperName.includes('ALEJANDRA ARELLANES')) return 'Alejandra Arellanes';
+        if (upperName === 'ANDREA' || upperName.includes('ANDREA ESQUIVEL')) return 'Andrea Esquivel';
+        if (upperName === 'DANIEL' || upperName.includes('DANIEL ROMERO')) return 'Daniel Romero';
+        if (upperName === 'MONTSERRAT' || upperName.includes('MONTSERRAT COVARRUBIAS') || upperName.includes('MONTSE')) return 'Montserrat Covarrubias';
+        if (upperName === 'SIMALÚ' || upperName === 'SIMALU' || upperName.includes('SIMALÚ LEÓN') || upperName.includes('SIMALU LEON') || upperName.includes('SIMALU') || upperName.includes('SIMALÚ')) return 'Simalú León';
+        return cleanName;
+    }
+
+    private async findAdcUserAccount(adcName: string) {
+        const targetNorm = this.normalizeADCName(adcName).toLowerCase();
+        const rawTarget = adcName.trim().toLowerCase();
+
+        // 1. Fetch PostgreSQL users
+        const pgUsers = await this.prismaService.users.findMany({
+            where: { is_active: true },
+            select: {
+                id: true,
+                email: true,
+                first_name: true,
+                last_name: true,
+                adc_asociado_name: true,
+                last_login_at: true,
+                roles: { select: { name: true } }
+            }
+        });
+
+        // 2. Fetch MySQL users
+        let mysqlUsers: any[] = [];
+        try {
+            const db = this.getDb();
+            mysqlUsers = await db.usuario.findMany({
+                where: { bloqueado: false },
+                select: { id: true, correo: true, nombre: true, rol: true }
+            });
+        } catch (e: any) {
+            this.logger.warn(`Could not read MySQL usuarios for ADC matching: ${e.message}`);
+        }
+
+        // Check PostgreSQL users with role ADC whose name matches
+        const pgAdc = pgUsers.find(u => {
+            const role = (u.roles?.name || '').toLowerCase();
+            if (!role.includes('adc')) return false;
+            const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
+            const normFullName = this.normalizeADCName(fullName).toLowerCase();
+            return normFullName === targetNorm || fullName === rawTarget || (u.first_name && this.normalizeADCName(u.first_name).toLowerCase() === targetNorm);
+        });
+        if (pgAdc) {
+            return {
+                email: pgAdc.email,
+                name: `${pgAdc.first_name || ''} ${pgAdc.last_name || ''}`.trim(),
+                lastLoginAt: pgAdc.last_login_at
+            };
+        }
+
+        // Check MySQL users with role ADC whose nombre matches
+        const myAdc = mysqlUsers.find(u => {
+            const role = (u.rol || '').toLowerCase();
+            if (!role.includes('adc')) return false;
+            const nombre = (u.nombre || '').trim().toLowerCase();
+            const normNombre = this.normalizeADCName(nombre).toLowerCase();
+            return normNombre === targetNorm || nombre === rawTarget;
+        });
+        if (myAdc) {
+            return {
+                email: myAdc.correo,
+                name: myAdc.nombre,
+                lastLoginAt: null
+            };
+        }
+
+        // Check any PostgreSQL user who is NOT an administrator/gerente/supervisor whose name matches
+        const pgAny = pgUsers.find(u => {
+            const role = (u.roles?.name || '').toLowerCase();
+            if (role.includes('admin') || role.includes('gerent') || role.includes('super') || role.includes('cfo') || role.includes('ceo')) return false;
+            const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
+            const normFullName = this.normalizeADCName(fullName).toLowerCase();
+            return normFullName === targetNorm || fullName === rawTarget;
+        });
+        if (pgAny) {
+            return {
+                email: pgAny.email,
+                name: `${pgAny.first_name || ''} ${pgAny.last_name || ''}`.trim(),
+                lastLoginAt: pgAny.last_login_at
+            };
+        }
+
+        return null;
+    }
+
     async obtenerTodos() {
         try {
             const db = this.getDb();
@@ -27,47 +120,25 @@ export class AdcsService {
             
             const adcNames = new Set<string>();
             activos.forEach(a => {
-                if (a.adc && a.adc.trim()) adcNames.add(a.adc.trim());
+                if (a.adc && a.adc.trim()) adcNames.add(this.normalizeADCName(a.adc.trim()));
             });
             sitios.forEach(s => {
-                if (s.adc && s.adc.trim()) adcNames.add(s.adc.trim());
+                if (s.adc && s.adc.trim()) adcNames.add(this.normalizeADCName(s.adc.trim()));
             });
 
             // Convert to array
-            const uniqueAdcs = Array.from(adcNames).sort();
+            const uniqueAdcs = Array.from(adcNames).filter(Boolean).sort();
 
-            // Fetch all users to check status
-            const allUsers = await this.prismaService.users.findMany({
-                where: { is_active: true },
-                select: {
-                    id: true,
-                    first_name: true,
-                    last_name: true,
-                    adc_asociado_name: true,
-                    email: true,
-                    roles: { select: { name: true } }
-                }
-            });
-
-            return uniqueAdcs.map(adcName => {
-                const target = adcName.trim().toLowerCase();
-                const userExists = allUsers.some(u => {
-                    const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
-                    const firstName = (u.first_name || '').trim().toLowerCase();
-                    const adcAsoc = (u.adc_asociado_name || '').trim().toLowerCase();
-                    const email = (u.email || '').trim().toLowerCase();
-
-                    return fullName === target ||
-                           firstName === target ||
-                           (adcAsoc && (adcAsoc === target || adcAsoc.includes(target) || target.includes(adcAsoc))) ||
-                           (firstName && target.startsWith(firstName)) ||
-                           email === target;
-                });
+            const results = await Promise.all(uniqueAdcs.map(async (adcName) => {
+                const user = await this.findAdcUserAccount(adcName);
                 return {
                     name: adcName,
-                    status: userExists ? 'Usuario Creado' : 'Sin Usuario'
+                    email: user?.email || null,
+                    status: (user ? 'Usuario Creado' : 'Sin Usuario') as 'Usuario Creado' | 'Sin Usuario'
                 };
-            });
+            }));
+
+            return results;
         } catch (error: any) {
             this.logger.error(`Error en obtenerTodos (ADCs): ${error.message}`);
             throw error;
@@ -78,42 +149,30 @@ export class AdcsService {
         try {
             const db = this.getDb();
             
-            // 1. Get user details from main database with flexible matching
-            const allUsers = await this.prismaService.users.findMany({
-                where: { is_active: true },
-                select: {
-                    id: true,
-                    email: true,
-                    first_name: true,
-                    last_name: true,
-                    adc_asociado_name: true,
-                    last_login_at: true,
-                    roles: { select: { name: true } }
-                }
-            });
-
-            const target = name.trim().toLowerCase();
-            const user = allUsers.find(u => {
-                const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
-                const firstName = (u.first_name || '').trim().toLowerCase();
-                const adcAsoc = (u.adc_asociado_name || '').trim().toLowerCase();
-                const email = (u.email || '').trim().toLowerCase();
-
-                return fullName === target || 
-                       firstName === target ||
-                       (adcAsoc && (adcAsoc === target || adcAsoc.includes(target) || target.includes(adcAsoc))) ||
-                       (firstName && target.startsWith(firstName)) ||
-                       email === target;
-            });
+            // 1. Get user details for this ADC specifically
+            const user = await this.findAdcUserAccount(name);
 
             // 2. Get unique clients associated with this ADC from R4 database (from sitios and activos)
+            const rawTarget = name.trim();
+            const normTarget = this.normalizeADCName(name);
+
             const sitios = await db.sitio.findMany({
-                where: { adc: name },
+                where: {
+                    OR: [
+                        { adc: rawTarget },
+                        { adc: normTarget }
+                    ]
+                },
                 include: { cliente: true }
             });
 
             const activos = await db.activo.findMany({
-                where: { adc: name },
+                where: {
+                    OR: [
+                        { adc: rawTarget },
+                        { adc: normTarget }
+                    ]
+                },
                 include: { cliente: true }
             });
 
@@ -134,7 +193,7 @@ export class AdcsService {
             return {
                 name,
                 email: user?.email || null,
-                lastLoginAt: user?.last_login_at || null,
+                lastLoginAt: user?.lastLoginAt || null,
                 clientesAsociados: Array.from(uniqueClientNames).sort(),
                 totalClientes: uniqueClientNames.size
             };

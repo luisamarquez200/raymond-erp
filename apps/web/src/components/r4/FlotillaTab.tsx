@@ -152,6 +152,8 @@ export default function FlotillaTab({
   // Upload state
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
   const [openFilters, setOpenFilters] = useState<Record<string, boolean>>({});
@@ -955,22 +957,28 @@ export default function FlotillaTab({
   const handleUpload = async () => {
     if (!file) return;
     setIsUploading(true);
+    setUploadError(null);
+    setUploadResult(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
       // Full bulk load: admin/gerente use /r4/carga-masiva
       // Partial load: ADC use /r4/carga-masiva/parcial (backend filters rows by the ADC's name)
       const endpoint = isAdc ? '/r4/carga-masiva/parcial' : '/r4/carga-masiva';
-      await api.post(endpoint, formData, {
+      const response = await api.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      await fetchFlotilla();
+      const data = response.data?.data || response.data || {};
+      setUploadResult(data);
       toast.success(isAdc ? 'Cargue parcial procesado exitosamente.' : 'Carga masiva procesada exitosamente.');
-      setIsUploadModalOpen(false);
-      setFile(null);
-    } catch (error) {
+      // Refresh flotilla and sites in background
+      fetchFlotilla();
+      fetchSites();
+    } catch (error: any) {
       console.error('Error uploading file:', error);
-      toast.error('Error al procesar el archivo');
+      const errMsg = error.response?.data?.message || 'Error al procesar el archivo. Verifica el formato e intenta nuevamente.';
+      setUploadError(errMsg);
+      toast.error(errMsg);
     } finally {
       setIsUploading(false);
     }
@@ -1454,42 +1462,93 @@ export default function FlotillaTab({
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white border border-slate-200 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden"
             >
               <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
                   <HardDrive className="w-5 h-5" style={{ color: isAdc ? '#6366f1' : '#dc2626' }} />
                   {isAdc ? 'Cargue Parcial de Flotilla' : 'Carga Masiva de Flotilla'}
                 </h3>
-                <button onClick={() => setIsUploadModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                <button 
+                  onClick={() => { setIsUploadModalOpen(false); setFile(null); setUploadResult(null); setUploadError(null); }} 
+                  className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
               <div className="p-6 space-y-6">
-                <p className="text-xs text-slate-500 leading-relaxed font-semibold">
-                  {isAdc 
-                    ? <>Sube un archivo <span className="font-black text-slate-900">.xlsx</span> con tus equipos. Solo se importarán los registros asociados a <span className="font-black text-indigo-600">tu ADC</span>. Los registros de otros ADCs en el archivo serán ignorados.</>
-                    : <>Sube un archivo <span className="font-black text-slate-900">.xlsx</span> o <span className="font-black text-slate-900">.csv</span> para importar y actualizar múltiples equipos, incluyendo sus fechas de mantenimiento.</>
-                  }
-                </p>
-                <div className="p-2">
-                  {isUploading ? (
-                    <div className="flex flex-col items-center justify-center py-10 space-y-4">
-                      <div className="relative w-20 h-20">
-                        <div className="absolute inset-0 border-4 border-red-100 rounded-full"></div>
-                        <div className="absolute inset-0 border-4 border-red-600 rounded-full border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <FileSpreadsheet className="w-8 h-8 text-red-600 animate-pulse" />
-                        </div>
-                      </div>
-                      <h3 className="text-base font-black text-slate-900">Procesando Archivo...</h3>
-                      <p className="text-xs text-slate-400 text-center max-w-xs font-semibold">
-                        Registrando activos y rentas mensuales...
+                {uploadResult ? (
+                  /* SUCCESS RESULT STATE */
+                  <div className="flex flex-col items-center justify-center py-4 space-y-5">
+                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-md">
+                      <CheckCircle2 className="w-10 h-10 animate-in zoom-in-50 duration-300" />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <h3 className="text-xl font-black text-slate-900">¡Carga Procesada Exitosamente!</h3>
+                      <p className="text-xs text-slate-500 font-medium max-w-xs mx-auto">
+                        {isAdc 
+                          ? 'Tus equipos y registros asignados se han actualizado en la base de datos.'
+                          : 'La flotilla, rentas y directorio se sincronizaron con éxito en la plataforma.'
+                        }
                       </p>
                     </div>
-                  ) : (
-                    <>
+
+                    <div className="grid grid-cols-2 gap-3 w-full pt-2">
+                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Filas Procesadas</span>
+                        <span className="text-2xl font-black text-slate-900">{uploadResult.processed || 0}</span>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 block mb-1">Rentas Generadas</span>
+                        <span className="text-2xl font-black text-emerald-600">{uploadResult.details?.rentasCreadas || 0}</span>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 block mb-1">Sitios Sincronizados</span>
+                        <span className="text-2xl font-black text-indigo-600">{uploadResult.details?.sitiosNuevos || 0}</span>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-red-600 block mb-1">Clientes Sincronizados</span>
+                        <span className="text-2xl font-black text-red-600">{uploadResult.details?.clientesNuevos || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : isUploading ? (
+                  /* LOADING STATE */
+                  <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                    <div className="relative w-20 h-20">
+                      <div className="absolute inset-0 border-4 border-red-100 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-red-600 rounded-full border-t-transparent animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <FileSpreadsheet className="w-8 h-8 text-red-600 animate-pulse" />
+                      </div>
+                    </div>
+                    <h3 className="text-base font-black text-slate-900">Procesando y Guardando Archivo...</h3>
+                    <p className="text-xs text-slate-400 text-center max-w-xs font-semibold">
+                      Sincronizando equipos, directorio de distribuidores y rentas operativas. Por favor espera unos segundos.
+                    </p>
+                  </div>
+                ) : (
+                  /* UPLOAD FORM STATE */
+                  <>
+                    <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                      {isAdc 
+                        ? <>Sube tu archivo maestro <span className="font-black text-slate-900">.xlsx</span>. Se procesarán los registros asociados a <span className="font-black text-indigo-600">tu ADC</span>.</>
+                        : <>Sube el archivo maestro <span className="font-black text-slate-900">.xlsx</span> para actualizar equipos, rentas y directorio de clientes y distribuidores.</>
+                      }
+                    </p>
+
+                    {uploadError && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 text-red-700">
+                        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                        <div className="text-xs font-semibold">
+                          <p className="font-bold">Error en la carga:</p>
+                          <p className="mt-0.5">{uploadError}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-2">
                       <label 
                         className={`relative flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-3xl cursor-pointer transition-all duration-300 ${file ? 'border-red-500/50 bg-red-50/5' : 'border-slate-200 hover:border-red-500 hover:bg-slate-50/50 group'}`}
                         onDragOver={handleDragOver}
@@ -1519,18 +1578,38 @@ export default function FlotillaTab({
                           </button>
                         </div>
                       )}
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
-                <button onClick={() => { setIsUploadModalOpen(false); setFile(null); }} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors" disabled={isUploading}>
-                  Cancelar
-                </button>
-                <button onClick={handleUpload} disabled={isUploading || !file} className={`px-6 py-2.5 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${isAdc ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-red-600 hover:bg-red-700 shadow-red-100'}`}>
-                  {isAdc ? 'Importar mis datos' : 'Importar Datos'}
-                </button>
+                {uploadResult ? (
+                  <button 
+                    onClick={() => { setIsUploadModalOpen(false); setFile(null); setUploadResult(null); setUploadError(null); }} 
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Finalizar y Ver Flotilla
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => { setIsUploadModalOpen(false); setFile(null); setUploadError(null); }} 
+                      className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors" 
+                      disabled={isUploading}
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      onClick={handleUpload} 
+                      disabled={isUploading || !file} 
+                      className={`px-6 py-2.5 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${isAdc ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-red-600 hover:bg-red-700 shadow-red-100'}`}
+                    >
+                      {isAdc ? 'Importar mis datos' : 'Importar Datos'}
+                    </button>
+                  </>
+                )}
               </div>
             </motion.div>
           </motion.div>

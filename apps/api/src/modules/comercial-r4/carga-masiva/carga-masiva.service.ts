@@ -272,6 +272,32 @@ export class CargaMasivaService {
             let sitiosNuevos = 0;
 
             // PROCESAR DIRECTORIO SI EXISTE
+            const candDistContactoNombre = [
+                'CONTACTO DEL DISTRIBUIDOR', 'CONTACTO DE DISTRIBUIDOR', 'CONTACTO DISTRIBUIDOR', 'CONTACTO DIST',
+                'CONTACTO TECNICO DEL DISTRIBUIDOR', 'CONTACTO TÉCNICO DEL DISTRIBUIDOR',
+                'CONTACTO TECNICO', 'CONTACTO TÉCNICO', 'CONTACTO DEALER', 'CONTACTO DEL DEALER',
+                'PERSONA DEALER', 'RESPONSABLE DEALER', 'TECNICO DEALER', 'TÉCNICO DEALER',
+                'TECNICO', 'TÉCNICO', 'ASESOR DEALER', 'ASESOR TECNICO', 'ASESOR TÉCNICO',
+                'NOMBRE DEL CONTACTO', 'NOMBRE CONTACTO DISTRIBUIDOR', 'NOMBRE CONTACTO', 'CONTACTO'
+            ];
+            const candDistContactoTel = [
+                'TEL DEL CONTACTO DEL DISTRIBUIDOR', 'TEL. DEL CONTACTO DEL DISTRIBUIDOR', 'TELEFONO DEL CONTACTO DEL DISTRIBUIDOR', 'TELÉFONO DEL CONTACTO DEL DISTRIBUIDOR',
+                'TELEFONO DISTRIBUIDOR', 'TELÉFONO DISTRIBUIDOR', 'TEL DISTRIBUIDOR', 'TEL. DISTRIBUIDOR',
+                'TELEFONO DEALER', 'TELÉFONO DEALER', 'TEL DEALER', 'TEL. DEALER',
+                'TELEFONO TECNICO', 'TELÉFONO TÉCNICO', 'TEL TECNICO', 'TEL. TECNICO',
+                'TEL CONTACTO', 'TELEFONO CONTACTO', 'TELÉFONO CONTACTO', 'TELÉFONO', 'TELEFONO', 'TEL'
+            ];
+            const candDistContactoMail = [
+                'MAIL DEL CONTACTO DEL DISTRIBUIDOR', 'CORREO DEL CONTACTO DEL DISTRIBUIDOR', 'EMAIL DEL CONTACTO DEL DISTRIBUIDOR',
+                'CORREO DISTRIBUIDOR', 'EMAIL DISTRIBUIDOR', 'MAIL DISTRIBUIDOR',
+                'CORREO DEALER', 'EMAIL DEALER', 'MAIL DEALER',
+                'CORREO TECNICO', 'EMAIL TECNICO', 'MAIL TECNICO', 'CORREO TÉCNICO', 'EMAIL TÉCNICO', 'MAIL TÉCNICO',
+                'MAIL CONTACTO', 'CORREO CONTACTO', 'EMAIL CONTACTO', 'MAIL', 'CORREO', 'EMAIL'
+            ];
+            const candDistSucursal = [
+                'SUCURSAL', 'SUCURSAL DISTRIBUIDOR', 'SUCURSAL DEALER', 'AGENCIA', 'PLAZA'
+            ];
+
             const directorioSheet = workbook.worksheets.find(ws => ws.name.toUpperCase().includes('DIRECTORIO'));
             if (directorioSheet) {
                 this.logger.log('Hoja de Directorio detectada, pre-cargando clientes y sitios...');
@@ -379,38 +405,44 @@ export class CargaMasivaService {
                         }
                         
                         if (siteName) {
-                            const cacheKey = `${clientName}::${siteName}`;
-                            let sitio = sitioCache.get(cacheKey);
                             const region = getDirVal(row, ['REGION', 'REGIÓN']);
                             const responsable = normalizeADCName(getDirVal(row, ['RESPONSABLE', 'ADC', 'EJECUTIVO ADC', 'EJECUTIVO']));
                             const distribuidor = getDirVal(row, ['DISTRIBUIDOR', 'DISTRIBUIDOR AUTORIZADO', 'DEALER', 'DEALER ASIGNADO', 'AGENCIA', 'PROVEEDOR']);
-                            const contactoNombre = getDirVal(row, ['CONTACTO DISTRIBUIDOR', 'CONTACTO DEALER', 'PERSONA DEALER', 'RESPONSABLE DEALER', 'CONTACTO TECNICO', 'CONTACTO TÉCNICO', 'TECNICO DEALER', 'TÉCNICO DEALER', 'TECNICO', 'TÉCNICO', 'ASESOR DEALER', 'ASESOR TECNICO', 'CONTACTO DIST']);
-                            const contactoTelefono = getDirVal(row, ['TELEFONO DISTRIBUIDOR', 'TELÉFONO DISTRIBUIDOR', 'TELEFONO DEALER', 'TELÉFONO DEALER', 'TEL DEALER', 'TEL DISTRIBUIDOR', 'TELEFONO TECNICO', 'TELÉFONO TÉCNICO']);
-                            const contactoCorreo = getDirVal(row, ['CORREO DISTRIBUIDOR', 'EMAIL DISTRIBUIDOR', 'MAIL DISTRIBUIDOR', 'CORREO DEALER', 'EMAIL DEALER', 'MAIL DEALER', 'CORREO TECNICO', 'EMAIL TECNICO']);
+                            const sucursal = getDirVal(row, candDistSucursal);
+                            const contactoNombre = getDirVal(row, candDistContactoNombre);
+                            const contactoTelefono = getDirVal(row, candDistContactoTel);
+                            const contactoCorreo = getDirVal(row, candDistContactoMail);
                             
                             const adcCorreo = getDirVal(row, ['CORREO ADC', 'EMAIL ADC', 'MAIL ADC', 'CORREO RESPONSABLE', 'EMAIL RESPONSABLE']);
                             const adcTelefono = getDirVal(row, ['TELEFONO ADC', 'TELÉFONO ADC', 'TEL ADC', 'TELEFONO RESPONSABLE', 'TELÉFONO RESPONSABLE']);
-                            const distribuidorDireccion = getDirVal(row, ['DIRECCION DISTRIBUIDOR', 'DIRECCIÓN DISTRIBUIDOR', 'DIRECCION DEALER', 'DIRECCIÓN DEALER', 'DOMICILIO DISTRIBUIDOR', 'SUCURSAL DISTRIBUIDOR']);
+                            const distribuidorDireccion = getDirVal(row, ['DIRECCION DISTRIBUIDOR', 'DIRECCIÓN DISTRIBUIDOR', 'DIRECCION DEALER', 'DIRECCIÓN DEALER', 'DOMICILIO DISTRIBUIDOR']);
                             const adcDireccion = getDirVal(row, ['DIRECCION ADC', 'DIRECCIÓN ADC']);
+                            const cuentaDir = getDirVal(row, ['CUENTA', 'NO. CUENTA', 'NUMERO CUENTA']);
 
                             const sitioData = {
                                 cliente_id: cliente.id,
                                 nombre: siteName,
                                 direccion: getDirVal(row, ['DIRECCION', 'DIRECCIÓN', 'CALLE', 'CALLE Y NUMERO', 'DOMICILIO', 'DIRECCION SITIO']),
-                                distribuidor: distribuidor,
-                                adc: responsable,
+                                distribuidor: distribuidor || null,
+                                adc: responsable || null,
+                                cuenta: cuentaDir || null,
                                 contacto_operativo: {
-                                    region,
-                                    responsable,
-                                    adc_correo: adcCorreo,
-                                    adc_telefono: adcTelefono,
-                                    adc_direccion: adcDireccion,
-                                    distribuidor_contacto_nombre: contactoNombre,
-                                    distribuidor_contacto_telefono: contactoTelefono,
-                                    distribuidor_contacto_correo: contactoCorreo,
-                                    distribuidor_direccion: distribuidorDireccion
+                                    ...(region ? { region } : {}),
+                                    ...(responsable ? { responsable } : {}),
+                                    ...(adcCorreo ? { adc_correo: adcCorreo } : {}),
+                                    ...(adcTelefono ? { adc_telefono: adcTelefono } : {}),
+                                    ...(adcDireccion ? { adc_direccion: adcDireccion } : {}),
+                                    ...(sucursal ? { distribuidor_sucursal: sucursal } : {}),
+                                    ...(contactoNombre ? { distribuidor_contacto_nombre: contactoNombre } : {}),
+                                    ...(contactoTelefono ? { distribuidor_contacto_telefono: contactoTelefono } : {}),
+                                    ...(contactoCorreo ? { distribuidor_contacto_correo: contactoCorreo } : {}),
+                                    ...(distribuidorDireccion ? { distribuidor_direccion: distribuidorDireccion } : {})
                                 }
                             };
+
+                            const cacheKey1 = `${cliente.id}::${normalizeClientName(siteName)}`;
+                            const cacheKey2 = `${cliente.id}::${siteName.trim()}`;
+                            let sitio = sitioCache.get(cacheKey1) || sitioCache.get(cacheKey2);
 
                             if (!sitio) {
                                 sitio = await db.sitio.findFirst({ where: { cliente_id: cliente.id, nombre: siteName } });
@@ -418,15 +450,39 @@ export class CargaMasivaService {
                                     sitio = await db.sitio.create({ data: sitioData });
                                     sitiosNuevos++;
                                 } else {
-                                    // Update existing site with directory info
-                                    sitio = await db.sitio.update({ where: { id: sitio.id }, data: { direccion: sitioData.direccion || sitio.direccion, distribuidor: sitioData.distribuidor || sitio.distribuidor, contacto_operativo: sitioData.contacto_operativo } });
+                                    const mergedContacto = {
+                                        ...((sitio.contacto_operativo as any) || {}),
+                                        ...sitioData.contacto_operativo
+                                    };
+                                    sitio = await db.sitio.update({
+                                        where: { id: sitio.id },
+                                        data: {
+                                            ...(sitioData.direccion ? { direccion: sitioData.direccion } : {}),
+                                            ...(sitioData.distribuidor ? { distribuidor: sitioData.distribuidor } : {}),
+                                            ...(sitioData.adc ? { adc: sitioData.adc } : {}),
+                                            ...(sitioData.cuenta ? { cuenta: sitioData.cuenta } : {}),
+                                            contacto_operativo: mergedContacto
+                                        }
+                                    });
                                 }
-                                sitioCache.set(cacheKey, sitio);
                             } else {
-                                // Update existing cached site in db
-                                sitio = await db.sitio.update({ where: { id: sitio.id }, data: { direccion: sitioData.direccion || sitio.direccion, adc: sitioData.adc || sitio.adc, distribuidor: sitioData.distribuidor || sitio.distribuidor, contacto_operativo: sitioData.contacto_operativo } });
-                                sitioCache.set(cacheKey, sitio);
+                                const mergedContacto = {
+                                    ...((sitio.contacto_operativo as any) || {}),
+                                    ...sitioData.contacto_operativo
+                                };
+                                sitio = await db.sitio.update({
+                                    where: { id: sitio.id },
+                                    data: {
+                                        ...(sitioData.direccion ? { direccion: sitioData.direccion } : {}),
+                                        ...(sitioData.adc ? { adc: sitioData.adc } : {}),
+                                        ...(sitioData.distribuidor ? { distribuidor: sitioData.distribuidor } : {}),
+                                        ...(sitioData.cuenta ? { cuenta: sitioData.cuenta } : {}),
+                                        contacto_operativo: mergedContacto
+                                    }
+                                });
                             }
+                            sitioCache.set(cacheKey1, sitio);
+                            sitioCache.set(cacheKey2, sitio);
                         }
                     }
                 }
@@ -526,37 +582,34 @@ export class CargaMasivaService {
 
                     // B: SITIO
                     const sitioName = getStrictColVal(row, headers, ['SITE', 'SITIO', 'SUCURSAL', 'TIENDA']) || 'Sin Sitio';
-                    const sitioCacheKey = `${cliente.id}::${sitioName}`;
-                    let sitio = sitioCache.get(sitioCacheKey);
+                    const sitioCacheKey1 = `${cliente.id}::${normalizeClientName(sitioName)}`;
+                    const sitioCacheKey2 = `${cliente.id}::${sitioName.trim()}`;
+                    let sitio = sitioCache.get(sitioCacheKey1) || sitioCache.get(sitioCacheKey2);
                     
-                    const adc = normalizeADCName(getStrictColVal(row, headers, ['RESPONSABLE', 'ADC', 'EJECUTIVO ADC', 'EJECUTIVO']));
+                    const rawRowAdc = getStrictColVal(row, headers, ['RESPONSABLE', 'ADC', 'EJECUTIVO ADC', 'EJECUTIVO']);
+                    const adc = normalizeADCName(rawRowAdc);
                     
                     // CARGA PARCIAL: si se especificó un ADC filter, ignorar filas de otros ADCs
                     if (adcFilter) {
-                        const rowAdcNorm = (adc || '').toLowerCase().trim();
-                        const filterNorm = adcFilter.toLowerCase().trim();
-                        if (rowAdcNorm && rowAdcNorm !== filterNorm) {
+                        const normRowAdc = (adc || '').toLowerCase().trim();
+                        const normFilter = normalizeADCName(adcFilter)?.toLowerCase().trim() || adcFilter.toLowerCase().trim();
+                        if (normRowAdc && normFilter && normRowAdc !== normFilter && !normRowAdc.includes(normFilter) && !normFilter.includes(normRowAdc)) {
                             this.logger.log(`Fila ${rowNumber}: ADC "${adc}" omitido (carga parcial para "${adcFilter}")`);
                             continue;
                         }
                     }
                     const distribuidor = getStrictColVal(row, headers, ['DISTRIBUIDOR', 'DISTRIBUIDOR AUTORIZADO', 'DEALER', 'DEALER ASIGNADO', 'AGENCIA', 'PROVEEDOR']);
-                    const sitioData = {
-                        ciudad: getStrictColVal(row, headers, ['MUNICIPIO', 'CIUDAD', 'PLAZA']),
-                        direccion: getStrictColVal(row, headers, ['DIRECCION', 'DIRECCIÓN', 'CALLE', 'CALLE Y NUMERO', 'DOMICILIO', 'DIRECCION SITIO']),
-                        cuenta: getStrictColVal(row, headers, ['CUENTA', 'NO. CUENTA', 'NUMERO CUENTA']),
-                        adc: adc,
-                        distribuidor: distribuidor,
-                        contacto_operativo: {
-                            adc_correo: getStrictColVal(row, headers, ['CORREO ADC', 'MAIL ADC', 'EMAIL ADC', 'CORREO RESPONSABLE']),
-                            adc_telefono: getStrictColVal(row, headers, ['TELEFONO ADC', 'TELÉFONO ADC', 'TELEFONO RESPONSABLE']),
-                            adc_direccion: getStrictColVal(row, headers, ['DIRECCION ADC', 'DIRECCIÓN ADC']),
-                            distribuidor_contacto_nombre: getStrictColVal(row, headers, ['CONTACTO DISTRIBUIDOR', 'CONTACTO DEALER', 'PERSONA DEALER', 'RESPONSABLE DEALER', 'CONTACTO TECNICO', 'CONTACTO TÉCNICO', 'TECNICO DEALER', 'TÉCNICO DEALER', 'TECNICO', 'TÉCNICO', 'ASESOR DEALER', 'ASESOR TECNICO', 'CONTACTO DIST']),
-                            distribuidor_contacto_correo: getStrictColVal(row, headers, ['CORREO DISTRIBUIDOR', 'MAIL DISTRIBUIDOR', 'EMAIL DISTRIBUIDOR', 'CORREO DEALER', 'EMAIL DEALER', 'CORREO TECNICO', 'EMAIL TECNICO']),
-                            distribuidor_contacto_telefono: getStrictColVal(row, headers, ['TELEFONO DISTRIBUIDOR', 'TELÉFONO DISTRIBUIDOR', 'TELEFONO DEALER', 'TELÉFONO DEALER', 'TEL DEALER', 'TEL DISTRIBUIDOR', 'TELEFONO TECNICO', 'TELÉFONO TÉCNICO']),
-                            distribuidor_direccion: getStrictColVal(row, headers, ['DIRECCION DISTRIBUIDOR', 'DIRECCIÓN DISTRIBUIDOR', 'DIRECCION DEALER', 'DIRECCIÓN DEALER', 'DOMICILIO DISTRIBUIDOR'])
-                        }
-                    };
+                    
+                    const mainContactoNombre = getStrictColVal(row, headers, candDistContactoNombre);
+                    const mainContactoCorreo = getStrictColVal(row, headers, candDistContactoMail);
+                    const mainContactoTel = getStrictColVal(row, headers, candDistContactoTel);
+                    const mainAdcCorreo = getStrictColVal(row, headers, ['CORREO ADC', 'MAIL ADC', 'EMAIL ADC', 'CORREO RESPONSABLE']);
+                    const mainAdcTel = getStrictColVal(row, headers, ['TELEFONO ADC', 'TELÉFONO ADC', 'TELEFONO RESPONSABLE']);
+                    const mainAdcDir = getStrictColVal(row, headers, ['DIRECCION ADC', 'DIRECCIÓN ADC']);
+                    const mainDistDir = getStrictColVal(row, headers, ['DIRECCION DISTRIBUIDOR', 'DIRECCIÓN DISTRIBUIDOR', 'DIRECCION DEALER', 'DIRECCIÓN DEALER', 'DOMICILIO DISTRIBUIDOR']);
+                    const mainCiudad = getStrictColVal(row, headers, ['MUNICIPIO', 'CIUDAD', 'PLAZA']);
+                    const mainDireccion = getStrictColVal(row, headers, ['DIRECCION', 'DIRECCIÓN', 'CALLE', 'CALLE Y NUMERO', 'DOMICILIO', 'DIRECCION SITIO']);
+                    const mainCuenta = getStrictColVal(row, headers, ['CUENTA', 'NO. CUENTA', 'NUMERO CUENTA']);
 
                     if (!sitio) {
                         sitio = await db.sitio.findFirst({
@@ -565,18 +618,71 @@ export class CargaMasivaService {
                         
                         if (!sitio) {
                             sitio = await db.sitio.create({
-                                data: { cliente_id: cliente.id, nombre: sitioName, ...sitioData },
+                                data: {
+                                    cliente_id: cliente.id,
+                                    nombre: sitioName,
+                                    ciudad: mainCiudad,
+                                    direccion: mainDireccion,
+                                    cuenta: mainCuenta,
+                                    adc: adc,
+                                    distribuidor: distribuidor,
+                                    contacto_operativo: {
+                                        ...(mainAdcCorreo ? { adc_correo: mainAdcCorreo } : {}),
+                                        ...(mainAdcTel ? { adc_telefono: mainAdcTel } : {}),
+                                        ...(mainAdcDir ? { adc_direccion: mainAdcDir } : {}),
+                                        ...(mainContactoNombre ? { distribuidor_contacto_nombre: mainContactoNombre } : {}),
+                                        ...(mainContactoCorreo ? { distribuidor_contacto_correo: mainContactoCorreo } : {}),
+                                        ...(mainContactoTel ? { distribuidor_contacto_telefono: mainContactoTel } : {}),
+                                        ...(mainDistDir ? { distribuidor_direccion: mainDistDir } : {}),
+                                    }
+                                },
                             });
                             sitiosNuevos++;
                         } else {
-                            sitio = await db.sitio.update({ where: { id: sitio.id }, data: sitioData });
+                            const existingContacto = (sitio.contacto_operativo as any) || {};
+                            const mergedContacto = {
+                                ...existingContacto,
+                                ...(mainAdcCorreo ? { adc_correo: mainAdcCorreo } : {}),
+                                ...(mainAdcTel ? { adc_telefono: mainAdcTel } : {}),
+                                ...(mainAdcDir ? { adc_direccion: mainAdcDir } : {}),
+                                ...(mainContactoNombre ? { distribuidor_contacto_nombre: mainContactoNombre } : {}),
+                                ...(mainContactoCorreo ? { distribuidor_contacto_correo: mainContactoCorreo } : {}),
+                                ...(mainContactoTel ? { distribuidor_contacto_telefono: mainContactoTel } : {}),
+                                ...(mainDistDir ? { distribuidor_direccion: mainDistDir } : {}),
+                            };
+                            const updateData: any = { contacto_operativo: mergedContacto };
+                            if (mainCiudad) updateData.ciudad = mainCiudad;
+                            if (mainDireccion) updateData.direccion = mainDireccion;
+                            if (mainCuenta) updateData.cuenta = mainCuenta;
+                            if (adc) updateData.adc = adc;
+                            if (distribuidor) updateData.distribuidor = distribuidor;
+
+                            sitio = await db.sitio.update({ where: { id: sitio.id }, data: updateData });
                         }
-                        sitioCache.set(sitioCacheKey, sitio);
                     } else {
-                        // Ensure cache handles updates within same file if new fields appear
-                        sitio = await db.sitio.update({ where: { id: sitio.id }, data: sitioData });
-                        sitioCache.set(sitioCacheKey, sitio);
+                        // Site was found in cache (e.g. from Directorio): ONLY update non-empty fields and MERGE contacto_operativo
+                        const existingContacto = (sitio.contacto_operativo as any) || {};
+                        const mergedContacto = {
+                            ...existingContacto,
+                            ...(mainAdcCorreo ? { adc_correo: mainAdcCorreo } : {}),
+                            ...(mainAdcTel ? { adc_telefono: mainAdcTel } : {}),
+                            ...(mainAdcDir ? { adc_direccion: mainAdcDir } : {}),
+                            ...(mainContactoNombre ? { distribuidor_contacto_nombre: mainContactoNombre } : {}),
+                            ...(mainContactoCorreo ? { distribuidor_contacto_correo: mainContactoCorreo } : {}),
+                            ...(mainContactoTel ? { distribuidor_contacto_telefono: mainContactoTel } : {}),
+                            ...(mainDistDir ? { distribuidor_direccion: mainDistDir } : {}),
+                        };
+                        const updateData: any = { contacto_operativo: mergedContacto };
+                        if (mainCiudad) updateData.ciudad = mainCiudad;
+                        if (mainDireccion && (!sitio.direccion || sitio.direccion === '-')) updateData.direccion = mainDireccion;
+                        if (mainCuenta) updateData.cuenta = mainCuenta;
+                        if (adc) updateData.adc = adc;
+                        if (distribuidor) updateData.distribuidor = distribuidor;
+
+                        sitio = await db.sitio.update({ where: { id: sitio.id }, data: updateData });
                     }
+                    sitioCache.set(sitioCacheKey1, sitio);
+                    sitioCache.set(sitioCacheKey2, sitio);
 
                     // C: ACTIVO
                     let activo = activoCache.get(serie);
