@@ -23,6 +23,62 @@ export class UsersService implements OnModuleInit {
         }, 5000);
     }
 
+    private async syncSingleUserToR4(dbR4: any, user: {
+        id: string;
+        email: string;
+        first_name?: string | null;
+        last_name?: string | null;
+        role_name?: string | null;
+        adc_asociado_name?: string | null;
+        auxiliar_name?: string | null;
+        avatar_url?: string | null;
+        is_active?: boolean;
+    }) {
+        if (!dbR4 || !user.email) return;
+
+        const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+        const rol = user.role_name || 'USUARIO';
+        const isBlocked = user.is_active === false;
+
+        // Buscar si ya existe por ID o por correo para prevenir colisión de clave primaria (PRIMARY KEY)
+        const existing = await dbR4.usuario.findFirst({
+            where: {
+                OR: [
+                    { id: user.id },
+                    { correo: user.email }
+                ]
+            }
+        });
+
+        if (existing) {
+            await dbR4.usuario.update({
+                where: { id: existing.id },
+                data: {
+                    correo: user.email,
+                    nombre: fullName,
+                    rol: rol,
+                    adc_asociado_name: user.adc_asociado_name || null,
+                    auxiliar_name: user.auxiliar_name || null,
+                    avatar_url: user.avatar_url || null,
+                    bloqueado: isBlocked,
+                }
+            });
+        } else {
+            await dbR4.usuario.create({
+                data: {
+                    id: user.id,
+                    correo: user.email,
+                    nombre: fullName,
+                    rol: rol,
+                    adc_asociado_name: user.adc_asociado_name || null,
+                    auxiliar_name: user.auxiliar_name || null,
+                    avatar_url: user.avatar_url || null,
+                    bloqueado: isBlocked,
+                }
+            });
+        }
+    }
+
     async syncAllUsersToR4() {
         try {
             await PrismaDynamicService.ensureClientsInitialized();
@@ -38,32 +94,28 @@ export class UsersService implements OnModuleInit {
                 },
             });
 
+            let syncedCount = 0;
             for (const user of users) {
                 if (user.email) {
-                    await dbR4.usuario.upsert({
-                        where: { correo: user.email },
-                        update: {
-                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
-                            rol: user.roles?.name || 'USUARIO',
-                            adc_asociado_name: user.adc_asociado_name || null,
-                            auxiliar_name: user.auxiliar_name || null,
-                            avatar_url: user.avatar_url || null,
-                            bloqueado: !user.is_active,
-                        },
-                        create: {
+                    try {
+                        await this.syncSingleUserToR4(dbR4, {
                             id: user.id,
-                            correo: user.email,
-                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
-                            rol: user.roles?.name || 'USUARIO',
-                            adc_asociado_name: user.adc_asociado_name || null,
-                            auxiliar_name: user.auxiliar_name || null,
-                            avatar_url: user.avatar_url || null,
-                            bloqueado: !user.is_active,
-                        },
-                    });
+                            email: user.email,
+                            first_name: user.first_name,
+                            last_name: user.last_name,
+                            role_name: user.roles?.name,
+                            adc_asociado_name: user.adc_asociado_name,
+                            auxiliar_name: user.auxiliar_name,
+                            avatar_url: user.avatar_url,
+                            is_active: user.is_active,
+                        });
+                        syncedCount++;
+                    } catch (uErr: any) {
+                        this.logger.warn(`No se pudo sincronizar usuario ${user.email} a ComercialR4PDN: ${uErr?.message}`);
+                    }
                 }
             }
-            this.logger.log(`✔️ Sincronización automática de usuarios y avatares completada en ComercialR4PDN (${users.length} usuarios)`);
+            this.logger.log(`✔️ Sincronización automática de usuarios y avatares completada en ComercialR4PDN (${syncedCount}/${users.length} usuarios)`);
         } catch (err: any) {
             this.logger.warn(`Error en sincronización inicial de usuarios a ComercialR4PDN: ${err?.message}`);
         }
@@ -187,26 +239,16 @@ export class UsersService implements OnModuleInit {
             try {
                 const dbR4 = PrismaDynamicService.clients.r4;
                 if (dbR4 && user.email) {
-                    await dbR4.usuario.upsert({
-                        where: { correo: user.email },
-                        update: {
-                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
-                            rol: role.name || 'USUARIO',
-                            adc_asociado_name: user.adc_asociado_name || null,
-                            auxiliar_name: user.auxiliar_name || null,
-                            avatar_url: user.avatar_url || null,
-                            bloqueado: !user.is_active,
-                        },
-                        create: {
-                            id: user.id,
-                            correo: user.email,
-                            nombre: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
-                            rol: role.name || 'USUARIO',
-                            adc_asociado_name: user.adc_asociado_name || null,
-                            auxiliar_name: user.auxiliar_name || null,
-                            avatar_url: user.avatar_url || null,
-                            bloqueado: false,
-                        },
+                    await this.syncSingleUserToR4(dbR4, {
+                        id: user.id,
+                        email: user.email,
+                        first_name: user.first_name,
+                        last_name: user.last_name,
+                        role_name: role.name,
+                        adc_asociado_name: user.adc_asociado_name,
+                        auxiliar_name: user.auxiliar_name,
+                        avatar_url: user.avatar_url,
+                        is_active: user.is_active,
                     });
                 }
             } catch (err: any) {
@@ -440,26 +482,16 @@ export class UsersService implements OnModuleInit {
         try {
             const dbR4 = PrismaDynamicService.clients.r4;
             if (dbR4 && updatedUser.email) {
-                await dbR4.usuario.upsert({
-                    where: { correo: updatedUser.email },
-                    update: {
-                        nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
-                        rol: updatedUser.roles?.name || 'USUARIO',
-                        adc_asociado_name: updatedUser.adc_asociado_name || null,
-                        auxiliar_name: updatedUser.auxiliar_name || null,
-                        avatar_url: updatedUser.avatar_url || null,
-                        bloqueado: updatedUser.is_active === false,
-                    },
-                    create: {
-                        id: updatedUser.id,
-                        correo: updatedUser.email,
-                        nombre: `${updatedUser.first_name || ''} ${updatedUser.last_name || ''}`.trim() || updatedUser.email,
-                        rol: updatedUser.roles?.name || 'USUARIO',
-                        adc_asociado_name: updatedUser.adc_asociado_name || null,
-                        auxiliar_name: updatedUser.auxiliar_name || null,
-                        avatar_url: updatedUser.avatar_url || null,
-                        bloqueado: updatedUser.is_active === false,
-                    },
+                await this.syncSingleUserToR4(dbR4, {
+                    id: updatedUser.id,
+                    email: updatedUser.email,
+                    first_name: updatedUser.first_name,
+                    last_name: updatedUser.last_name,
+                    role_name: updatedUser.roles?.name,
+                    adc_asociado_name: updatedUser.adc_asociado_name,
+                    auxiliar_name: updatedUser.auxiliar_name,
+                    avatar_url: updatedUser.avatar_url,
+                    is_active: updatedUser.is_active,
                 });
             }
         } catch (err: any) {}
