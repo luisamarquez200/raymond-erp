@@ -3,7 +3,7 @@
 import { 
   Search, Filter, Download, Grid3x3, List, Plus, Eye, Edit, 
   FileText, Clock, CheckCircle, Upload, X, FileSpreadsheet, 
-  Wrench, Activity, CheckCircle2, AlertTriangle, ChevronRight, ChevronLeft, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2, Trash2, ChevronDown, ChevronUp, Layers
+  Wrench, Activity, CheckCircle2, AlertTriangle, AlertCircle, ChevronRight, ChevronLeft, ShieldCheck, MapPin, Truck, HardDrive, Info, Check, ChevronsUpDown, Loader2, Trash2, ChevronDown, ChevronUp, Layers
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -487,14 +487,23 @@ export default function FlotillaTab({
       // Compute only the fields that actually changed
       const originalAsset = fleetAssets.find(a => a.serie === editingRowId) || {};
       const changedFields: any = {};
+      
       Object.keys(editingData).forEach(key => {
-        if (editingData[key] !== originalAsset[key]) {
-          changedFields[key] = editingData[key];
+        const valNew = editingData[key];
+        const valOld = originalAsset[key];
+        if (valNew !== undefined && valNew !== null && String(valNew).trim() !== String(valOld ?? '').trim()) {
+          changedFields[key] = valNew;
         }
       });
 
+      // Explicitly ensure estatus is tracked if modified
+      if (editingData.estatus && String(editingData.estatus).trim() !== String(originalAsset.estatus || '').trim()) {
+        changedFields.estatus = editingData.estatus;
+        changedFields.estatus_operativo = editingData.estatus;
+      }
+
       if (Object.keys(changedFields).length === 0) {
-        toast.info('No se detectaron cambios');
+        toast.info('No se detectaron cambios en el formulario');
         cancelEditing();
         return;
       }
@@ -502,17 +511,17 @@ export default function FlotillaTab({
       if (isAdc) {
         // Requires approval
         await api.post(`/r4/flotilla/${editingRowId}/solicitar-cambio`, changedFields);
-        toast.info('Solicitud de cambio enviada para aprobación de Gerencia.');
+        toast.success('¡Solicitud enviada! El cambio (incluyendo estatus) se envió a Gerencia para su aprobación.');
       } else {
         // Direct save
         await api.put(`/r4/flotilla/${editingRowId}`, changedFields);
         toast.success('Activo actualizado directamente');
       }
-      fetchFlotilla();
       cancelEditing();
+      await Promise.all([fetchFlotilla(), fetchPendingApprovals()]);
     } catch (error) {
       console.error(error);
-      toast.error('Error al actualizar el activo');
+      toast.error('Error al procesar la actualización del activo');
     }
   };
 
@@ -2014,6 +2023,18 @@ export default function FlotillaTab({
               </div>
               
               <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto font-bold text-xs text-slate-600">
+                {isAdc && (
+                  <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 text-amber-900 mb-2 shadow-xs">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-black text-xs text-amber-900">Perfil ADC: Solicitud de Aprobación</p>
+                      <p className="text-[11px] font-normal text-amber-800 mt-0.5 leading-relaxed">
+                        Cualquier modificación en este equipo (cambio de <strong>Estatus</strong>, cliente, póliza o datos técnicos) generará una <strong>Solicitud de Cambio</strong> que se enviará automáticamente a Gerencia para su aprobación.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Número de Serie *</label>
@@ -2107,7 +2128,10 @@ export default function FlotillaTab({
                     <input type="text" value={editingData.propietario || ''} onChange={(e) => setEditingData({...editingData, propietario: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Estatus Operativo</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[10px] uppercase tracking-wider font-black text-slate-700">Estatus Operativo *</label>
+                      {isAdc && <span className="text-[9px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-300">Requiere Aprobación</span>}
+                    </div>
                     <select value={editingData.estatus || ''} onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer font-bold">
                       <option value="Activo">Activo</option>
                       <option value="Inactivo">Inactivo</option>
@@ -2170,7 +2194,7 @@ export default function FlotillaTab({
                   Cancelar
                 </button>
                 <button onClick={saveEditing} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
-                  {isAdc ? 'Solicitar Cambio' : 'Guardar Directo'}
+                  {isAdc ? 'Enviar Solicitud de Cambio' : 'Guardar Directo'}
                 </button>
               </div>
             </motion.div>

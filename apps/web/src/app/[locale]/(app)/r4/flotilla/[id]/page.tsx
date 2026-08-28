@@ -56,8 +56,16 @@ export default function AssetCarnetPage() {
     if (!newStatus) return;
     try {
       setUpdating(true);
-      await api.put(`/r4/flotilla/${id}/estatus`, { estatus: newStatus });
-      toast.success(`Estatus actualizado a ${newStatus}`);
+      if (isAdc) {
+        await api.post(`/r4/flotilla/${id}/solicitar-cambio`, {
+          estatus: newStatus,
+          estatus_operativo: newStatus
+        });
+        toast.success(`Solicitud enviada: Cambio de estatus a "${newStatus}" enviado para aprobación de Gerencia`);
+      } else {
+        await api.put(`/r4/flotilla/${id}/estatus`, { estatus: newStatus });
+        toast.success(`Estatus actualizado a ${newStatus}`);
+      }
       fetchAssetDetails(); // Refresh logs and data
     } catch (error) {
       console.error('Error updating status:', error);
