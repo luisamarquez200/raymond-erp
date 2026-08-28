@@ -148,7 +148,7 @@ export class PresupuestosService {
         });
 
         // 2. Fetch all orders (OrdenMensual)
-        let ordersWhere: any = {};
+        let ordersWhere: any = { activo_id: { not: null } };
         if (cliente_id) ordersWhere.cliente_id = cliente_id;
         
         const allOrders = await db.ordenMensual.findMany({
