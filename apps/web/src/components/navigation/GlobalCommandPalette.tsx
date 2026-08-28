@@ -13,6 +13,7 @@ import {
     Building2,
     HardDrive,
     Wrench,
+    Receipt,
     ArrowRight,
     Sparkles,
     Command as CommandIcon,
@@ -142,6 +143,17 @@ export function GlobalCommandPalette() {
                         </div>
                         <span className="font-bold text-slate-800 text-sm">Presupuestos y Facturación</span>
                         <CommandShortcut className="text-slate-400 text-xs">Finanzas</CommandShortcut>
+                    </CommandItem>
+
+                    <CommandItem
+                        onSelect={() => runCommand(() => router.push('/es/r4/ordenes-mensuales'))}
+                        className="cursor-pointer rounded-xl flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors"
+                    >
+                        <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600">
+                            <Receipt className="h-4 w-4" />
+                        </div>
+                        <span className="font-bold text-slate-800 text-sm">Órdenes Mensuales y Pedidos TOTVS</span>
+                        <CommandShortcut className="text-slate-400 text-xs">POs</CommandShortcut>
                     </CommandItem>
 
                     <CommandItem

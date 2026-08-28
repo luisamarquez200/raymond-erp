@@ -1,6 +1,65 @@
 import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 
+const ADC_ALIASES: Record<string, string[]> = {
+    'daniel': ['daniel', 'daniel romero', 'romero'],
+    'romero': ['daniel', 'daniel romero', 'romero'],
+    'alejandra': ['alejandra', 'alejandra arellanes', 'arellanes'],
+    'arellanes': ['alejandra', 'alejandra arellanes', 'arellanes'],
+    'andrea': ['andrea', 'andrea esquivel', 'esquivel'],
+    'esquivel': ['andrea', 'andrea esquivel', 'esquivel'],
+    'montserrat': ['montserrat', 'montserrat covarrubias', 'covarrubias', 'montse'],
+    'covarrubias': ['montserrat', 'montserrat covarrubias', 'covarrubias', 'montse'],
+    'simalu': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+    'simalú': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+    'leon': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+    'león': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
+};
+
+function stripAccents(str: string): string {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: string[]): boolean {
+    if (keywords.length === 0) return true;
+
+    const cleanKeywords = new Set<string>();
+    for (const kw of keywords) {
+        if (!kw) continue;
+        const norm = stripAccents(kw.trim().toLowerCase());
+        if (!norm) continue;
+        cleanKeywords.add(norm);
+
+        const parts = norm.split(/\s+/).filter(p => p.length >= 3);
+        for (const p of parts) {
+            cleanKeywords.add(p);
+            if (ADC_ALIASES[p]) {
+                ADC_ALIASES[p].forEach(a => cleanKeywords.add(stripAccents(a.toLowerCase())));
+            }
+        }
+        if (ADC_ALIASES[norm]) {
+            ADC_ALIASES[norm].forEach(a => cleanKeywords.add(stripAccents(a.toLowerCase())));
+        }
+    }
+
+    const keywordList = Array.from(cleanKeywords);
+
+    for (const raw of candidates) {
+        if (!raw) continue;
+        const norm = stripAccents(raw.trim().toLowerCase());
+        if (!norm) continue;
+
+        for (const kw of keywordList) {
+            if (!kw) continue;
+            if (norm.includes(kw) || kw.includes(norm)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 @Injectable()
 export class OrdenesService {
     private readonly logger = new Logger(OrdenesService.name);
@@ -11,13 +70,22 @@ export class OrdenesService {
         return db;
     }
 
-    async obtenerOrdenes() {
+    async obtenerOrdenes(adc?: string) {
         const db = this.getDb();
         try {
+            const adcKeywords = adc ? adc.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+
             const ordenes = await db.ordenMensual.findMany({
+                where: {
+                    activo_id: { not: null }
+                },
                 include: { 
                     cliente: true, 
-                    renta: true,
+                    renta: {
+                        include: {
+                            sitio: true
+                        }
+                    },
                     activo: {
                         include: {
                             accesorios: {
@@ -28,28 +96,45 @@ export class OrdenesService {
                 },
                 orderBy: { periodo: 'desc' },
             });
-            return ordenes.map((o: any) => ({
-                id: o.id,
-                periodo: o.periodo,
-                po: o.po,
-                tarifa: o.tarifa,
-                moneda: o.moneda,
-                estado: o.estado,
-                condiciones: o.condiciones,
-                pedido_totvs: (o.condiciones as any)?.pedido_totvs || (o.condiciones as any)?.pedido || (o.condiciones as any)?.pedido_tovts || (o.renta as any)?.no_registro_totvs || null,
-                fecha_pedido_totvs: (o.condiciones as any)?.fecha_pedido_totvs || (o.condiciones as any)?.fecha_ped || (o.renta as any)?.fecha_pedido_totvs || null,
-                cliente: o.cliente?.razon_social || 'Desconocido',
-                activo: o.activo?.serie || o.activo_id,
-                activo_modelo: o.activo?.modelo || '-',
-                accesorios: o.activo?.accesorios?.map((acc: any) => ({
-                    id: acc.accesorio?.id,
-                    serie: acc.accesorio?.serie,
-                    modelo: acc.accesorio?.modelo,
-                    tipo: acc.tipo_relacion,
-                    cantidad: acc.cantidad || 1
-                })) || [],
-                renta_id: o.renta_id
-            }));
+
+            const filtered = ordenes.filter((o: any) => {
+                if (adcKeywords.length === 0) return true;
+                const candidates = [
+                    o.renta?.adc,
+                    o.activo?.adc,
+                    o.renta?.sitio?.adc,
+                    (o.cliente as any)?.adc,
+                    (o.cliente as any)?.datos_comerciales?.adc
+                ];
+                return matchAdcKeywords(candidates, adcKeywords);
+            });
+
+            return filtered.map((o: any) => {
+                const adcName = o.renta?.adc || o.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+                return {
+                    id: o.id,
+                    periodo: o.periodo,
+                    po: o.po,
+                    tarifa: o.tarifa,
+                    moneda: o.moneda,
+                    estado: o.estado,
+                    condiciones: o.condiciones,
+                    pedido_totvs: (o.condiciones as any)?.pedido_totvs || (o.condiciones as any)?.pedido || (o.condiciones as any)?.pedido_tovts || (o.renta as any)?.no_registro_totvs || null,
+                    fecha_pedido_totvs: (o.condiciones as any)?.fecha_pedido_totvs || (o.condiciones as any)?.fecha_ped || (o.renta as any)?.fecha_pedido_totvs || null,
+                    cliente: o.cliente?.razon_social || 'Desconocido',
+                    activo: o.activo?.serie || o.activo_id,
+                    activo_modelo: o.activo?.modelo || '-',
+                    accesorios: o.activo?.accesorios?.map((acc: any) => ({
+                        id: acc.accesorio?.id,
+                        serie: acc.accesorio?.serie,
+                        modelo: acc.accesorio?.modelo,
+                        tipo: acc.tipo_relacion,
+                        cantidad: acc.cantidad || 1
+                    })) || [],
+                    adc: adcName,
+                    renta_id: o.renta_id
+                };
+            });
         } catch (error: any) {
             this.logger.error(`Error en obtenerOrdenes: ${error.message}`);
             throw error;

@@ -3274,10 +3274,10 @@ export default function RentasTab({
               className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-[2rem] shadow-xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-5xl bg-white rounded-[2rem] shadow-2xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
             >
               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
@@ -3291,13 +3291,13 @@ export default function RentasTab({
                 <button
                   type="button"
                   onClick={() => setViewRentaConfig({ ...viewRentaConfig, isOpen: false })}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white">
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white scrollbar-thin scrollbar-thumb-slate-200">
                 <div className="space-y-4">
                   <h3 className="text-sm font-black text-slate-800 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-800">1</span>
@@ -3444,7 +3444,7 @@ export default function RentasTab({
                     )}
                   </h3>
 
-                  {/* Tabla de Pedidos TOTVS emitidos */}
+                  {/* Tabla de Pedidos TOTVS emitidos con Scroll Horizontal y Vertical */}
                   {(() => {
                     const ordenes = (viewRentaConfig.renta.ordenes || []).sort((a: any, b: any) => (b.periodo || '').localeCompare(a.periodo || ''));
                     if (ordenes.length === 0) {
@@ -3457,8 +3457,8 @@ export default function RentasTab({
                     }
 
                     return (
-                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                        <table className="w-full text-left text-xs whitespace-nowrap">
+                      <div className="border border-slate-200 rounded-2xl overflow-x-auto shadow-xs bg-white scrollbar-thin">
+                        <table className="w-full text-left text-xs whitespace-nowrap min-w-[500px]">
                           <thead className="bg-slate-50 text-[10px] text-slate-500 font-black uppercase tracking-wider border-b border-slate-100">
                             <tr>
                               <th className="p-3.5">Periodo</th>
@@ -3466,43 +3466,53 @@ export default function RentasTab({
                               <th className="p-3.5">No. Pedido TOTVS</th>
                               <th className="p-3.5">Fecha Pedido TOTVS</th>
                               <th className="p-3.5 text-right">Tarifa Facturada</th>
-                              <th className="p-3.5 text-center">Estado</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                             {ordenes.map((ord: any) => {
                               const cond = ord.condiciones || {};
-                              const noTotvs = ord.pedido_totvs || cond.pedido_totvs || cond.pedido || viewRentaConfig.renta.no_registro_totvs || '-';
+                              const rawTotvs = ord.pedido_totvs || cond.pedido_totvs || cond.pedido || viewRentaConfig.renta.no_registro_totvs || '-';
+                              const invalid = ['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED'];
+                              const noTotvs = invalid.includes(String(rawTotvs).toUpperCase().trim()) ? '-' : rawTotvs;
+                              const isPendingNote = String(noTotvs).toUpperCase().includes('PORTAL');
                               const fTotvs = ord.fecha_pedido_totvs || cond.fecha_pedido_totvs || cond.fecha_ped || viewRentaConfig.renta.fecha_pedido_totvs;
+                              
+                              const [y, m] = (ord.periodo || '').split('-');
+                              const months: Record<string, string> = {
+                                '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+                                '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+                                '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+                              };
+                              const formattedPeriod = m && months[m] ? `${months[m]} ${y}` : ord.periodo;
+
                               return (
                                 <tr key={ord.id} className="hover:bg-slate-50/60 transition-colors">
                                   <td className="p-3.5 font-bold text-slate-900">
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-mono text-xs">
-                                      {ord.periodo}
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-semibold">
+                                      {formattedPeriod}
                                     </span>
                                   </td>
                                   <td className="p-3.5 font-black text-[#E5222D]">
                                     {ord.po || viewRentaConfig.renta.orden_compra || '-'}
                                   </td>
                                   <td className="p-3.5">
-                                    <span className={cn(
-                                      "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold",
-                                      noTotvs !== '-' ? "bg-blue-50 text-blue-800 border border-blue-200" : "text-slate-400"
-                                    )}>
-                                      {noTotvs}
-                                    </span>
+                                    {isPendingNote ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-medium">
+                                        {noTotvs}
+                                      </span>
+                                    ) : noTotvs !== '-' ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                        {noTotvs}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400">-</span>
+                                    )}
                                   </td>
                                   <td className="p-3.5 text-slate-500">
                                     {fTotvs ? new Date(fTotvs).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                                   </td>
                                   <td className="p-3.5 text-right font-black text-slate-900">
                                     ${(Number(ord.tarifa) || Number(viewRentaConfig.renta.detalles?.renta_base) || Number(viewRentaConfig.renta.tarifa) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {ord.moneda || viewRentaConfig.renta.detalles?.moneda || 'MXN'}
-                                  </td>
-                                  <td className="p-3.5 text-center">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      {ord.estado || 'REGISTRADA'}
-                                    </span>
                                   </td>
                                 </tr>
                               );

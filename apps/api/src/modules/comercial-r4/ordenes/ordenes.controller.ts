@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Post, Body } from '@nestjs/common';
+import { Controller, Get, UseGuards, Post, Body, Query } from '@nestjs/common';
 import { OrdenesService } from './ordenes.service';
 
 @Controller('r4/ordenes-mensuales')
@@ -6,10 +6,10 @@ export class OrdenesController {
     constructor(private readonly ordenesService: OrdenesService) {}
 
     @Get()
-    async getAll() {
+    async getAll(@Query('adc') adc?: string) {
         return {
             success: true,
-            data: await this.ordenesService.obtenerOrdenes()
+            data: await this.ordenesService.obtenerOrdenes(adc)
         };
     }
 
