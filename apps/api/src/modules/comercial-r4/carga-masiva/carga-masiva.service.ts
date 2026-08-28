@@ -515,14 +515,19 @@ export class CargaMasivaService {
                 }
             }
 
-            // Precarga de la base de datos para evitar repeticiones de previas cargas
-            const existentesOrdenes = await db.ordenMensual.findMany({ select: { activo_id: true, periodo: true, po: true } });
+            // Precarga de la base de datos para identificar órdenes existentes
+            const existentesOrdenes = await db.ordenMensual.findMany({ 
+                select: { id: true, activo_id: true, periodo: true, po: true, tarifa: true, moneda: true, condiciones: true } 
+            });
+            const existingOrdersMap = new Map<string, any>();
             existentesOrdenes.forEach(o => {
-                ordenesMensualesSet.add(`M::${o.activo_id}::${o.periodo}`);
-                ordenesMensualesSet.add(`B::${o.activo_id}::${o.periodo}::${o.po || ''}`);
+                existingOrdersMap.set(`M::${o.activo_id}::${o.periodo}`, o);
+                existingOrdersMap.set(`B::${o.activo_id}::${o.periodo}::${o.po || ''}`, o);
             });
 
             const ordenesMensualesParaInsertar: any[] = [];
+            const ordenesMensualesParaActualizar: any[] = [];
+            const seenOrderKeysInFile = new Set<string>();
 
             let processed = 0;
             let errors = 0;
@@ -858,50 +863,72 @@ export class CargaMasivaService {
                             rentaCache.set(activo.id, renta);
                         }
 
-                        // E: ÓRDENES MENSUALES (Acumular en memoria)
+                        // E: ÓRDENES MENSUALES (Acumular en memoria para insertar o actualizar)
                         for (const { name: monthName, period } of activeMonths) {
                             const po = getVal(row, `PO ${monthName}`);
                             const monto = getVal(row, `MONTO ${monthName}`);
+                            const pedido = getVal(row, `PEDIDO ${monthName}`);
 
-                            if (!po && !monto) continue;
+                            if (!po && !monto && !pedido) continue;
 
                             const isMensual = getVal(row, 'TIPO')?.toLowerCase().trim() === 'mensual';
                             const cacheKeyM = `M::${activo.id}::${period}`;
                             const cacheKeyB = `B::${activo.id}::${period}::${po || ''}`;
+                            const dedupKey = isMensual ? cacheKeyM : cacheKeyB;
 
-                            if (isMensual && ordenesMensualesSet.has(cacheKeyM)) {
-                                continue;
-                            } else if (!isMensual && ordenesMensualesSet.has(cacheKeyB)) {
+                            if (seenOrderKeysInFile.has(dedupKey)) {
                                 continue;
                             }
-
-                            // Añadir al set para evitar duplicados en el mismo archivo
-                            ordenesMensualesSet.add(cacheKeyM);
-                            ordenesMensualesSet.add(cacheKeyB);
+                            seenOrderKeysInFile.add(dedupKey);
 
                             const parsedMonto = parseCurrency(monto);
                             const moneda = getVal(row, `MONEDA ${monthName}`);
                             const fechaOc = getVal(row, `FECHA OC ${monthName}`);
+                            const fechaPed = getVal(row, `FECHA PED ${monthName}`);
+                            const existingOrder = existingOrdersMap.get(cacheKeyM) || existingOrdersMap.get(cacheKeyB);
 
-                            ordenesMensualesParaInsertar.push({
-                                cliente_id: cliente.id,
-                                renta_id: renta.id,
-                                activo_id: activo.id,
-                                periodo: period,
-                                po,
-                                tarifa: (!isNaN(parsedMonto as any) ? parsedMonto : null),
-                                moneda: (moneda || getVal(row, 'MONEDA') || 'MXN').toString().substring(0, 20),
-                                estado: 'IMPORTADA',
-                                condiciones: {
-                                    fecha_oc: fechaOc,
-                                    pedido: getVal(row, `PEDIDO ${monthName}`),
-                                    fecha_ped: getVal(row, `FECHA PED ${monthName}`),
-                                    aplica_smp: getVal(row, `APLICA SMP ${monthName}`),
-                                    realizado: getVal(row, `REALIZADO ${monthName}`),
-                                    comentarios: getVal(row, `COMENTARIOS ${monthName}`),
-                                },
-                            });
-                            rentasCreadas++;
+                            if (existingOrder) {
+                                const existingCond = (existingOrder.condiciones as any) || {};
+                                const mergedCondiciones = {
+                                    ...existingCond,
+                                    ...(fechaOc ? { fecha_oc: fechaOc } : {}),
+                                    ...(pedido ? { pedido: pedido } : {}),
+                                    ...(fechaPed ? { fecha_ped: fechaPed } : {}),
+                                    ...(getVal(row, `APLICA SMP ${monthName}`) ? { aplica_smp: getVal(row, `APLICA SMP ${monthName}`) } : {}),
+                                    ...(getVal(row, `REALIZADO ${monthName}`) ? { realizado: getVal(row, `REALIZADO ${monthName}`) } : {}),
+                                    ...(getVal(row, `COMENTARIOS ${monthName}`) ? { comentarios: getVal(row, `COMENTARIOS ${monthName}`) } : {}),
+                                };
+
+                                ordenesMensualesParaActualizar.push({
+                                    id: existingOrder.id,
+                                    po: po || existingOrder.po || 'IMPORTADA',
+                                    tarifa: (!isNaN(parsedMonto as any) && parsedMonto !== null ? parsedMonto : existingOrder.tarifa),
+                                    moneda: (moneda || getVal(row, 'MONEDA') || existingOrder.moneda || 'MXN').toString().substring(0, 20),
+                                    condiciones: mergedCondiciones
+                                });
+                            } else {
+                                const condicionesNuevas: any = {
+                                    fecha_oc: fechaOc || null,
+                                    pedido: pedido || null,
+                                    fecha_ped: fechaPed || null,
+                                    aplica_smp: getVal(row, `APLICA SMP ${monthName}`) || null,
+                                    realizado: getVal(row, `REALIZADO ${monthName}`) || null,
+                                    comentarios: getVal(row, `COMENTARIOS ${monthName}`) || null,
+                                };
+
+                                ordenesMensualesParaInsertar.push({
+                                    cliente_id: cliente.id,
+                                    renta_id: renta.id,
+                                    activo_id: activo.id,
+                                    periodo: period,
+                                    po: po || 'IMPORTADA',
+                                    tarifa: (!isNaN(parsedMonto as any) ? parsedMonto : null),
+                                    moneda: (moneda || getVal(row, 'MONEDA') || 'MXN').toString().substring(0, 20),
+                                    estado: 'IMPORTADA',
+                                    condiciones: condicionesNuevas,
+                                });
+                                rentasCreadas++;
+                            }
                         }
                     }
 
@@ -914,14 +941,31 @@ export class CargaMasivaService {
                 }
             }
 
-            // Inserción masiva final
-            this.logger.log(`Insertando ${ordenesMensualesParaInsertar.length} ordenes mensuales por lotes...`);
-            const chunkSize = 1000;
-            for (let i = 0; i < ordenesMensualesParaInsertar.length; i += chunkSize) {
-                await db.ordenMensual.createMany({
-                    data: ordenesMensualesParaInsertar.slice(i, i + chunkSize),
-                    skipDuplicates: true,
-                });
+            // Inserción masiva y actualización de órdenes
+            if (ordenesMensualesParaInsertar.length > 0) {
+                this.logger.log(`Insertando ${ordenesMensualesParaInsertar.length} ordenes mensuales nuevas por lotes...`);
+                const chunkSize = 1000;
+                for (let i = 0; i < ordenesMensualesParaInsertar.length; i += chunkSize) {
+                    await db.ordenMensual.createMany({
+                        data: ordenesMensualesParaInsertar.slice(i, i + chunkSize),
+                        skipDuplicates: true,
+                    });
+                }
+            }
+
+            if (ordenesMensualesParaActualizar.length > 0) {
+                this.logger.log(`Actualizando ${ordenesMensualesParaActualizar.length} ordenes mensuales existentes...`);
+                for (const ord of ordenesMensualesParaActualizar) {
+                    await db.ordenMensual.update({
+                        where: { id: ord.id },
+                        data: {
+                            po: ord.po,
+                            tarifa: ord.tarifa,
+                            moneda: ord.moneda,
+                            condiciones: ord.condiciones,
+                        }
+                    }).catch(() => null);
+                }
             }
 
             // Calcular series duplicadas y equipos únicos consolidados

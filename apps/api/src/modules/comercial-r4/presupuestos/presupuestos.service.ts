@@ -335,7 +335,7 @@ export class PresupuestosService {
                     moneda: oMoneda,
                     importe: amount,
                     po: o.po,
-                    pedido_totvs: condicionesObj.pedido_totvs || condicionesObj.pedido_tovts || o.renta?.no_registro_totvs || '-'
+                    pedido_totvs: condicionesObj.pedido_totvs || condicionesObj.pedido || condicionesObj.pedido_tovts || o.renta?.no_registro_totvs || '-'
                 });
             }
         }

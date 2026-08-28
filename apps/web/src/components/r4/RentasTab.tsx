@@ -415,13 +415,23 @@ export default function RentasTab({
       })
     : clientesDisponibles;
 
-  const selectedClienteObj = clientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id);
+  const getCuentasParaCliente = (clienteId: string) => {
+    if (!clienteId) return [];
+    const clientObj = clientesDisponibles.find((c: any) => c.id === clienteId);
+    const fromSitios = (clientObj?.sitios || []).map((s: any) => s.cuenta);
+    const fromRentas = rentas
+      .filter((r: any) => r.cliente_id === clienteId || r.cliente?.id === clienteId)
+      .flatMap((r: any) => [r.cuenta, r.activo?.cuenta]);
+    const fromEquipos = equiposDisponibles
+      .filter((e: any) => e.cliente_id === clienteId || e.sitio?.cliente_id === clienteId)
+      .map((e: any) => e.cuenta);
 
-  const cuentasDelCliente = Array.from(new Set<string>(
-    (selectedClienteObj?.sitios || [])
-      .map((s: any) => s.cuenta)
-      .filter((v: any): v is string => !!v)
-  )).sort((a: string, b: string) => a.localeCompare(b));
+    const combined = Array.from(new Set([...fromSitios, ...fromRentas, ...fromEquipos].filter(Boolean))) as string[];
+    return combined.filter(c => typeof c === 'string' && c.trim() !== '' && c.trim() !== '-').sort((a, b) => a.localeCompare(b));
+  };
+
+  const cuentasDelCliente = getCuentasParaCliente(newRentaFormData.cliente_id);
+  const selectedClienteObj = clientesDisponibles.find((c: any) => c.id === newRentaFormData.cliente_id);
 
   const openEditModal = (renta: any) => {
     if (isAdc) {
@@ -569,8 +579,21 @@ export default function RentasTab({
     }
 
     // Find all assets assigned to this site
-    const siteAssets = equiposDisponibles.filter(e => e.sitio_id === selectedFichaSitioId);
+    let siteAssets = equiposDisponibles.filter(e => e.sitio_id === selectedFichaSitioId);
     
+    // If a specific cuenta is selected, filter by that cuenta (matching asset.cuenta or activeRenta.cuenta)
+    if (selectedFichaCuenta) {
+      const matchCuentaNorm = selectedFichaCuenta.trim().toLowerCase();
+      const filteredByCuenta = siteAssets.filter(asset => {
+        const activeRenta = rentas.find(r => r.activo?.id === asset.id && r.estado !== 'CANCELADA');
+        const eqCuenta = (asset.cuenta || activeRenta?.cuenta || '').trim().toLowerCase();
+        return eqCuenta === matchCuentaNorm;
+      });
+      if (filteredByCuenta.length > 0) {
+        siteAssets = filteredByCuenta;
+      }
+    }
+
     // Calculate previous month string
     let prevPeriod = '';
     if (fichaMesCobro && fichaMesCobro.includes('-')) {
@@ -603,13 +626,13 @@ export default function RentasTab({
         existingRenta: activeRenta || null,
         alreadyHasOrderInMonth: alreadyHasOrder,
         orderInMonthPo: orderInCurrentMonth?.po || activeRenta?.orden_compra || null,
-        orderInMonthTotvs: (orderInCurrentMonth?.condiciones as any)?.pedido_totvs || activeRenta?.no_registro_totvs || null,
+        orderInMonthTotvs: (orderInCurrentMonth?.condiciones as any)?.pedido_totvs || (orderInCurrentMonth?.condiciones as any)?.pedido || activeRenta?.no_registro_totvs || null,
         hadOrderInPrevMonth: hadOrderInPrev
       };
     });
 
     setFichaSeriesGrid(gridData);
-  }, [selectedFichaSitioId, fichaMesCobro, equiposDisponibles, rentas]);
+  }, [selectedFichaSitioId, selectedFichaCuenta, fichaMesCobro, equiposDisponibles, rentas]);
 
   // Recalculate discount when pricing or dias caidos change
   const handleGridFieldChange = (index: number, field: 'checked' | 'renta_base' | 'dias_caidos', value: any) => {
@@ -2038,9 +2061,8 @@ export default function RentasTab({
                           </div>
                           <div className="max-h-[250px] overflow-y-auto space-y-1">
                             {(() => {
-                              const sitiosDelCliente = clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios || [];
-                              const cuentasUnicas = Array.from(new Set(sitiosDelCliente.map((s: any) => s.cuenta).filter(Boolean))) as string[];
-                              const filtered = cuentasUnicas.filter(c => c.toLowerCase().includes(fichaCuentaSearchTerm.toLowerCase())).sort();
+                              const cuentasUnicas = getCuentasParaCliente(selectedFichaClienteId);
+                              const filtered = cuentasUnicas.filter(c => c.toLowerCase().includes(fichaCuentaSearchTerm.toLowerCase())).sort((a, b) => a.localeCompare(b));
                               
                               if (filtered.length === 0) return <div className="p-4 text-center text-sm text-slate-500">No se encontraron cuentas.</div>;
                               
@@ -2111,7 +2133,23 @@ export default function RentasTab({
                           <div className="max-h-[250px] overflow-y-auto space-y-1">
                             {(() => {
                               const sitiosDelCliente = clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios || [];
-                              const filteredByCuenta = selectedFichaCuenta ? sitiosDelCliente.filter((s: any) => s.cuenta === selectedFichaCuenta) : sitiosDelCliente;
+                              const filteredByCuenta = selectedFichaCuenta
+                                ? sitiosDelCliente.filter((s: any) => {
+                                    const matchCta = selectedFichaCuenta.trim().toLowerCase();
+                                    if ((s.cuenta || '').trim().toLowerCase() === matchCta) return true;
+                                    const hasRenta = rentas.some((r: any) =>
+                                      (r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId) &&
+                                      r.sitio_id === s.id &&
+                                      ((r.cuenta || '').trim().toLowerCase() === matchCta || (r.activo?.cuenta || '').trim().toLowerCase() === matchCta)
+                                    );
+                                    if (hasRenta) return true;
+                                    const hasEquipo = equiposDisponibles.some((e: any) =>
+                                      e.sitio_id === s.id && (e.cuenta || '').trim().toLowerCase() === matchCta
+                                    );
+                                    return hasEquipo;
+                                  })
+                                : sitiosDelCliente;
+
                               const filtered = filteredByCuenta
                                 .filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase()))
                                 .sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
@@ -2124,7 +2162,7 @@ export default function RentasTab({
                                   type="button"
                                   onClick={() => {
                                     setSelectedFichaSitioId(s.id);
-                                    if (s.cuenta) setSelectedFichaCuenta(s.cuenta);
+                                    if (s.cuenta && !selectedFichaCuenta) setSelectedFichaCuenta(s.cuenta);
                                     setOpenFichaSitio(false);
                                     setFichaSitioSearchTerm('');
                                   }}
@@ -3434,8 +3472,8 @@ export default function RentasTab({
                           <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                             {ordenes.map((ord: any) => {
                               const cond = ord.condiciones || {};
-                              const noTotvs = ord.pedido_totvs || cond.pedido_totvs || viewRentaConfig.renta.no_registro_totvs || '-';
-                              const fTotvs = ord.fecha_pedido_totvs || cond.fecha_pedido_totvs || viewRentaConfig.renta.fecha_pedido_totvs;
+                              const noTotvs = ord.pedido_totvs || cond.pedido_totvs || cond.pedido || viewRentaConfig.renta.no_registro_totvs || '-';
+                              const fTotvs = ord.fecha_pedido_totvs || cond.fecha_pedido_totvs || cond.fecha_ped || viewRentaConfig.renta.fecha_pedido_totvs;
                               return (
                                 <tr key={ord.id} className="hover:bg-slate-50/60 transition-colors">
                                   <td className="p-3.5 font-bold text-slate-900">

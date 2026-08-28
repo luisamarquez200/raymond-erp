@@ -85,8 +85,8 @@ export class RentasService {
                 moneda: o.moneda,
                 estado: o.estado,
                 condiciones: o.condiciones,
-                pedido_totvs: (o.condiciones as any)?.pedido_totvs || renta.no_registro_totvs || null,
-                fecha_pedido_totvs: (o.condiciones as any)?.fecha_pedido_totvs || renta.fecha_pedido_totvs || null,
+                pedido_totvs: (o.condiciones as any)?.pedido_totvs || (o.condiciones as any)?.pedido || (o.condiciones as any)?.pedido_tovts || renta.no_registro_totvs || null,
+                fecha_pedido_totvs: (o.condiciones as any)?.fecha_pedido_totvs || (o.condiciones as any)?.fecha_ped || renta.fecha_pedido_totvs || null,
                 created_at: o.created_at
             })),
         };
