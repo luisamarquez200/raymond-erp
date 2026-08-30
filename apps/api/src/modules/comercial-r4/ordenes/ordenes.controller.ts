@@ -1,7 +1,7 @@
 import { Controller, Get, UseGuards, Post, Body, Query } from '@nestjs/common';
 import { OrdenesService } from './ordenes.service';
 
-@Controller('r4/ordenes-mensuales')
+@Controller(['r4/ordenes-mensuales', 'r4/ordenes'])
 export class OrdenesController {
     constructor(private readonly ordenesService: OrdenesService) {}
 
@@ -14,7 +14,7 @@ export class OrdenesController {
     }
 
     @Post()
-    async registrarManual(@Body() dto: { renta_id: string, periodo: string, po: string }) {
+    async registrarManual(@Body() dto: { renta_id: string, periodo: string, po: string, tarifa?: number, pedido_totvs?: string, fecha_pedido_totvs?: string }) {
         if (!dto.renta_id || !dto.periodo || !dto.po) {
             throw new Error('renta_id, periodo y po son requeridos');
         }

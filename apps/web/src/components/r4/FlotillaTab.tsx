@@ -1702,7 +1702,7 @@ export default function FlotillaTab({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Número de Serie *</label>
-                    <input type="text" value={newAssetSerie} onChange={(e) => setNewAssetSerie(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 12345" />
+                    <input type="text" value={newAssetSerie} onChange={(e) => setNewAssetSerie(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Número de serie" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Modelo *</label>
@@ -1711,7 +1711,7 @@ export default function FlotillaTab({
                       value={newAssetModelo}
                       onChange={(val) => setNewAssetModelo(val)}
                       placeholder="Buscar o seleccionar modelo..."
-                      searchPlaceholder="Escribe el modelo para buscar (ej. 7400, 8210)..."
+                      searchPlaceholder="Buscar modelo por número o nombre..."
                       emptyMessage="No se encontraron coincidencias"
                     />
                   </div>
@@ -1846,30 +1846,30 @@ export default function FlotillaTab({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Distribuidor</label>
-                    <select value={newAssetDistribuidor} onChange={(e) => setNewAssetDistribuidor(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer">
+                    <select value={newAssetDistribuidor} onChange={(e) => setNewAssetDistribuidor(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer">
                       <option value="">Seleccionar Distribuidor</option>
                       {uniqueDistribuidores.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Propietario</label>
-                    <input type="text" value={newAssetPropietario} onChange={(e) => setNewAssetPropietario(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: LOGIS / RYDER" />
+                    <input type="text" value={newAssetPropietario} onChange={(e) => setNewAssetPropietario(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Nombre del propietario" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">OACH</label>
-                    <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 95 in" />
+                    <input type="text" value={newAssetOach} onChange={(e) => setNewAssetOach(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Dimensiones (in)" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">Altura</label>
-                    <input type="text" value={newAssetAltura} onChange={(e) => setNewAssetAltura(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 240 in" />
+                    <input type="text" value={newAssetAltura} onChange={(e) => setNewAssetAltura(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Altura del mástil (in)" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">BC</label>
-                    <input type="text" value={newAssetBc} onChange={(e) => setNewAssetBc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 36 in" />
+                    <input type="text" value={newAssetBc} onChange={(e) => setNewAssetBc(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Centro de carga (in)" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1">iWarehouse S/N</label>
-                    <input type="text" value={newAssetIwarehouse} onChange={(e) => setNewAssetIwarehouse(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: IW-98210" />
+                    <input type="text" value={newAssetIwarehouse} onChange={(e) => setNewAssetIwarehouse(e.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Número de serie iWarehouse" />
                   </div>
                 </div>
 
@@ -1891,7 +1891,7 @@ export default function FlotillaTab({
                     <div className="mt-3 p-4 bg-red-50/40 border border-red-100 rounded-2xl grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Precio Renta Cliente</label>
-                        <input type="number" value={newRentaPrecio} onChange={(e) => setNewRentaPrecio(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 5500" />
+                        <input type="number" value={newRentaPrecio} onChange={(e) => setNewRentaPrecio(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="0.00" />
                       </div>
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Moneda Renta</label>
@@ -1911,7 +1911,7 @@ export default function FlotillaTab({
                       </div>
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Costo Servicio Dealer</label>
-                        <input type="number" value={newRentaCostoDealer} onChange={(e) => setNewRentaCostoDealer(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="Ej: 1200" />
+                        <input type="number" value={newRentaCostoDealer} onChange={(e) => setNewRentaCostoDealer(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" placeholder="0.00" />
                       </div>
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider mb-1 text-red-700">Moneda Dealer</label>
@@ -1939,7 +1939,7 @@ export default function FlotillaTab({
                             }
                           }} 
                           className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" 
-                          placeholder="Ej: 36" 
+                          placeholder="Meses" 
                         />
                       </div>
                       <div>
@@ -1961,7 +1961,7 @@ export default function FlotillaTab({
                           value={newRentaFolioOc} 
                           onChange={(e) => setNewRentaFolioOc(e.target.value)} 
                           className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" 
-                          placeholder="Ej: OC-9872" 
+                          placeholder="Número de OC" 
                         />
                       </div>
                       <div>
@@ -1971,7 +1971,7 @@ export default function FlotillaTab({
                           value={newRentaPedidoTotvs} 
                           onChange={(e) => setNewRentaPedidoTotvs(e.target.value)} 
                           className="w-full px-3.5 py-2.5 bg-white border border-red-200 rounded-xl text-slate-900 focus:outline-none focus:border-red-500" 
-                          placeholder="Ej: PED-10293" 
+                          placeholder="Número de pedido TOTVS" 
                         />
                       </div>
                       <div className="col-span-2">
@@ -2098,7 +2098,7 @@ export default function FlotillaTab({
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Capacidad (LB)</label>
-                    <input type="text" value={editingData.capacidad || editingData.capacidad_lb || ''} onChange={(e) => setEditingData({...editingData, capacidad: e.target.value, capacidad_lb: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" placeholder="Ej: 4500" />
+                    <input type="text" value={editingData.capacidad || editingData.capacidad_lb || ''} onChange={(e) => setEditingData({...editingData, capacidad: e.target.value, capacidad_lb: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" placeholder="Capacidad en lbs" />
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">OACH</label>

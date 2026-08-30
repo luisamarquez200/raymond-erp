@@ -324,7 +324,7 @@ export default function GestionTipoCambio() {
                                         min="0.01"
                                         value={editingItem.tipo_cambio}
                                         onChange={(e) => setEditingItem({ ...editingItem, tipo_cambio: e.target.value })}
-                                        placeholder="Ej. 18.35"
+                                        placeholder="0.0000"
                                         required
                                         className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-red-500"
                                     />
@@ -352,7 +352,7 @@ export default function GestionTipoCambio() {
                                 <textarea
                                     value={editingItem.motivo}
                                     onChange={(e) => setEditingItem({ ...editingItem, motivo: e.target.value })}
-                                    placeholder="Ej. Ajuste según valor oficial DOF de inicio de mes"
+                                    placeholder="Ingresar motivo del ajuste..."
                                     rows={3}
                                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-red-500"
                                 />

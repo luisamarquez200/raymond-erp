@@ -276,15 +276,39 @@ export default function GestionUsuarios() {
         } catch (error) {}
     };
 
-    const R4_ROLES = ['administrador', 'adc', 'gerente', 'auxiliar'];
-    const filteredUsers = users.filter(u => {
-        const uRole = (u.role?.name || '').toLowerCase();
-        if (!R4_ROLES.includes(uRole)) return false;
+    const R4_ROLES = ['administrador', 'admin', 'gerente', 'coordinadora', 'coordinador', 'adc', 'auxiliar'];
+    const ROLE_ORDER: Record<string, number> = {
+        'administrador': 1,
+        'admin': 1,
+        'gerente': 2,
+        'coordinadora': 3,
+        'coordinador': 3,
+        'adc': 4,
+        'auxiliar': 5,
+    };
 
-        return `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-               u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-               uRole.includes(searchTerm.toLowerCase());
-    });
+    const filteredUsers = users
+        .filter(u => {
+            const uRole = (u.role?.name || '').toLowerCase();
+            if (!R4_ROLES.includes(uRole)) return false;
+
+            return `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   uRole.includes(searchTerm.toLowerCase());
+        })
+        .sort((a, b) => {
+            const roleA = (a.role?.name || '').toLowerCase();
+            const roleB = (b.role?.name || '').toLowerCase();
+            const orderA = ROLE_ORDER[roleA] || 99;
+            const orderB = ROLE_ORDER[roleB] || 99;
+
+            if (orderA !== orderB) {
+                return orderA - orderB;
+            }
+            const nameA = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
+            const nameB = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
 
     const activeSelectedRoleName = (roles.find((r: any) => r.id === roleId)?.name || '').toLowerCase();
 
@@ -337,7 +361,8 @@ export default function GestionUsuarios() {
                                     <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
                                         <th className="p-4 pl-6">Usuario</th>
                                         <th className="p-4">Email</th>
-                                        <th className="p-4">Rol & Asociaciones</th>
+                                        <th className="p-4 w-36">Rol</th>
+                                        <th className="p-4">Asignaciones</th>
                                         <th className="p-4">Estatus</th>
                                         <th className="p-4 pr-6 text-right">Acciones</th>
                                     </tr>
@@ -373,31 +398,40 @@ export default function GestionUsuarios() {
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <div className="flex flex-col items-start gap-1">
-                                                        <span 
-                                                            className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border"
-                                                            style={{ 
-                                                                backgroundColor: `${uColor}15`, 
-                                                                color: uColor,
-                                                                borderColor: `${uColor}30`
-                                                            }}
-                                                        >
-                                                            {uRoleName.toUpperCase()}
-                                                        </span>
+                                                    <span 
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs"
+                                                        style={{ 
+                                                            backgroundColor: `${uColor}12`, 
+                                                            color: uColor,
+                                                            borderColor: `${uColor}30`
+                                                        }}
+                                                    >
+                                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: uColor }} />
+                                                        {uRoleName.toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex flex-col gap-1 text-xs">
                                                         {u.supervisorName && (
-                                                            <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 font-bold">
-                                                                Coordinadora: {u.supervisorName}
-                                                            </span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Coord:</span>
+                                                                <span className="font-semibold text-slate-700">{u.supervisorName}</span>
+                                                            </div>
                                                         )}
                                                         {u.adcAsociadoName && (
-                                                            <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200 font-bold">
-                                                                ADC Asociado: {u.adcAsociadoName}
-                                                            </span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ADC:</span>
+                                                                <span className="font-semibold text-slate-800">{u.adcAsociadoName}</span>
+                                                            </div>
                                                         )}
                                                         {u.auxiliarName && (
-                                                            <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-100 font-bold">
-                                                                Auxiliar: {u.auxiliarName}
-                                                            </span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aux:</span>
+                                                                <span className="font-semibold text-slate-700">{u.auxiliarName}</span>
+                                                            </div>
+                                                        )}
+                                                        {!u.supervisorName && !u.adcAsociadoName && !u.auxiliarName && (
+                                                            <span className="text-slate-300 font-bold">—</span>
                                                         )}
                                                     </div>
                                                 </td>

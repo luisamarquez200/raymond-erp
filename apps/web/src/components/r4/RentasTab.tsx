@@ -157,9 +157,10 @@ export default function RentasTab({
   const [fichaPedidoTotvs, setFichaPedidoTotvs] = useState("");
   const [fichaFechaTotvs, setFichaFechaTotvs] = useState("");
   const [fichaMesCobro, setFichaMesCobro] = useState(new Date().toISOString().slice(0, 7));
+  const [fichaMesCobroFin, setFichaMesCobroFin] = useState('');
   const [fichaPdfFile, setFichaPdfFile] = useState<File | null>(null);
   const [isFichaDragging, setIsFichaDragging] = useState(false);
-  const [fichaSeriesGrid, setFichaSeriesGrid] = useState<any[]>([]); // Array of { assetId, serie, modelo, clase, checked, renta_base, dias_caidos, descuento, renta_final, alreadyHasOrderInMonth, orderInMonthPo, hadOrderInPrevMonth }
+  const [fichaSeriesGrid, setFichaSeriesGrid] = useState<any[]>([]); // Array of { assetId, serie, modelo, clase, sitioId, sitioNombre, cuenta, checked, renta_base, dias_caidos, descuento, renta_final, alreadyHasOrderInMonth, orderInMonthPo, orderInMonthTotvs, hadOrderInPrevMonth, pedido_totvs }
   const [showOnlyAvailableInMonth, setShowOnlyAvailableInMonth] = useState(true);
   const [isSubmittingFicha, setIsSubmittingFicha] = useState(false);
 
@@ -168,6 +169,29 @@ export default function RentasTab({
   const [openFichaCuenta, setOpenFichaCuenta] = useState(false);
   const [selectedFichaCuenta, setSelectedFichaCuenta] = useState("");
   const [fichaCuentaSearchTerm, setFichaCuentaSearchTerm] = useState('');
+
+  // Helper para generar rango de meses
+  const getMonthsInRange = (startPeriod: string, endPeriod?: string): string[] => {
+    if (!startPeriod) return [];
+    if (!endPeriod || endPeriod < startPeriod) return [startPeriod];
+    
+    const [startY, startM] = startPeriod.split('-').map(Number);
+    const [endY, endM] = endPeriod.split('-').map(Number);
+    
+    const result: string[] = [];
+    let curY = startY;
+    let curM = startM;
+    
+    while (curY < endY || (curY === endY && curM <= endM)) {
+      result.push(`${curY}-${String(curM).padStart(2, '0')}`);
+      curM++;
+      if (curM > 12) {
+        curM = 1;
+        curY++;
+      }
+    }
+    return result;
+  };
 
   // NEW STATE FOR STANDALONE RENTA
   const [clientesDisponibles, setClientesDisponibles] = useState<any[]>([]);
@@ -273,12 +297,22 @@ export default function RentasTab({
 
   // REGISTER OC STATE
   const [registerOcConfig, setRegisterOcConfig] = useState<{
-    isOpen: boolean; renta: any; periodo: string; po: string; isSubmitting: boolean; pdfFile: File | null; isDragging: boolean;
+    isOpen: boolean;
+    renta: any;
+    periodo: string;
+    po: string;
+    pedido_totvs: string;
+    fecha_pedido_totvs: string;
+    isSubmitting: boolean;
+    pdfFile: File | null;
+    isDragging: boolean;
   }>({
     isOpen: false,
     renta: null as any,
     periodo: '',
     po: '',
+    pedido_totvs: '',
+    fecha_pedido_totvs: '',
     isSubmitting: false,
     pdfFile: null,
     isDragging: false,
@@ -317,8 +351,18 @@ export default function RentasTab({
       await api.post('/r4/ordenes-mensuales', {
         renta_id: registerOcConfig.renta.id,
         periodo: registerOcConfig.periodo,
-        po: registerOcConfig.po
+        po: registerOcConfig.po,
+        pedido_totvs: registerOcConfig.pedido_totvs || undefined,
+        fecha_pedido_totvs: registerOcConfig.fecha_pedido_totvs || undefined,
       });
+
+      // Also update renta's no_registro_totvs & fecha_pedido_totvs if provided
+      if (registerOcConfig.pedido_totvs || registerOcConfig.fecha_pedido_totvs) {
+        await api.patch(`/r4/rentas/${registerOcConfig.renta.id}`, {
+          no_registro_totvs: registerOcConfig.pedido_totvs || undefined,
+          fecha_pedido_totvs: registerOcConfig.fecha_pedido_totvs || undefined,
+        });
+      }
 
       // Upload PDF
       const fileData = new FormData();
@@ -328,7 +372,17 @@ export default function RentasTab({
       });
 
       toast.success('Orden de compra registrada con éxito');
-      setRegisterOcConfig({ isOpen: false, renta: null, periodo: '', po: '', isSubmitting: false, pdfFile: null, isDragging: false });
+      setRegisterOcConfig({
+        isOpen: false,
+        renta: null,
+        periodo: '',
+        po: '',
+        pedido_totvs: '',
+        fecha_pedido_totvs: '',
+        isSubmitting: false,
+        pdfFile: null,
+        isDragging: false
+      });
       fetchRentasYClientes(); // Refresh rentas to show new order
     } catch (error: any) {
       console.error('Error registrando OC:', error);
@@ -571,27 +625,55 @@ export default function RentasTab({
     }
   }, [isNewRentaModalOpen, newRentaFormData.sitio_id, equiposDisponibles, newRentaFormData.activo_id]);
 
-  // Filter series based on selected site in Ficha OC
+  // Filter series based on selected client, site and cuenta in Ficha OC
   useEffect(() => {
-    if (!selectedFichaSitioId) {
+    if (!selectedFichaClienteId) {
       setFichaSeriesGrid([]);
       return;
     }
 
-    // Find all assets assigned to this site
-    let siteAssets = equiposDisponibles.filter(e => e.sitio_id === selectedFichaSitioId);
+    const client = clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId);
+    const sitiosDelCliente = client?.sitios || [];
+    const clientSiteIds = new Set(sitiosDelCliente.map((s: any) => s.id));
+
+    // Find all assets assigned to this client across all sites, or matched by renta/cliente_id
+    let siteAssets = equiposDisponibles.filter(e => {
+      if (selectedFichaSitioId) {
+        return e.sitio_id === selectedFichaSitioId;
+      }
+      return (
+        (e.sitio_id && clientSiteIds.has(e.sitio_id)) ||
+        e.cliente_id === selectedFichaClienteId ||
+        rentas.some(r => r.activo?.id === e.id && (r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId))
+      );
+    });
+
+    // Also include any asset that has an active renta with this client even if not in equiposDisponibles
+    rentas.forEach(r => {
+      if ((r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId) && r.activo && r.estado !== 'CANCELADA') {
+        if (selectedFichaSitioId && r.sitio_id !== selectedFichaSitioId) return;
+        if (!siteAssets.some(e => e.id === r.activo.id)) {
+          siteAssets.push({
+            id: r.activo.id,
+            serie: r.activo.serie,
+            modelo: r.activo.modelo,
+            clase: r.activo.clase,
+            sitio_id: r.sitio_id,
+            cuenta: r.cuenta,
+            estatus: r.estado,
+          });
+        }
+      }
+    });
     
     // If a specific cuenta is selected, filter by that cuenta (matching asset.cuenta or activeRenta.cuenta)
     if (selectedFichaCuenta) {
       const matchCuentaNorm = selectedFichaCuenta.trim().toLowerCase();
-      const filteredByCuenta = siteAssets.filter(asset => {
+      siteAssets = siteAssets.filter(asset => {
         const activeRenta = rentas.find(r => r.activo?.id === asset.id && r.estado !== 'CANCELADA');
         const eqCuenta = (asset.cuenta || activeRenta?.cuenta || '').trim().toLowerCase();
         return eqCuenta === matchCuentaNorm;
       });
-      if (filteredByCuenta.length > 0) {
-        siteAssets = filteredByCuenta;
-      }
     }
 
     // Calculate previous month string
@@ -612,13 +694,20 @@ export default function RentasTab({
       const hadOrderInPrev = prevPeriod ? orders.some((o: any) => o.periodo === prevPeriod) : false;
 
       const alreadyHasOrder = !!orderInCurrentMonth;
+      const existingTotvs = (orderInCurrentMonth?.condiciones as any)?.pedido_totvs || (orderInCurrentMonth?.condiciones as any)?.pedido || activeRenta?.no_registro_totvs || '';
+
+      const assetSitio = sitiosDelCliente.find((s: any) => s.id === (asset.sitio_id || activeRenta?.sitio_id)) || activeRenta?.sitio;
+      const assetCuenta = asset.cuenta || activeRenta?.cuenta || assetSitio?.cuenta || '-';
 
       return {
         assetId: asset.id,
         serie: asset.serie,
         modelo: asset.modelo || '-',
         clase: asset.clase || '-',
-        checked: siteAssets.length === 1 && !alreadyHasOrder ? true : false,
+        sitioId: asset.sitio_id || activeRenta?.sitio_id || sitiosDelCliente[0]?.id || '',
+        sitioNombre: assetSitio?.nombre || 'Sitio Principal',
+        cuenta: assetCuenta,
+        checked: false,
         renta_base: basePrice,
         dias_caidos: 0,
         descuento: 0,
@@ -626,16 +715,17 @@ export default function RentasTab({
         existingRenta: activeRenta || null,
         alreadyHasOrderInMonth: alreadyHasOrder,
         orderInMonthPo: orderInCurrentMonth?.po || activeRenta?.orden_compra || null,
-        orderInMonthTotvs: (orderInCurrentMonth?.condiciones as any)?.pedido_totvs || (orderInCurrentMonth?.condiciones as any)?.pedido || activeRenta?.no_registro_totvs || null,
-        hadOrderInPrevMonth: hadOrderInPrev
+        orderInMonthTotvs: existingTotvs || null,
+        hadOrderInPrevMonth: hadOrderInPrev,
+        pedido_totvs: existingTotvs || fichaPedidoTotvs || '',
       };
     });
 
     setFichaSeriesGrid(gridData);
-  }, [selectedFichaSitioId, selectedFichaCuenta, fichaMesCobro, equiposDisponibles, rentas]);
+  }, [selectedFichaClienteId, selectedFichaSitioId, selectedFichaCuenta, fichaMesCobro, equiposDisponibles, rentas, clientesDisponibles]);
 
   // Recalculate discount when pricing or dias caidos change
-  const handleGridFieldChange = (index: number, field: 'checked' | 'renta_base' | 'dias_caidos', value: any) => {
+  const handleGridFieldChange = (index: number, field: 'checked' | 'renta_base' | 'dias_caidos' | 'pedido_totvs', value: any) => {
     const updated = [...fichaSeriesGrid];
     const item = { ...updated[index] };
     
@@ -645,6 +735,8 @@ export default function RentasTab({
       item.renta_base = Number(value) || 0;
     } else if (field === 'dias_caidos') {
       item.dias_caidos = Number(value) || 0;
+    } else if (field === 'pedido_totvs') {
+      item.pedido_totvs = value;
     }
 
     // discount = (base / 30) * dias_caidos
@@ -707,10 +799,12 @@ export default function RentasTab({
   const resetFichaOcForm = () => {
     setSelectedFichaClienteId("");
     setSelectedFichaSitioId("");
+    setSelectedFichaCuenta("");
     setFichaFolioOc("");
     setFichaPedidoTotvs("");
     setFichaFechaTotvs("");
     setFichaMesCobro(new Date().toISOString().slice(0, 7));
+    setFichaMesCobroFin("");
     setFichaPdfFile(null);
     setIsFichaDragging(false);
     setShowOnlyAvailableInMonth(true);
@@ -831,16 +925,22 @@ export default function RentasTab({
 
     try {
       setIsSubmittingFicha(true);
-      toast.info("Procesando registro de OC simplificada...");
+      const targetPeriods = getMonthsInRange(fichaMesCobro, fichaMesCobroFin);
+      const client = clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId);
+      const sitiosDelCliente = client?.sitios || [];
+
+      toast.info(`Procesando registro de OC para ${selectedItems.length} serie(s) en ${targetPeriods.length} mes(es)...`);
 
       for (const item of selectedItems) {
         let rentaId = '';
+        const itemPedidoTotvs = item.pedido_totvs?.trim() || fichaPedidoTotvs?.trim() || undefined;
+        const targetSitioId = item.sitioId || selectedFichaSitioId || sitiosDelCliente[0]?.id;
         
         if (item.existingRenta) {
           rentaId = item.existingRenta.id;
           // Update existing renta
           await api.patch(`/r4/rentas/${rentaId}`, {
-            no_registro_totvs: fichaPedidoTotvs || undefined,
+            no_registro_totvs: itemPedidoTotvs,
             fecha_pedido_totvs: fichaFechaTotvs || undefined,
           });
 
@@ -855,11 +955,13 @@ export default function RentasTab({
           // Create new renta
           const payload = {
             cliente_id: selectedFichaClienteId,
-            sitio_id: selectedFichaSitioId,
+            sitio_id: targetSitioId,
             activo_id: item.assetId,
-            fecha_inicio: new Date().toISOString().split('T')[0], // Default today
-            fecha_fin: new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0], // Default 1 year
-            no_registro_totvs: fichaPedidoTotvs || undefined,
+            fecha_inicio: targetPeriods[0] ? `${targetPeriods[0]}-01` : new Date().toISOString().split('T')[0],
+            fecha_fin: targetPeriods.length > 1 
+              ? `${targetPeriods[targetPeriods.length - 1]}-28`
+              : new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0],
+            no_registro_totvs: itemPedidoTotvs,
             fecha_pedido_totvs: fichaFechaTotvs || undefined,
             detalles: {
               oc_cliente: fichaFolioOc,
@@ -875,19 +977,21 @@ export default function RentasTab({
           rentaId = createRes.data?.data?.id || createRes.data?.id;
         }
 
-        // Sincronizar orden mensual con el mes de cobertura, tarifa final y datos de TOTVS
-        if (fichaMesCobro && rentaId) {
-          try {
-            await api.post('/r4/ordenes', {
-              renta_id: rentaId,
-              periodo: fichaMesCobro,
-              po: fichaFolioOc,
-              tarifa: item.renta_final,
-              pedido_totvs: fichaPedidoTotvs || undefined,
-              fecha_pedido_totvs: fichaFechaTotvs || undefined,
-            });
-          } catch (ordErr) {
-            console.warn('No se pudo sincronizar orden mensual:', ordErr);
+        // Sincronizar órdenes mensuales con todos los periodos del rango (ej. Julio a Diciembre)
+        if (rentaId && targetPeriods.length > 0) {
+          for (const periodo of targetPeriods) {
+            try {
+              await api.post('/r4/ordenes', {
+                renta_id: rentaId,
+                periodo: periodo,
+                po: fichaFolioOc,
+                tarifa: item.renta_final,
+                pedido_totvs: itemPedidoTotvs,
+                fecha_pedido_totvs: fichaFechaTotvs || undefined,
+              });
+            } catch (ordErr) {
+              console.warn(`No se pudo sincronizar orden mensual para periodo ${periodo}:`, ordErr);
+            }
           }
         }
 
@@ -903,21 +1007,12 @@ export default function RentasTab({
         }
       }
 
-      toast.success("Registro OC guardada con éxito.");
-      setIsFichaOcModalOpen(false);
-      // Clean form
-      setSelectedFichaClienteId("");
-      setSelectedFichaSitioId("");
-      setFichaFolioOc("");
-      setFichaPedidoTotvs("");
-      setFichaFechaTotvs("");
-      setFichaMesCobro("");
-      setFichaPdfFile(null);
-      setIsFichaDragging(false);
+      toast.success(`Registro OC guardado con éxito (${targetPeriods.length} mes(es) aplicados).`);
+      resetFichaOcForm();
       fetchRentasYClientes();
     } catch (error: any) {
       console.error(error);
-      toast.error(error.response?.data?.message || "Error al registrar la Ficha de OC.");
+      toast.error(error.response?.data?.message || 'Error al procesar Registro OC');
     } finally {
       setIsSubmittingFicha(false);
     }
@@ -1613,16 +1708,17 @@ export default function RentasTab({
                             <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 
-                                setRegisterOcConfig(prev => ({
-                                  ...prev,
+                                setRegisterOcConfig({
                                   isOpen: true,
                                   renta,
-                                  periodo: '',
-                                  po: '',
+                                  periodo: new Date().toISOString().slice(0, 7),
+                                  po: renta.orden_compra || (renta.detalles as any)?.oc_cliente || '',
+                                  pedido_totvs: renta.no_registro_totvs || (renta.condiciones as any)?.pedido_totvs || '',
+                                  fecha_pedido_totvs: renta.fecha_pedido_totvs ? new Date(renta.fecha_pedido_totvs).toISOString().split('T')[0] : '',
                                   isSubmitting: false,
                                   pdfFile: null,
                                   isDragging: false
-                                }));
+                                });
                               }}
                               className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
                               title="Registrar OC"
@@ -1750,74 +1846,125 @@ export default function RentasTab({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setRegisterOcConfig(prev => ({ ...prev, isOpen: false, renta: null, periodo: '', po: '', isSubmitting: false, pdfFile: null, isDragging: false }))}
+              onClick={() => setRegisterOcConfig(prev => ({ ...prev, isOpen: false, renta: null, periodo: '', po: '', pedido_totvs: '', fecha_pedido_totvs: '', isSubmitting: false, pdfFile: null, isDragging: false }))}
               className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[2rem] shadow-2xl z-50 overflow-hidden flex flex-col"
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-white rounded-[2rem] shadow-2xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <form onSubmit={handleRegisterOc} className="flex flex-col h-full">
-                <div className="p-6 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
-                  <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
-                    <FilePlus className="w-5 h-5" />
+              <form onSubmit={handleRegisterOc} className="flex flex-col h-full overflow-hidden">
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-red-50 text-[#E5222D] rounded-2xl">
+                      <FilePlus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-slate-900">Registrar Orden de Compra</h2>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Generar orden mensual rápida</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-black text-slate-900">Registrar OC</h2>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Generar orden mensual rápida</p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRegisterOcConfig(prev => ({ ...prev, isOpen: false, renta: null, periodo: '', po: '', pedido_totvs: '', fecha_pedido_totvs: '', isSubmitting: false, pdfFile: null, isDragging: false }))}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <div className="p-6 space-y-4">
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Renta Seleccionada</div>
-                    <div className="text-sm font-bold text-slate-700">{registerOcConfig.renta?.cuenta} - {registerOcConfig.renta?.activo?.serie}</div>
+                <div className="p-6 overflow-y-auto custom-scrollbar space-y-5">
+                  {/* Selected Renta Info Card */}
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between">
+                    <div className="space-y-0.5 min-w-0 pr-3">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Equipo / Renta</span>
+                      <div className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <span className="font-mono text-slate-900 font-black">{registerOcConfig.renta?.activo?.serie || '-'}</span>
+                        <span className="text-xs text-slate-400 font-medium truncate">• {registerOcConfig.renta?.activo?.modelo || registerOcConfig.renta?.activo?.clase || 'Equipo'}</span>
+                      </div>
+                      <p className="text-xs text-slate-500 truncate">
+                        {registerOcConfig.renta?.cliente?.razon_social || registerOcConfig.renta?.cliente?.nombre || 'Cliente'} — <strong className="text-slate-700">{registerOcConfig.renta?.cuenta || registerOcConfig.renta?.sitio?.nombre}</strong>
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 bg-white border border-slate-200/80 rounded-xl px-3 py-1.5">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tarifa Base</span>
+                      <div className="text-xs font-black text-slate-900">
+                        ${(Number(registerOcConfig.renta?.detalles?.renta_base) || Number(registerOcConfig.renta?.tarifa) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-[10px] text-slate-500 font-normal">{registerOcConfig.renta?.detalles?.moneda || 'MXN'}</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-black text-slate-800 uppercase tracking-widest block mb-2">
-                      Período (YYYY-MM)
-                    </label>
-                    <input
-                      type="month"
-                      required
-                      placeholder="Ej. 2026-05"
-                      value={registerOcConfig.periodo}
-                      onChange={e => setRegisterOcConfig(prev => ({ ...prev, periodo: e.target.value }))}
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold focus:border-amber-500 focus:outline-none transition-all"
-                    />
-                  </div>
+                  {/* Form Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                        Folio OC Cliente *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ingresar número de OC"
+                        value={registerOcConfig.po}
+                        onChange={e => setRegisterOcConfig(prev => ({ ...prev, po: e.target.value }))}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:border-red-500 focus:outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="text-xs font-black text-slate-800 uppercase tracking-widest block mb-2">
-                      Folio PO (Orden de Compra)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ingresa el folio de la OC"
-                      value={registerOcConfig.po}
-                      onChange={e => setRegisterOcConfig(prev => ({ ...prev, po: e.target.value }))}
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold focus:border-amber-500 focus:outline-none transition-all"
-                    />
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                        Mes de Cobertura *
+                      </label>
+                      <input
+                        type="month"
+                        required
+                        value={registerOcConfig.periodo}
+                        onChange={e => setRegisterOcConfig(prev => ({ ...prev, periodo: e.target.value }))}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:border-red-500 focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                        Pedido TOTVS
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ingresar pedido TOTVS"
+                        value={registerOcConfig.pedido_totvs}
+                        onChange={e => setRegisterOcConfig(prev => ({ ...prev, pedido_totvs: e.target.value }))}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:border-red-500 focus:outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                        Fecha Registro TOTVS
+                      </label>
+                      <input
+                        type="date"
+                        value={registerOcConfig.fecha_pedido_totvs}
+                        onChange={e => setRegisterOcConfig(prev => ({ ...prev, fecha_pedido_totvs: e.target.value }))}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:border-red-500 focus:outline-none transition-all"
+                      />
+                    </div>
                   </div>
 
                   {/* PDF Upload */}
-                  <div>
-                    <label className="text-xs font-black text-slate-800 uppercase tracking-widest block mb-2">
-                      Cargar PDF de la OC del Cliente <span className="text-red-500">*</span>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                      Documento PDF de la OC <span className="text-red-500">*</span>
                     </label>
                     {registerOcConfig.pdfFile ? (
-                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 w-full">
+                      <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-2xl px-4 py-3 w-full">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-2 bg-emerald-100 rounded-xl shrink-0">
-                            <FileText className="w-4 h-4 text-emerald-600" />
+                          <div className="p-2 bg-red-100 rounded-xl shrink-0">
+                            <FileText className="w-4 h-4 text-red-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-bold text-emerald-700 truncate max-w-[280px]">{registerOcConfig.pdfFile.name}</p>
-                            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
+                            <p className="text-sm font-bold text-red-700 truncate max-w-[280px]">{registerOcConfig.pdfFile.name}</p>
+                            <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">
                               {(registerOcConfig.pdfFile.size / 1024 / 1024).toFixed(2)} MB
                             </p>
                           </div>
@@ -1826,14 +1973,14 @@ export default function RentasTab({
                           <button
                             type="button"
                             onClick={() => document.getElementById('registerOcPdfUpload')?.click()}
-                            className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors"
+                            className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                           >
                             Reemplazar
                           </button>
                           <button
                             type="button"
                             onClick={() => setRegisterOcConfig(prev => ({ ...prev, pdfFile: null }))}
-                            className="p-1.5 hover:bg-emerald-100 rounded-lg transition-colors text-emerald-400 hover:text-emerald-600"
+                            className="p-1.5 hover:bg-red-100 rounded-lg transition-colors text-red-400 hover:text-red-600"
                             title="Eliminar archivo"
                           >
                             <X className="w-4 h-4" />
@@ -1856,7 +2003,7 @@ export default function RentasTab({
                         onClick={() => document.getElementById('registerOcPdfUpload')?.click()}
                         className={cn(
                           "cursor-pointer flex flex-col items-center justify-center gap-1.5 border-2 border-dashed rounded-2xl p-4 text-center transition-all w-full",
-                          registerOcConfig.isDragging ? "border-emerald-500 bg-emerald-50/50" : "border-slate-200 bg-white hover:border-emerald-400"
+                          registerOcConfig.isDragging ? "border-red-500 bg-red-50/50" : "border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-slate-50"
                         )}
                         onDragEnter={(e) => {
                           e.preventDefault();
@@ -1899,29 +2046,30 @@ export default function RentasTab({
                             }
                           }}
                         />
-                        <FilePlus className={cn("w-6 h-6 mb-1 transition-colors", registerOcConfig.isDragging ? "text-emerald-500" : "text-slate-300")} />
-                        <span className="text-xs font-bold text-slate-600">
+                        <FileText className={cn("w-7 h-7 mb-0.5 transition-colors", registerOcConfig.isDragging ? "text-red-500" : "text-slate-400")} />
+                        <span className={cn("text-xs font-bold", registerOcConfig.isDragging ? "text-red-600" : "text-slate-700")}>
                           {registerOcConfig.isDragging ? "¡Suelta el archivo aquí!" : "Seleccionar Archivo PDF o Arrastrar y Soltar"}
                         </span>
-                        <span className="text-xs text-slate-400">PDF máximo 10MB</span>
+                        <span className="text-[11px] text-slate-400">PDF máximo 10MB</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[2rem]">
+                <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 rounded-b-[2rem]">
                   <button
                     type="button"
-                    onClick={() => setRegisterOcConfig(prev => ({ ...prev, isOpen: false, renta: null, periodo: '', po: '', isSubmitting: false, pdfFile: null, isDragging: false }))}
-                    className="px-6 py-3 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-black uppercase tracking-widest transition-all"
+                    onClick={() => setRegisterOcConfig(prev => ({ ...prev, isOpen: false, renta: null, periodo: '', po: '', pedido_totvs: '', fecha_pedido_totvs: '', isSubmitting: false, pdfFile: null, isDragging: false }))}
+                    className="px-6 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-all"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={registerOcConfig.isSubmitting}
-                    className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                    className="px-7 py-2.5 bg-[#E5222D] hover:bg-[#CC1E28] text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-red-200 flex items-center gap-2 disabled:opacity-50"
                   >
+                    <Check className="w-4 h-4" />
                     {registerOcConfig.isSubmitting ? 'Guardando...' : 'Registrar'}
                   </button>
                 </div>
@@ -1974,258 +2122,325 @@ export default function RentasTab({
                   <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2" style={{ color: currentColor }}>
                     <Building2 className="w-4 h-4"/> 1. Información del Cliente
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {/* Cliente select */}
-                    <div className="space-y-1.5 flex flex-col">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente *</label>
-                      <Popover open={openFichaCliente} onOpenChange={setOpenFichaCliente}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors"
-                          >
-                            {selectedFichaClienteId
-                              ? (clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razonSocial || clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razon_social)
-                              : "Seleccionar Cliente..."}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[400px] p-2 z-[99999]" align="start">
-                          <div className="relative mb-2">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input
-                              type="text"
-                              placeholder="Buscar cliente..."
-                              value={fichaClienteSearchTerm}
-                              onChange={(e) => setFichaClienteSearchTerm(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
-                            />
-                          </div>
-                          <div className="max-h-[250px] overflow-y-auto space-y-1">
-                            {[...filteredClientesDisponibles]
-                              .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
-                              .sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || ''))
-                              .length === 0 ? (
-                                <div className="p-4 text-center text-sm text-slate-500">No se encontraron clientes.</div>
-                              ) : (
-                                [...filteredClientesDisponibles]
-                                  .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
-                                  .sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || ''))
-                                  .map((c: any) => (
-                                    <button
-                                      key={c.id}
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedFichaClienteId(c.id);
-                                        setSelectedFichaCuenta('');
-                                        setSelectedFichaSitioId('');
-                                        setOpenFichaCliente(false);
-                                        setFichaClienteSearchTerm('');
-                                      }}
-                                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
-                                    >
-                                      <span>{c.razonSocial || c.razon_social}</span>
-                                      {selectedFichaClienteId === c.id && <Check className="w-4 h-4 text-red-600" />}
-                                    </button>
-                                  ))
-                              )}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                  <div className="space-y-4">
+                    {/* Row 1: Selectores de Cliente, Cuenta y Sitio */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Cliente select */}
+                      <div className="space-y-1.5 flex flex-col">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cliente *</label>
+                        <Popover open={openFichaCliente} onOpenChange={setOpenFichaCliente}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-400 transition-colors"
+                            >
+                              <span className={cn("truncate", !selectedFichaClienteId && "text-slate-400 font-normal")}>
+                                {selectedFichaClienteId
+                                  ? (clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razonSocial || clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.razon_social)
+                                  : "Seleccionar cliente..."}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-40" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[400px] p-2 z-[99999]" align="start">
+                            <div className="relative mb-2">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <input
+                                type="text"
+                                placeholder="Buscar cliente..."
+                                value={fichaClienteSearchTerm}
+                                onChange={(e) => setFichaClienteSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                              />
+                            </div>
+                            <div className="max-h-[250px] overflow-y-auto space-y-1">
+                              {[...filteredClientesDisponibles]
+                                .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
+                                .sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || ''))
+                                .length === 0 ? (
+                                  <div className="p-4 text-center text-sm text-slate-500">No se encontraron clientes.</div>
+                                ) : (
+                                  [...filteredClientesDisponibles]
+                                    .filter((c: any) => c && (c.razonSocial || c.razon_social || '').toLowerCase().includes((fichaClienteSearchTerm || '').toLowerCase()))
+                                    .sort((a, b) => (a.razonSocial || a.razon_social || '').localeCompare(b.razonSocial || b.razon_social || ''))
+                                    .map((c: any) => (
+                                      <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedFichaClienteId(c.id);
+                                          setSelectedFichaCuenta('');
+                                          setSelectedFichaSitioId('');
+                                          setOpenFichaCliente(false);
+                                          setFichaClienteSearchTerm('');
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                      >
+                                        <span className="truncate">{c.razonSocial || c.razon_social}</span>
+                                        {selectedFichaClienteId === c.id && <Check className="w-4 h-4 text-red-600 shrink-0 ml-2" />}
+                                      </button>
+                                    ))
+                                )}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
 
-                    {/* Cuenta select */}
-                    <div className="space-y-1.5 flex flex-col">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cuenta</label>
-                      <Popover open={openFichaCuenta} onOpenChange={setOpenFichaCuenta}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!selectedFichaClienteId}
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
-                          >
-                            {selectedFichaCuenta || "Todas las cuentas"}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[300px] p-2 z-[99999]" align="start">
-                          <div className="relative mb-2">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input
-                              type="text"
-                              placeholder="Buscar cuenta..."
-                              value={fichaCuentaSearchTerm}
-                              onChange={(e) => setFichaCuentaSearchTerm(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
-                            />
-                          </div>
-                          <div className="max-h-[250px] overflow-y-auto space-y-1">
-                            {(() => {
-                              const cuentasUnicas = getCuentasParaCliente(selectedFichaClienteId);
-                              const filtered = cuentasUnicas.filter(c => c.toLowerCase().includes(fichaCuentaSearchTerm.toLowerCase())).sort((a, b) => a.localeCompare(b));
-                              
-                              if (filtered.length === 0) return <div className="p-4 text-center text-sm text-slate-500">No se encontraron cuentas.</div>;
-                              
-                              return (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedFichaCuenta('');
-                                      setSelectedFichaSitioId('');
-                                      setOpenFichaCuenta(false);
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
-                                  >
-                                    <span>Todas las cuentas</span>
-                                    {!selectedFichaCuenta && <Check className="w-4 h-4 text-red-600" />}
-                                  </button>
-                                  {filtered.map(cuenta => (
+                      {/* Cuenta select */}
+                      <div className="space-y-1.5 flex flex-col">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cuenta</label>
+                        <Popover open={openFichaCuenta} onOpenChange={setOpenFichaCuenta}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              disabled={!selectedFichaClienteId}
+                              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-400 transition-colors disabled:opacity-50"
+                            >
+                              <span className="truncate">
+                                {selectedFichaCuenta || "Todas las cuentas"}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-40" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-2 z-[99999]" align="start">
+                            <div className="relative mb-2">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <input
+                                type="text"
+                                placeholder="Buscar cuenta..."
+                                value={fichaCuentaSearchTerm}
+                                onChange={(e) => setFichaCuentaSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                              />
+                            </div>
+                            <div className="max-h-[250px] overflow-y-auto space-y-1">
+                              {(() => {
+                                const cuentasUnicas = getCuentasParaCliente(selectedFichaClienteId);
+                                const filtered = cuentasUnicas.filter(c => c.toLowerCase().includes(fichaCuentaSearchTerm.toLowerCase())).sort((a, b) => a.localeCompare(b));
+                                
+                                if (filtered.length === 0) return <div className="p-4 text-center text-sm text-slate-500">No se encontraron cuentas.</div>;
+                                
+                                return (
+                                  <>
                                     <button
-                                      key={cuenta}
                                       type="button"
                                       onClick={() => {
-                                        setSelectedFichaCuenta(cuenta);
+                                        setSelectedFichaCuenta('');
                                         setSelectedFichaSitioId('');
                                         setOpenFichaCuenta(false);
                                       }}
                                       className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
                                     >
-                                      <span>{cuenta}</span>
-                                      {selectedFichaCuenta === cuenta && <Check className="w-4 h-4 text-red-600" />}
+                                      <span>Todas las cuentas</span>
+                                      {!selectedFichaCuenta && <Check className="w-4 h-4 text-red-600 shrink-0 ml-2" />}
                                     </button>
-                                  ))}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                                    {filtered.map(cuenta => (
+                                      <button
+                                        key={cuenta}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedFichaCuenta(cuenta);
+                                          setSelectedFichaSitioId('');
+                                          setOpenFichaCuenta(false);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                      >
+                                        <span className="truncate">{cuenta}</span>
+                                        {selectedFichaCuenta === cuenta && <Check className="w-4 h-4 text-red-600 shrink-0 ml-2" />}
+                                      </button>
+                                    ))}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      {/* Sitio select */}
+                      <div className="space-y-1.5 flex flex-col">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio / Ubicación</label>
+                        <Popover open={openFichaSitio} onOpenChange={setOpenFichaSitio}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              disabled={!selectedFichaClienteId}
+                              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-400 transition-colors disabled:opacity-50"
+                            >
+                              <span className="truncate">
+                                {selectedFichaSitioId
+                                  ? (clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre || "Sitio seleccionado")
+                                  : "Todos los sitios"}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-40" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[400px] p-2 z-[99999]" align="start">
+                            <div className="relative mb-2">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <input
+                                type="text"
+                                placeholder="Buscar sitio..."
+                                value={fichaSitioSearchTerm}
+                                onChange={(e) => setFichaSitioSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                              />
+                            </div>
+                            <div className="max-h-[250px] overflow-y-auto space-y-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedFichaSitioId('');
+                                  setOpenFichaSitio(false);
+                                  setFichaSitioSearchTerm('');
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                              >
+                                <span className="font-bold text-slate-800">Todos los sitios</span>
+                                {!selectedFichaSitioId && <Check className="w-4 h-4 text-red-600 shrink-0 ml-2" />}
+                              </button>
+                              {(() => {
+                                const sitiosDelCliente = clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios || [];
+                                const filteredByCuenta = selectedFichaCuenta
+                                  ? sitiosDelCliente.filter((s: any) => {
+                                      const matchCta = selectedFichaCuenta.trim().toLowerCase();
+                                      if ((s.cuenta || '').trim().toLowerCase() === matchCta) return true;
+                                      const hasRenta = rentas.some((r: any) =>
+                                        (r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId) &&
+                                        r.sitio_id === s.id &&
+                                        ((r.cuenta || '').trim().toLowerCase() === matchCta || (r.activo?.cuenta || '').trim().toLowerCase() === matchCta)
+                                      );
+                                      if (hasRenta) return true;
+                                      const hasEquipo = equiposDisponibles.some((e: any) =>
+                                        e.sitio_id === s.id && (e.cuenta || '').trim().toLowerCase() === matchCta
+                                      );
+                                      return hasEquipo;
+                                    })
+                                  : sitiosDelCliente;
+
+                                const filtered = filteredByCuenta
+                                  .filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase()))
+                                  .sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
+
+                                if (filtered.length === 0) return <div className="p-4 text-center text-sm text-slate-500">No se encontraron otros sitios.</div>;
+
+                                return filtered.map((s: any) => (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedFichaSitioId(s.id);
+                                      if (s.cuenta && !selectedFichaCuenta) setSelectedFichaCuenta(s.cuenta);
+                                      setOpenFichaSitio(false);
+                                      setFichaSitioSearchTerm('');
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
+                                  >
+                                    <span className="truncate">{s.nombre}</span>
+                                    {selectedFichaSitioId === s.id && <Check className="w-4 h-4 text-red-600 shrink-0 ml-2" />}
+                                  </button>
+                                ));
+                              })()}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
 
-                    {/* Sitio select */}
-                    <div className="space-y-1.5 flex flex-col">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Sitio *</label>
-                      <Popover open={openFichaSitio} onOpenChange={setOpenFichaSitio}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!selectedFichaClienteId}
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 flex justify-between items-center focus:outline-none focus:border-red-500 hover:border-red-500 transition-colors disabled:opacity-50"
-                          >
-                            {selectedFichaSitioId
-                              ? clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre
-                              : "Seleccionar Sitio..."}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[400px] p-2 z-[99999]" align="start">
-                          <div className="relative mb-2">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input
-                              type="text"
-                              placeholder="Buscar sitio..."
-                              value={fichaSitioSearchTerm}
-                              onChange={(e) => setFichaSitioSearchTerm(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500"
-                            />
-                          </div>
-                          <div className="max-h-[250px] overflow-y-auto space-y-1">
-                            {(() => {
-                              const sitiosDelCliente = clientesDisponibles.find((c: any) => c.id === selectedFichaClienteId)?.sitios || [];
-                              const filteredByCuenta = selectedFichaCuenta
-                                ? sitiosDelCliente.filter((s: any) => {
-                                    const matchCta = selectedFichaCuenta.trim().toLowerCase();
-                                    if ((s.cuenta || '').trim().toLowerCase() === matchCta) return true;
-                                    const hasRenta = rentas.some((r: any) =>
-                                      (r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId) &&
-                                      r.sitio_id === s.id &&
-                                      ((r.cuenta || '').trim().toLowerCase() === matchCta || (r.activo?.cuenta || '').trim().toLowerCase() === matchCta)
-                                    );
-                                    if (hasRenta) return true;
-                                    const hasEquipo = equiposDisponibles.some((e: any) =>
-                                      e.sitio_id === s.id && (e.cuenta || '').trim().toLowerCase() === matchCta
-                                    );
-                                    return hasEquipo;
-                                  })
-                                : sitiosDelCliente;
+                    {/* Row 2: Folio OC, Folio Pedido TOTVS, Fecha TOTVS */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Folio OC */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Folio OC Cliente *</label>
+                        <input
+                          type="text"
+                          required
+                          value={fichaFolioOc}
+                          onChange={e => setFichaFolioOc(e.target.value)}
+                          placeholder="Ingresar número de OC"
+                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-red-500 transition-all placeholder:text-slate-400 placeholder:font-normal"
+                        />
+                      </div>
 
-                              const filtered = filteredByCuenta
-                                .filter((s: any) => s && (s.nombre || '').toLowerCase().includes((fichaSitioSearchTerm || '').toLowerCase()))
-                                .sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
+                      {/* Folio Pedido Totvs */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Folio Pedido TOTVS</label>
+                        <input
+                          type="text"
+                          value={fichaPedidoTotvs}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setFichaPedidoTotvs(val);
+                            setFichaSeriesGrid(prev => prev.map(item => {
+                              if (!item.pedido_totvs || item.pedido_totvs === fichaPedidoTotvs) {
+                                return { ...item, pedido_totvs: val };
+                              }
+                              return item;
+                            }));
+                          }}
+                          placeholder="Ingresar pedido TOTVS (opcional)"
+                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-red-500 transition-all placeholder:text-slate-400 placeholder:font-normal"
+                        />
+                      </div>
 
-                              if (filtered.length === 0) return <div className="p-4 text-center text-sm text-slate-500">No se encontraron sitios.</div>;
-
-                              return filtered.map((s: any) => (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedFichaSitioId(s.id);
-                                    if (s.cuenta && !selectedFichaCuenta) setSelectedFichaCuenta(s.cuenta);
-                                    setOpenFichaSitio(false);
-                                    setFichaSitioSearchTerm('');
-                                  }}
-                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors flex items-center justify-between font-medium"
-                                >
-                                  <span>{s.nombre}</span>
-                                  {selectedFichaSitioId === s.id && <Check className="w-4 h-4 text-red-600" />}
-                                </button>
-                              ));
-                            })()}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                      {/* Fecha Registro Totvs */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Fecha Registro TOTVS</label>
+                        <input
+                          type="date"
+                          value={fichaFechaTotvs}
+                          onChange={e => setFichaFechaTotvs(e.target.value)}
+                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-red-500 transition-all"
+                        />
+                      </div>
                     </div>
 
-                    {/* Folio OC */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Folio OC Cliente *</label>
-                      <input
-                        type="text"
-                        value={fichaFolioOc}
-                        onChange={e => setFichaFolioOc(e.target.value)}
-                        placeholder="Escribe el folio de la OC"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
-                      />
+                    {/* Row 3: Mes Inicio y Mes Fin */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Mes de Cobertura Desde */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes Inicio (Desde) *</label>
+                        <input
+                          type="month"
+                          value={fichaMesCobro}
+                          onChange={e => setFichaMesCobro(e.target.value)}
+                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-red-500 transition-all"
+                          required
+                        />
+                      </div>
+
+                      {/* Mes de Cobertura Hasta (Opcional) */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes Fin (Hasta - Opcional)</label>
+                          {fichaMesCobroFin && (
+                            <button 
+                              type="button" 
+                              onClick={() => setFichaMesCobroFin('')}
+                              className="text-[10px] font-bold text-slate-400 hover:text-red-500 cursor-pointer"
+                            >
+                              Limpiar
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="month"
+                          min={fichaMesCobro}
+                          value={fichaMesCobroFin}
+                          onChange={e => setFichaMesCobroFin(e.target.value)}
+                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-red-500 transition-all"
+                        />
+                        {fichaMesCobroFin && fichaMesCobroFin >= fichaMesCobro && (
+                          <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 mt-0.5">
+                            <Calendar className="w-3 h-3" />
+                            Aplica a {getMonthsInRange(fichaMesCobro, fichaMesCobroFin).length} meses ({fichaMesCobro} a {fichaMesCobroFin})
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Folio Pedido Totvs */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Folio Pedido TOTVS</label>
-                      <input
-                        type="text"
-                        value={fichaPedidoTotvs}
-                        onChange={e => setFichaPedidoTotvs(e.target.value)}
-                        placeholder="Escribe el folio de pedido registrado en Totvs"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
-                      />
-                    </div>
-
-                    {/* Fecha Registro Totvs */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Fecha Registro TOTVS</label>
-                      <input
-                        type="date"
-                        value={fichaFechaTotvs}
-                        onChange={e => setFichaFechaTotvs(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
-                      />
-                    </div>
-
-                    {/* Mes de Cobertura */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Mes de Cobertura</label>
-                      <input
-                        type="month"
-                        value={fichaMesCobro}
-                        onChange={e => setFichaMesCobro(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:border-red-500 transition-all"
-                      />
-                    </div>
-
-                    {/* PDF Upload */}
-                    <div className="space-y-1.5 md:col-span-2">
+                    {/* Row 4: Carga de PDF */}
+                    <div className="space-y-1.5 pt-1">
                       <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Cargar PDF de la OC del Cliente <span className="text-red-500">*</span></label>
                       {fichaPdfFile ? (
                         <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-2xl px-4 py-3 w-full">
@@ -2274,7 +2489,7 @@ export default function RentasTab({
                           onClick={() => document.getElementById('fichaPdfUpload')?.click()}
                           className={cn(
                             "cursor-pointer flex flex-col items-center justify-center gap-1.5 border-2 border-dashed rounded-2xl p-4 text-center transition-all w-full",
-                            isFichaDragging ? "border-red-500 bg-red-50/50" : "border-slate-200 bg-slate-50/50 hover:border-red-400"
+                            isFichaDragging ? "border-red-500 bg-red-50/50" : "border-slate-200 bg-white hover:border-red-400 hover:bg-slate-50/50"
                           )}
                           onDragEnter={(e) => {
                             e.preventDefault();
@@ -2317,21 +2532,21 @@ export default function RentasTab({
                               }
                             }}
                           />
-                          <div className="pointer-events-none flex flex-col items-center gap-1.5">
-                            <FileText className={cn("w-8 h-8 transition-colors", isFichaDragging ? "text-red-500" : "text-slate-400")} />
-                            <span className={cn("text-sm font-bold", isFichaDragging ? "text-red-600" : "text-slate-700")}>
+                          <div className="pointer-events-none flex flex-col items-center gap-1">
+                            <FileText className={cn("w-7 h-7 transition-colors", isFichaDragging ? "text-red-500" : "text-slate-400")} />
+                            <span className={cn("text-xs font-bold", isFichaDragging ? "text-red-600" : "text-slate-700")}>
                               {isFichaDragging ? "¡Suelta el archivo aquí!" : "Seleccionar Archivo PDF o Arrastrar y Soltar"}
                             </span>
-                            <span className="text-xs text-slate-400">PDF máximo 10MB</span>
+                            <span className="text-[11px] text-slate-400">PDF máximo 10MB</span>
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
-                  </div>
+                </div>
 
                   {/* Grid of Series & Days Discount Calculator */}
-                  {selectedFichaSitioId && (
+                  {selectedFichaClienteId && (
                     <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
@@ -2339,7 +2554,16 @@ export default function RentasTab({
                             <Truck className="w-4 h-4"/> 2. Selección de Equipos para la OC
                           </h3>
                           <p className="text-xs text-slate-500 font-medium mt-0.5">
-                            Mes de cobertura: <strong className="text-slate-800 font-bold">{fichaMesCobro || 'Sin mes seleccionado'}</strong>
+                            Meses de cobertura: <strong className="text-slate-800 font-bold">
+                              {fichaMesCobroFin && fichaMesCobroFin >= fichaMesCobro 
+                                ? `${fichaMesCobro} a ${fichaMesCobroFin} (${getMonthsInRange(fichaMesCobro, fichaMesCobroFin).length} meses)` 
+                                : (fichaMesCobro || 'Sin mes seleccionado')}
+                            </strong>
+                            <span className="text-slate-400 ml-2">
+                              {selectedFichaSitioId 
+                                ? `• Sitio: ${clientesDisponibles.find(c => c.id === selectedFichaClienteId)?.sitios?.find((s: any) => s.id === selectedFichaSitioId)?.nombre}`
+                                : '• Todas las cuentas y sitios del cliente'}
+                            </span>
                           </p>
                         </div>
 
@@ -2378,7 +2602,7 @@ export default function RentasTab({
                         const availCount = totalCount - alreadyCount;
                         return (
                           <div className="flex flex-wrap items-center gap-3 text-xs bg-white border border-slate-200/80 rounded-xl px-4 py-2">
-                            <span className="text-slate-500">Total en sitio: <strong className="text-slate-900 font-bold">{totalCount}</strong></span>
+                            <span className="text-slate-500">Total series del cliente: <strong className="text-slate-900 font-bold">{totalCount}</strong></span>
                             <span className="text-slate-300">|</span>
                             <span className="text-emerald-700 font-bold">Disponibles sin OC este mes: {availCount}</span>
                             {alreadyCount > 0 && (
@@ -2412,8 +2636,10 @@ export default function RentasTab({
                                 </button>
                               </th>
                               <th className="p-3">Serie</th>
+                              <th className="p-3">Sitio / Cuenta</th>
                               <th className="p-3">Clase / Modelo</th>
                               <th className="p-3">Estatus en Mes</th>
+                              <th className="p-3 w-32">Pedido TOTVS</th>
                               <th className="p-3 w-28">Tarifa Renta</th>
                               <th className="p-3 w-24">Días Caídos</th>
                               <th className="p-3 w-28">Descuento</th>
@@ -2451,6 +2677,12 @@ export default function RentasTab({
                                     </td>
                                     <td className="p-3 text-slate-600">
                                       <div className="flex flex-col text-xs mt-0.5">
+                                        <span className="font-bold text-slate-800">{item.sitioNombre || '-'}</span>
+                                        <span className="text-[10px] text-slate-500">{item.cuenta || '-'}</span>
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-slate-600">
+                                      <div className="flex flex-col text-xs mt-0.5">
                                         <span className="font-bold text-slate-800">{item.modelo || '-'}</span>
                                         <span style={{ color: currentColor }}>{item.clase || '-'}</span>
                                       </div>
@@ -2469,6 +2701,16 @@ export default function RentasTab({
                                       ) : (
                                         <span className="text-[10px] font-bold text-slate-400">Disponible</span>
                                       )}
+                                    </td>
+                                    <td className="p-3">
+                                      <input
+                                        type="text"
+                                        disabled={item.alreadyHasOrderInMonth}
+                                        value={item.pedido_totvs || ""}
+                                        onChange={e => handleGridFieldChange(realIdx, 'pedido_totvs', e.target.value)}
+                                        placeholder={fichaPedidoTotvs || "Pedido TOTVS"}
+                                        className="w-28 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold disabled:bg-slate-100 disabled:cursor-not-allowed placeholder:font-normal placeholder:text-slate-400"
+                                      />
                                     </td>
                                     <td className="p-3">
                                       <input
@@ -2502,7 +2744,7 @@ export default function RentasTab({
                           </tbody>
                           <tfoot className="border-t-2 border-slate-200 bg-slate-50/80">
                             <tr>
-                              <td colSpan={6} className="p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">
+                              <td colSpan={8} className="p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">
                                 Total a Facturar
                                 <span className="text-slate-400 font-medium ml-1">
                                   ({fichaSeriesGrid.filter(i => i.checked).length} equipo{fichaSeriesGrid.filter(i => i.checked).length !== 1 ? 's' : ''})
@@ -2857,7 +3099,7 @@ export default function RentasTab({
                           <input
                             type="number"
                             min="1"
-                            placeholder="Ej. 12"
+                            placeholder="Meses de vigencia"
                             value={newRentaFormData.plazo_meses}
                             onChange={e => {
                               const plazo = e.target.value;

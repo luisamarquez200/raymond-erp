@@ -147,7 +147,7 @@ export default function RegistrarMantenimientoModal({
                         <Label className="text-[11px] font-bold text-slate-500 uppercase">DÍAS SIN OPERACIÓN (DÍAS CAÍDOS)</Label>
                         <Input 
                             type="number"
-                            placeholder="Ej. 2"
+                            placeholder="0"
                             value={formData.dias_caidos}
                             onChange={(e) => setFormData(prev => ({ ...prev, dias_caidos: e.target.value }))}
                             className="h-10 bg-white border-slate-200 text-xs rounded-xl font-medium tabular-nums"

@@ -7,11 +7,10 @@ import { useAuthStore } from '@/store/auth.store';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
-import { Eye, EyeOff, ChevronLeft, ChevronRight, User, Lock } from 'lucide-react';
+import { Eye, EyeOff, ChevronLeft, ChevronRight, Mail, Lock } from 'lucide-react';
 
 const loginSchema = z.object({
-    email: z.string().min(1, 'Usuario requerido'),
+    email: z.string().min(1, 'Correo electrónico requerido'),
     password: z.string().min(1, 'Contraseña requerida'),
 });
 
@@ -151,21 +150,21 @@ export default function LoginPage() {
                         </div>
 
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                            {/* Input: Username */}
+                            {/* Input: Email */}
                             <div className="space-y-1.5">
                                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                                    Usuario o Correo
+                                    Correo Electrónico
                                 </label>
                                 <div className="relative flex items-center">
                                     <div className="absolute left-4 text-slate-400 pointer-events-none">
-                                        <User className="w-4 h-4" />
+                                        <Mail className="w-4 h-4" />
                                     </div>
                                     <input
                                         {...register('email')}
-                                        type="text"
-                                        autoComplete="username"
+                                        type="email"
+                                        autoComplete="email"
                                         className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-red-600 focus:ring-4 focus:ring-red-500/10 outline-none transition-all text-sm font-semibold shadow-xs"
-                                        placeholder="ej. gerente.comercial@raymond.run"
+                                        placeholder="Ingresa tu correo"
                                     />
                                 </div>
                                 {errors.email && (
@@ -189,7 +188,7 @@ export default function LoginPage() {
                                         type={showPassword ? 'text' : 'password'}
                                         autoComplete="current-password"
                                         className="w-full pl-11 pr-12 py-3.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-red-600 focus:ring-4 focus:ring-red-500/10 outline-none transition-all text-sm font-semibold shadow-xs"
-                                        placeholder="••••••••••••"
+                                        placeholder="Ingresa tu contraseña"
                                     />
                                     <button
                                         type="button"
