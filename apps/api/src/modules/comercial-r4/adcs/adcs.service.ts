@@ -18,22 +18,38 @@ export class AdcsService {
         return db;
     }
 
-    private normalizeADCName(name: string | null | undefined): string {
+    private cleanAdcName(name: string | null | undefined): string {
         if (!name) return '';
-        const cleanName = name.trim().replace(/\s+/g, ' ');
-        const upperName = cleanName.toUpperCase();
-        if (upperName === 'ALEJANDRA' || upperName.includes('ALEJANDRA ARELLANES')) return 'Alejandra Arellanes';
-        if (upperName === 'ANDREA' || upperName.includes('ANDREA ESQUIVEL')) return 'Andrea Esquivel';
-        if (upperName === 'DANIEL' || upperName.includes('DANIEL ROMERO')) return 'Daniel Romero';
-        if (upperName === 'MONTSERRAT' || upperName.includes('MONTSERRAT COVARRUBIAS') || upperName.includes('MONTSE')) return 'Montserrat Covarrubias';
-        if (upperName === 'SIMALÚ' || upperName === 'SIMALU' || upperName.includes('SIMALÚ LEÓN') || upperName.includes('SIMALU LEON') || upperName.includes('SIMALU') || upperName.includes('SIMALÚ')) return 'Simalú León';
-        return cleanName;
+        return name
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    private isSameAdc(adcCandidate: string | null | undefined, targetAdc: string): boolean {
+        const c = this.cleanAdcName(adcCandidate);
+        const t = this.cleanAdcName(targetAdc);
+        if (!c || !t) return false;
+        if (c === t) return true;
+
+        const cTokens = c.split(' ').filter(w => w.length > 2);
+        const tTokens = t.split(' ').filter(w => w.length > 2);
+        if (cTokens.length === 0 || tTokens.length === 0) return false;
+
+        const allTargetInCandidate = tTokens.every(token => cTokens.includes(token));
+        const allCandidateInTarget = cTokens.every(token => tTokens.includes(token));
+        if (allTargetInCandidate || allCandidateInTarget) return true;
+
+        if (tTokens.length === 1 && cTokens.includes(tTokens[0]) && tTokens[0].length >= 4) return true;
+        if (cTokens.length === 1 && tTokens.includes(cTokens[0]) && cTokens[0].length >= 4) return true;
+
+        return false;
     }
 
     private async findAdcUserAccount(adcName: string) {
-        const targetNorm = this.normalizeADCName(adcName).toLowerCase();
-        const rawTarget = adcName.trim().toLowerCase();
-
         // 1. Fetch PostgreSQL users
         const pgUsers = await this.prismaService.users.findMany({
             where: { is_active: true },
@@ -64,9 +80,8 @@ export class AdcsService {
         const pgAdc = pgUsers.find(u => {
             const role = (u.roles?.name || '').toLowerCase();
             if (!role.includes('adc')) return false;
-            const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
-            const normFullName = this.normalizeADCName(fullName).toLowerCase();
-            return normFullName === targetNorm || fullName === rawTarget || (u.first_name && this.normalizeADCName(u.first_name).toLowerCase() === targetNorm);
+            const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+            return this.isSameAdc(fullName, adcName) || this.isSameAdc(u.first_name, adcName) || (u.adc_asociado_name && this.isSameAdc(u.adc_asociado_name, adcName));
         });
         if (pgAdc) {
             return {
@@ -80,9 +95,8 @@ export class AdcsService {
         const myAdc = mysqlUsers.find(u => {
             const role = (u.rol || '').toLowerCase();
             if (!role.includes('adc')) return false;
-            const nombre = (u.nombre || '').trim().toLowerCase();
-            const normNombre = this.normalizeADCName(nombre).toLowerCase();
-            return normNombre === targetNorm || nombre === rawTarget;
+            const nombre = (u.nombre || '').trim();
+            return this.isSameAdc(nombre, adcName);
         });
         if (myAdc) {
             return {
@@ -96,9 +110,8 @@ export class AdcsService {
         const pgAny = pgUsers.find(u => {
             const role = (u.roles?.name || '').toLowerCase();
             if (role.includes('admin') || role.includes('gerent') || role.includes('super') || role.includes('cfo') || role.includes('ceo')) return false;
-            const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim().toLowerCase();
-            const normFullName = this.normalizeADCName(fullName).toLowerCase();
-            return normFullName === targetNorm || fullName === rawTarget;
+            const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+            return this.isSameAdc(fullName, adcName);
         });
         if (pgAny) {
             return {
@@ -120,10 +133,10 @@ export class AdcsService {
             
             const adcNames = new Set<string>();
             activos.forEach(a => {
-                if (a.adc && a.adc.trim()) adcNames.add(this.normalizeADCName(a.adc.trim()));
+                if (a.adc && a.adc.trim()) adcNames.add(a.adc.trim());
             });
             sitios.forEach(s => {
-                if (s.adc && s.adc.trim()) adcNames.add(this.normalizeADCName(s.adc.trim()));
+                if (s.adc && s.adc.trim()) adcNames.add(s.adc.trim());
             });
 
             // Convert to array
@@ -153,39 +166,26 @@ export class AdcsService {
             const user = await this.findAdcUserAccount(name);
 
             // 2. Get unique clients associated with this ADC from R4 database (from sitios and activos)
-            const rawTarget = name.trim();
-            const normTarget = this.normalizeADCName(name);
-
-            const sitios = await db.sitio.findMany({
-                where: {
-                    OR: [
-                        { adc: rawTarget },
-                        { adc: normTarget }
-                    ]
-                },
+            const allSitios = await db.sitio.findMany({
+                where: { adc: { not: null } },
                 include: { cliente: true }
             });
 
-            const activos = await db.activo.findMany({
-                where: {
-                    OR: [
-                        { adc: rawTarget },
-                        { adc: normTarget }
-                    ]
-                },
+            const allActivos = await db.activo.findMany({
+                where: { adc: { not: null } },
                 include: { cliente: true }
             });
 
             const uniqueClientNames = new Set<string>();
             
-            sitios.forEach(s => {
-                if (s.cliente?.razon_social) {
+            allSitios.forEach(s => {
+                if (s.adc && this.isSameAdc(s.adc, name) && s.cliente?.razon_social) {
                     uniqueClientNames.add(s.cliente.razon_social);
                 }
             });
 
-            activos.forEach(a => {
-                if (a.cliente?.razon_social) {
+            allActivos.forEach(a => {
+                if (a.adc && this.isSameAdc(a.adc, name) && a.cliente?.razon_social) {
                     uniqueClientNames.add(a.cliente.razon_social);
                 }
             });

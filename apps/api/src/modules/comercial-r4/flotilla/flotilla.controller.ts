@@ -179,13 +179,16 @@ export class FlotillaController {
     @Put(':id/estatus')
     async actualizarEstatus(
         @Param('id') id: string,
-        @Body('estatus') estatus: string,
+        @Body() body: any,
         @Request() req: any
     ) {
         const userId = this.getUserId(req);
+        const estatus = typeof body === 'string' ? body : (body?.estatus || body?.estatus_operativo);
+        const fechaEfectiva = body?.fecha_efectiva;
+        const motivo = body?.motivo || body?.motivo_cambio;
         return {
             success: true,
-            data: await this.flotillaService.actualizarEstatus(id, estatus, userId)
+            data: await this.flotillaService.actualizarEstatus(id, estatus, userId, fechaEfectiva, motivo)
         };
     }
 

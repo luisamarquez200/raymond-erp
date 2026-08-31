@@ -114,6 +114,37 @@ interface RentasTabProps {
   setAdminAdcScope?: (scope: 'todos' | 'mis_adcs') => void;
 }
 
+function cleanAdcName(name: string | null | undefined): string {
+  if (!name) return '';
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isSameAdc(adcCandidate: string | null | undefined, targetAdc: string): boolean {
+  const c = cleanAdcName(adcCandidate);
+  const t = cleanAdcName(targetAdc);
+  if (!c || !t) return false;
+  if (c === t) return true;
+
+  const cTokens = c.split(' ').filter(w => w.length > 2);
+  const tTokens = t.split(' ').filter(w => w.length > 2);
+  if (cTokens.length === 0 || tTokens.length === 0) return false;
+
+  const allTargetInCandidate = tTokens.every(token => cTokens.includes(token));
+  const allCandidateInTarget = cTokens.every(token => tTokens.includes(token));
+  if (allTargetInCandidate || allCandidateInTarget) return true;
+
+  if (tTokens.length === 1 && cTokens.includes(tTokens[0]) && tTokens[0].length >= 4) return true;
+  if (cTokens.length === 1 && tTokens.includes(cTokens[0]) && cTokens[0].length >= 4) return true;
+
+  return false;
+}
+
 export default function RentasTab({ 
   adminAdcScope: externalAdminAdcScope, 
   setAdminAdcScope: externalSetAdminAdcScope 
@@ -489,11 +520,12 @@ export default function RentasTab({
 
   const openEditModal = (renta: any) => {
     if (isAdc) {
-      const rAdc = (renta.adc || renta.sitio?.adc || (renta.cliente as any)?.datos_comerciales?.adc || '').toLowerCase().trim();
-      const adcKeywords = loggedInAdcName.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+      const rAdc = renta.adc || renta.sitio?.adc || (renta.cliente as any)?.datos_comerciales?.adc || '';
+      const adcKeywords = loggedInAdcName.split(',').map((s: string) => s.trim()).filter(Boolean);
       const userFirstName = (user?.firstName || '').toLowerCase().trim();
-      const isOwner = adcKeywords.some((kw: string) => rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc)) ||
-        (userFirstName && rAdc.includes(userFirstName));
+      const userLastName = (user?.lastName || '').toLowerCase().trim();
+      const userFullName = `${userFirstName} ${userLastName}`.trim();
+      const isOwner = adcKeywords.some((kw: string) => isSameAdc(rAdc, kw)) || (userFullName && isSameAdc(rAdc, userFullName));
       if (!isOwner) {
         toast.error('Solo puedes editar información de rentas correspondientes a tu propio ADC asignado.');
         return;
@@ -1025,28 +1057,24 @@ export default function RentasTab({
   if (isAdc) {
     const adcKeywords = loggedInAdcName
       .split(',')
-      .map((s: string) => s.trim().toLowerCase())
+      .map((s: string) => s.trim())
       .filter(Boolean);
     const userFirstName = (user?.firstName || '').toLowerCase().trim();
     const userLastName = (user?.lastName || '').toLowerCase().trim();
     const userFullName = `${userFirstName} ${userLastName}`.trim();
 
     baseRentas = rentas.filter(r => {
-        const rAdc = (r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase().trim();
+        const rAdc = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '';
         if (!rAdc) return false;
-        return adcKeywords.some((kw: string) => 
-          rAdc === kw || 
-          rAdc.includes(kw) || 
-          kw.includes(rAdc)
-        ) || (userFullName && (rAdc.includes(userFullName) || userFullName.includes(rAdc))) ||
-        (userFirstName && rAdc.includes(userFirstName));
+        return adcKeywords.some((kw: string) => isSameAdc(rAdc, kw)) ||
+               (userFullName && isSameAdc(rAdc, userFullName));
     });
   } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
     let assignedAdcKeywords: string[] = [];
     if (rawAdcAsociado && rawAdcAsociado !== 'ninguno') {
       assignedAdcKeywords = rawAdcAsociado
         .split(',')
-        .map((s: string) => s.trim().toLowerCase())
+        .map((s: string) => s.trim())
         .filter(Boolean);
     }
 
@@ -1054,12 +1082,8 @@ export default function RentasTab({
       baseRentas = [];
     } else {
       baseRentas = rentas.filter(r => {
-        const rAdc = (r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '').toLowerCase().trim();
-        return assignedAdcKeywords.some(kw => 
-          rAdc === kw || 
-          rAdc.includes(kw) || 
-          kw.includes(rAdc)
-        );
+        const rAdc = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '';
+        return assignedAdcKeywords.some(kw => isSameAdc(rAdc, kw));
       });
     }
   }
@@ -2096,7 +2120,7 @@ export default function RentasTab({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl z-50 overflow-hidden flex flex-col max-h-[90vh]"
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl max-h-[92vh] bg-white rounded-[2rem] shadow-2xl z-50 overflow-hidden flex flex-col"
             >
               <form onSubmit={handleCreateFichaOc} className="flex flex-col h-full overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
@@ -2617,8 +2641,8 @@ export default function RentasTab({
                         );
                       })()}
 
-                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                        <table className="w-full text-left text-xs whitespace-nowrap">
+                      <div className="border border-slate-200 rounded-2xl overflow-x-auto custom-scrollbar shadow-sm bg-white">
+                        <table className="w-full text-left text-xs whitespace-nowrap min-w-[960px]">
                           <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-wider border-b border-slate-100">
                             <tr>
                               <th className="p-3 w-10">

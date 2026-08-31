@@ -127,6 +127,37 @@ interface FlotillaTabProps {
   setAdminAdcScope?: (scope: 'todos' | 'mis_adcs') => void;
 }
 
+function cleanAdcName(name: string | null | undefined): string {
+  if (!name) return '';
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isSameAdc(adcCandidate: string | null | undefined, targetAdc: string): boolean {
+  const c = cleanAdcName(adcCandidate);
+  const t = cleanAdcName(targetAdc);
+  if (!c || !t) return false;
+  if (c === t) return true;
+
+  const cTokens = c.split(' ').filter(w => w.length > 2);
+  const tTokens = t.split(' ').filter(w => w.length > 2);
+  if (cTokens.length === 0 || tTokens.length === 0) return false;
+
+  const allTargetInCandidate = tTokens.every(token => cTokens.includes(token));
+  const allCandidateInTarget = cTokens.every(token => tTokens.includes(token));
+  if (allTargetInCandidate || allCandidateInTarget) return true;
+
+  if (tTokens.length === 1 && cTokens.includes(tTokens[0]) && tTokens[0].length >= 4) return true;
+  if (cTokens.length === 1 && tTokens.includes(cTokens[0]) && cTokens[0].length >= 4) return true;
+
+  return false;
+}
+
 export default function FlotillaTab({ 
   adminAdcScope: externalAdminAdcScope, 
   setAdminAdcScope: externalSetAdminAdcScope 
@@ -203,6 +234,7 @@ export default function FlotillaTab({
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<any>({});
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   // Delete Modal State
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
@@ -217,6 +249,7 @@ export default function FlotillaTab({
 
   // Transfer Modal State
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
   const [selectedAssetForTransfer, setSelectedAssetForTransfer] = useState<any>(null);
   const [transferDestinationSite, setTransferDestinationSite] = useState('');
   const [allSites, setAllSites] = useState<any[]>([]);
@@ -472,7 +505,10 @@ export default function FlotillaTab({
     }
     setEditingRowId(asset.serie);
     // Deep clone to avoid mutating the original
-    setEditingData(JSON.parse(JSON.stringify(asset)));
+    const cloned = JSON.parse(JSON.stringify(asset));
+    cloned.fecha_efectiva = cloned.fecha_efectiva || new Date().toISOString().split('T')[0];
+    cloned.motivo_cambio = cloned.motivo_cambio || '';
+    setEditingData(cloned);
     setIsEditModalOpen(true);
   };
 
@@ -480,10 +516,13 @@ export default function FlotillaTab({
     setEditingRowId(null);
     setEditingData({});
     setIsEditModalOpen(false);
+    setIsSubmittingEdit(false);
   };
 
   const saveEditing = async () => {
+    if (isSubmittingEdit) return;
     try {
+      setIsSubmittingEdit(true);
       // Compute only the fields that actually changed
       const originalAsset = fleetAssets.find(a => a.serie === editingRowId) || {};
       const changedFields: any = {};
@@ -502,6 +541,14 @@ export default function FlotillaTab({
         changedFields.estatus_operativo = editingData.estatus;
       }
 
+      // Always pass fecha_efectiva and motivo_cambio if provided (especially important for status changes/bajas)
+      if (editingData.fecha_efectiva) {
+        changedFields.fecha_efectiva = editingData.fecha_efectiva;
+      }
+      if (editingData.motivo_cambio) {
+        changedFields.motivo_cambio = editingData.motivo_cambio;
+      }
+
       if (Object.keys(changedFields).length === 0) {
         toast.info('No se detectaron cambios en el formulario');
         cancelEditing();
@@ -511,17 +558,21 @@ export default function FlotillaTab({
       if (isAdc) {
         // Requires approval
         await api.post(`/r4/flotilla/${editingRowId}/solicitar-cambio`, changedFields);
-        toast.success('¡Solicitud enviada! El cambio (incluyendo estatus) se envió a Gerencia para su aprobación.');
+        toast.success('¡Solicitud enviada! El cambio se envió a Gerencia para su aprobación.');
       } else {
         // Direct save
         await api.put(`/r4/flotilla/${editingRowId}`, changedFields);
         toast.success('Activo actualizado directamente');
       }
+
+      // Close modal immediately upon successful request
       cancelEditing();
       await Promise.all([fetchFlotilla(), fetchPendingApprovals()]);
     } catch (error) {
       console.error(error);
       toast.error('Error al procesar la actualización del activo');
+    } finally {
+      setIsSubmittingEdit(false);
     }
   };
 
@@ -533,6 +584,7 @@ export default function FlotillaTab({
   };
 
   const handleTransfer = async () => {
+    if (isSubmittingTransfer) return;
     if (!transferDestinationSite) {
       toast.error('Selecciona un sitio de destino.');
       return;
@@ -553,6 +605,7 @@ export default function FlotillaTab({
     }
 
     try {
+      setIsSubmittingTransfer(true);
       const payload = {
         sitio_id: transferDestinationSite,
         estatus_operativo: 'Activo'
@@ -569,10 +622,12 @@ export default function FlotillaTab({
       }
 
       setIsTransferModalOpen(false);
-      fetchFlotilla();
+      await Promise.all([fetchFlotilla(), fetchPendingApprovals()]);
     } catch (error) {
       console.error('Error in transfer:', error);
       toast.error('Error al realizar la transferencia');
+    } finally {
+      setIsSubmittingTransfer(false);
     }
   };
 
@@ -713,16 +768,16 @@ export default function FlotillaTab({
 
   let baseAssets = fleetAssets;
   if (isAdc && !isTestingAdmin) {
+    const adcKeywords = loggedInAdcName.split(',').map((s: string) => s.trim()).filter(Boolean);
+    const userFirstName = (user?.firstName || '').toLowerCase().trim();
+    const userLastName = (user?.lastName || '').toLowerCase().trim();
+    const userFullName = `${userFirstName} ${userLastName}`.trim();
+
     baseAssets = fleetAssets.filter(a => {
-        const adcLower = a.adc?.toLowerCase() || '';
-        const userLower = loggedInAdcName.toLowerCase();
-        const usernameLower = (user as any)?.username?.toLowerCase() || '';
-        const emailLower = user?.email?.toLowerCase() || '';
-        return adcLower === userLower || 
-               userLower.includes(adcLower) || 
-               (user?.firstName && adcLower.includes(user.firstName.toLowerCase())) ||
-               usernameLower.includes(adcLower) ||
-               emailLower.includes(adcLower);
+      const aAdc = a.adc || '';
+      if (!aAdc) return false;
+      return adcKeywords.some(kw => isSameAdc(aAdc, kw)) ||
+             (userFullName && isSameAdc(aAdc, userFullName));
     });
   } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
     // Leer ADCs asignados: primero del perfil fresco de la API, luego del store
@@ -737,7 +792,7 @@ export default function FlotillaTab({
       // El campo puede contener múltiples ADCs separados por coma: "Andrea Esquivel, Montserrat Covarrubias"
       assignedAdcKeywords = rawAdcAsociado
         .split(',')
-        .map((s: string) => s.trim().toLowerCase())
+        .map((s: string) => s.trim())
         .filter(Boolean);
     }
 
@@ -746,15 +801,23 @@ export default function FlotillaTab({
       baseAssets = [];
     } else {
       baseAssets = fleetAssets.filter(a => {
-        const adcLower = (a.adc || '').toLowerCase().trim();
-        return assignedAdcKeywords.some(kw => 
-          adcLower === kw || 
-          adcLower.includes(kw) || 
-          kw.includes(adcLower)
-        );
+        const aAdc = a.adc || '';
+        return assignedAdcKeywords.some(kw => isSameAdc(aAdc, kw));
       });
     }
   }
+
+  const displayedApprovals = pendingApprovals.filter((sol: any) => {
+    if (isAdministrator && adminAdcScope === 'mis_adcs') {
+      const rawAssigned = freshUserProfile?.adcAsociadoName || (user as any)?.adc_asociado_name || (user as any)?.adcAsociadoName || '';
+      if (!rawAssigned || rawAssigned === 'ninguno') return false;
+      if (rawAssigned === 'todos') return true;
+      const assignedList = rawAssigned.split(',').map((s: string) => s.trim()).filter(Boolean);
+      const solAdc = sol.adc || sol.datosPropuestos?.datos?.adc || sol.solicitante || '';
+      return assignedList.some((kw: string) => isSameAdc(solAdc, kw));
+    }
+    return true;
+  });
 
   const normalizedAssets = baseAssets.map(a => {
     // Normalize ESTATUS to the master file nomenclature
@@ -1017,13 +1080,13 @@ export default function FlotillaTab({
         
         {/* Header Action Buttons (Primary CTA & Alerts Only) */}
         <div className="flex items-center gap-3 shrink-0">
-          {!isAdc && pendingApprovals.length > 0 && (
+          {!isAdc && displayedApprovals.length > 0 && (
             <button
               onClick={() => setShowApprovalsTab(!showApprovalsTab)}
               className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-sm border-2 ${showApprovalsTab ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}
             >
               <AlertTriangle className="w-4 h-4" />
-              Aprobaciones ({pendingApprovals.length})
+              Aprobaciones ({displayedApprovals.length})
             </button>
           )}
           <button 
@@ -1167,7 +1230,7 @@ export default function FlotillaTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-red-50 text-slate-700 font-bold">
-                {pendingApprovals.map((sol: any) => {
+                {displayedApprovals.map((sol: any) => {
                   const sitioAntNombre = sol.sitioAnteriorNombre || allSites.find(s => s.id === sol.sitioAnteriorId)?.nombre || 'Sin sitio anterior';
                   const sitioNvoNombre = sol.sitioNuevoNombre || allSites.find(s => s.id === sol.sitioNuevoId)?.nombre || sol.sitioNuevoId;
                   const accionBadge = sol.accionNombre || (sol.datosPropuestos?.tipo === 'ALTA' ? 'Alta de Equipo' : sol.datosPropuestos?.tipo === 'EDICION' ? 'Edición de Equipo' : 'Transferencia de Sitio');
@@ -2127,20 +2190,41 @@ export default function FlotillaTab({
                     <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-slate-700">Propietario</label>
                     <input type="text" value={editingData.propietario || ''} onChange={(e) => setEditingData({...editingData, propietario: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none font-bold" />
                   </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] uppercase tracking-wider font-black text-slate-700">Estatus Operativo *</label>
-                      {isAdc && <span className="text-[9px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-300">Requiere Aprobación</span>}
+                  {/* Bloque Destacado de Estatus y Fecha Efectiva */}
+                  <div className="col-span-2 p-3.5 bg-amber-50/50 border border-amber-200/80 rounded-2xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] uppercase tracking-wider font-black text-amber-950">Estatus Operativo *</label>
+                          {isAdc && <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">Requiere Aprobación</span>}
+                        </div>
+                        <select 
+                          value={editingData.estatus || ''} 
+                          onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} 
+                          className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500 cursor-pointer font-bold"
+                        >
+                          <option value="Activo">Activo</option>
+                          <option value="Inactivo">Inactivo</option>
+                          <option value="Comodato">Comodato</option>
+                          <option value="Back Up">Back Up</option>
+                          <option value="Inactivo con Cliente">Inactivo con Cliente</option>
+                          <option value="Por Entregar">Por Entregar</option>
+                          <option value="Por Retirar">Por Retirar</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider mb-1 font-black text-amber-950">
+                          Fecha Efectiva del Cambio / Baja *
+                        </label>
+                        <input 
+                          type="date" 
+                          value={editingData.fecha_efectiva || ''} 
+                          onChange={(e) => setEditingData({...editingData, fecha_efectiva: e.target.value})} 
+                          className="w-full px-3.5 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500 font-bold" 
+                        />
+                      </div>
                     </div>
-                    <select value={editingData.estatus || ''} onChange={(e) => setEditingData({...editingData, estatus: e.target.value, estatus_operativo: e.target.value})} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none cursor-pointer font-bold">
-                      <option value="Activo">Activo</option>
-                      <option value="Inactivo">Inactivo</option>
-                      <option value="Comodato">Comodato</option>
-                      <option value="Back Up">Back Up</option>
-                      <option value="Inactivo con Cliente">Inactivo con Cliente</option>
-                      <option value="Por Entregar">Por Entregar</option>
-                      <option value="Por Retirar">Por Retirar</option>
-                    </select>
                   </div>
                   {!isAdc && (
                     <div>
@@ -2190,11 +2274,28 @@ export default function FlotillaTab({
               </div>
 
               <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
-                <button onClick={cancelEditing} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
+                <button 
+                  type="button"
+                  onClick={cancelEditing} 
+                  disabled={isSubmittingEdit}
+                  className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 disabled:opacity-50 transition-colors"
+                >
                   Cancelar
                 </button>
-                <button onClick={saveEditing} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
-                  {isAdc ? 'Enviar Solicitud de Cambio' : 'Guardar Directo'}
+                <button 
+                  type="button"
+                  onClick={saveEditing} 
+                  disabled={isSubmittingEdit}
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-all flex items-center gap-2"
+                >
+                  {isSubmittingEdit ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{isAdc ? 'Enviando...' : 'Guardando...'}</span>
+                    </>
+                  ) : (
+                    <span>{isAdc ? 'Enviar Solicitud de Cambio' : 'Guardar Directo'}</span>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -2202,7 +2303,6 @@ export default function FlotillaTab({
         )}
       </AnimatePresence>
 
-      {/* Modal Transferir Equipo */}
       <AnimatePresence>
         {isTransferModalOpen && (
           <motion.div 
@@ -2239,10 +2339,10 @@ export default function FlotillaTab({
                     <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-[42px] focus:ring-0 focus:border-red-500 transition-all shadow-sm hover:border-slate-300">
                       <SelectValue placeholder="-- Elige un sitio destino --" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl border-slate-100 shadow-xl bg-white z-50 max-h-[300px]">
-                      {allSites.map(site => (
-                        <SelectItem key={site.id} value={site.id} className="text-xs text-slate-700">
-                          {site.cliente?.razon_social || 'Cliente'} - {site.nombre}
+                    <SelectContent className="bg-white border border-slate-200 shadow-xl rounded-2xl max-h-60">
+                      {allSites.map((s: any) => (
+                        <SelectItem key={s.id} value={s.id} className="text-xs font-bold py-2.5">
+                          {s.cliente_nombre ? `${s.cliente_nombre} - ${s.nombre}` : s.nombre} {s.adc ? `(ADC: ${s.adc})` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -2251,11 +2351,28 @@ export default function FlotillaTab({
               </div>
 
               <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
-                <button onClick={handleCloseTransferModal} className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors">
+                <button 
+                  type="button"
+                  onClick={handleCloseTransferModal} 
+                  disabled={isSubmittingTransfer}
+                  className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 disabled:opacity-50 transition-colors"
+                >
                   Cancelar
                 </button>
-                <button onClick={handleTransfer} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-colors">
-                  Ejecutar Transferencia
+                <button 
+                  type="button"
+                  onClick={handleTransfer} 
+                  disabled={isSubmittingTransfer}
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-100 transition-all flex items-center gap-2"
+                >
+                  {isSubmittingTransfer ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Transfiriendo...</span>
+                    </>
+                  ) : (
+                    <span>Confirmar Transferencia</span>
+                  )}
                 </button>
               </div>
             </motion.div>

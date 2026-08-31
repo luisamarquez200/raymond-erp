@@ -11,59 +11,57 @@ interface DashboardFilters {
     adc?: string;
 }
 
-const ADC_ALIASES: Record<string, string[]> = {
-    'daniel': ['daniel', 'daniel romero', 'romero'],
-    'romero': ['daniel', 'daniel romero', 'romero'],
-    'alejandra': ['alejandra', 'alejandra arellanes', 'arellanes'],
-    'arellanes': ['alejandra', 'alejandra arellanes', 'arellanes'],
-    'andrea': ['andrea', 'andrea esquivel', 'esquivel'],
-    'esquivel': ['andrea', 'andrea esquivel', 'esquivel'],
-    'montserrat': ['montserrat', 'montserrat covarrubias', 'covarrubias', 'montse'],
-    'covarrubias': ['montserrat', 'montserrat covarrubias', 'covarrubias', 'montse'],
-    'simalu': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
-    'simalú': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
-    'leon': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
-    'león': ['simalu', 'simalú', 'simalu leon', 'simalú león', 'leon', 'león'],
-};
-
 function stripAccents(str: string): string {
-    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+export function cleanAdcName(name: string | null | undefined): string {
+    if (!name) return '';
+    return stripAccents(name)
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+export function isSameAdc(adcCandidate: string | null | undefined, targetAdc: string): boolean {
+    const c = cleanAdcName(adcCandidate);
+    const t = cleanAdcName(targetAdc);
+    if (!c || !t) return false;
+
+    // 1. Exact normalized match
+    if (c === t) return true;
+
+    // 2. Token based match: all significant words (>2 chars)
+    const cTokens = c.split(' ').filter(w => w.length > 2);
+    const tTokens = t.split(' ').filter(w => w.length > 2);
+
+    if (cTokens.length === 0 || tTokens.length === 0) return false;
+
+    // If both have multiple words (e.g. "Simalu Leon" vs "Simalu Leon" or "Juan Perez" vs "Juan Perez Gonzalez")
+    const allTargetInCandidate = tTokens.every(token => cTokens.includes(token));
+    const allCandidateInTarget = cTokens.every(token => tTokens.includes(token));
+
+    if (allTargetInCandidate || allCandidateInTarget) return true;
+
+    // If one is a single significant distinctive name (>= 4 chars), like searching by last name or first name
+    if (tTokens.length === 1 && cTokens.includes(tTokens[0]) && tTokens[0].length >= 4) {
+        return true;
+    }
+    if (cTokens.length === 1 && tTokens.includes(cTokens[0]) && cTokens[0].length >= 4) {
+        return true;
+    }
+
+    return false;
 }
 
 function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: string[]): boolean {
-    if (keywords.length === 0) return true;
+    if (!keywords || keywords.length === 0) return true;
 
-    // Expand keywords with aliases and normalized forms
-    const cleanKeywords = new Set<string>();
     for (const kw of keywords) {
         if (!kw) continue;
-        const norm = stripAccents(kw.trim().toLowerCase());
-        if (!norm) continue;
-        cleanKeywords.add(norm);
-
-        // Check single tokens
-        const parts = norm.split(/\s+/).filter(p => p.length >= 3);
-        for (const p of parts) {
-            cleanKeywords.add(p);
-            if (ADC_ALIASES[p]) {
-                ADC_ALIASES[p].forEach(a => cleanKeywords.add(stripAccents(a.toLowerCase())));
-            }
-        }
-        if (ADC_ALIASES[norm]) {
-            ADC_ALIASES[norm].forEach(a => cleanKeywords.add(stripAccents(a.toLowerCase())));
-        }
-    }
-
-    const keywordList = Array.from(cleanKeywords);
-
-    for (const raw of candidates) {
-        if (!raw) continue;
-        const norm = stripAccents(raw.trim().toLowerCase());
-        if (!norm) continue;
-
-        for (const kw of keywordList) {
-            if (!kw) continue;
-            if (norm === kw || norm.includes(kw) || kw.includes(norm)) {
+        for (const cand of candidates) {
+            if (!cand) continue;
+            if (isSameAdc(cand, kw)) {
                 return true;
             }
         }
@@ -219,9 +217,9 @@ export class PresupuestosService {
                     currencyStat.equipos_detenidos += budgetAmount * months.length;
                 } else {
                     currencyStat.presupuesto_mes += budgetAmount * months.length;
-
                     // ADC Compliance tracking
-                    const adcName = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+                    const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
+                    const adcName = rawAdc?.trim() || 'Sin ADC';
                     const clientName = r.cliente.razon_social;
                     const adcKey = `${adcName}___${clientName}___${rMoneda}`;
                     if (!adcsMap.has(adcKey)) {
@@ -271,7 +269,8 @@ export class PresupuestosService {
                 currencyStat.acumulado += pending;
                 
                 const clientName = r.cliente.razon_social;
-                const adcName = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+                const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
+                const adcName = rawAdc?.trim() || 'Sin ADC';
                 
                 pendingByClientAdc.push({
                     cliente: clientName,
@@ -293,7 +292,8 @@ export class PresupuestosService {
             // Check filters
             if (sitio_id && o.renta?.sitio_id !== sitio_id) continue;
 
-            const adcName = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            const rawAdc = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc;
+            const adcName = rawAdc?.trim() || 'Sin ADC';
             if (adcKeywords.length > 0) {
                 if (!matchAdcKeywords([adcName, o.renta?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
                     continue;
@@ -382,14 +382,17 @@ export class PresupuestosService {
                 }
             }
             return true;
-        }).map(o => ({
-            adc: o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC',
-            cliente: o.cliente.razon_social,
-            periodo_original: o.periodo,
-            po: o.po,
-            importe: o.tarifa || 0,
-            moneda: o.moneda || 'MXN'
-        }));
+        }).map(o => {
+            const rawAdc = o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc;
+            return {
+                adc: rawAdc?.trim() || 'Sin ADC',
+                cliente: o.cliente.razon_social,
+                periodo_original: o.periodo,
+                po: o.po,
+                importe: o.tarifa || 0,
+                moneda: o.moneda || 'MXN'
+            };
+        });
 
         const observaciones: any[] = [];
 
@@ -441,7 +444,8 @@ export class PresupuestosService {
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
 
-            const adcName = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
+            const adcName = rawAdc?.trim() || 'Sin ADC';
             const clientName = r.cliente.razon_social;
             const key = `${adcName}___${clientName}___${rMoneda}`;
 
@@ -495,9 +499,10 @@ export class PresupuestosService {
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
 
-            const adcName = o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+            const rawAdc = o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc;
+            const adcName = rawAdc?.trim() || 'Sin ADC';
             if (adcKeywords.length > 0) {
-                const adcCandidates = [adcName, o.renta?.adc, o.renta?.activo?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.adc, (o.cliente as any)?.datos_comerciales?.adc];
+                const adcCandidates = [adcName, o.renta?.adc, o.renta?.activo?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc];
                 if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
                     continue;
                 }
@@ -505,7 +510,6 @@ export class PresupuestosService {
 
             const clientName = o.cliente?.razon_social || '';
             const key = `${adcName}___${clientName}___${oMoneda}`;
-
             const rentaTarifa = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.renta?.tarifa || 0);
             const orderAmount = (o.tarifa && o.tarifa > 0 && o.tarifa <= (rentaTarifa * 3 || 300000)) ? o.tarifa : (rentaTarifa || o.tarifa || 0);
 

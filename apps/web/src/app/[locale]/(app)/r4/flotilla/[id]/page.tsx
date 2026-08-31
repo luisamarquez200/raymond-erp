@@ -4,13 +4,22 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Truck, HardDrive, ShieldCheck, MapPin, 
-  User, Briefcase, Calendar, Clock, Edit, FileSpreadsheet, CheckCircle2, XCircle, ArrowRight, Wrench, Search, X, BatteryCharging, Link as LinkIcon, Unlink
+  User, Briefcase, Calendar, Clock, Edit, FileSpreadsheet, CheckCircle2, XCircle, ArrowRight, Wrench, Search, X, BatteryCharging, Link as LinkIcon, Unlink,
+  RefreshCw, Loader2, AlertCircle
 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
 import { useConfigStore } from '@/store/config.store';
+import { cn } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import PageLoader from '@/components/ui/PageLoader';
 import RegistrarMantenimientoModal from '@/components/r4/flotilla/RegistrarMantenimientoModal';
 
@@ -24,7 +33,10 @@ export default function AssetCarnetPage() {
   const [asset, setAsset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split('T')[0]);
+  const [statusMotivo, setStatusMotivo] = useState('');
 
   const [mantenimientoModalOpen, setMantenimientoModalOpen] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -33,9 +45,13 @@ export default function AssetCarnetPage() {
   const [searchingAccessories, setSearchingAccessories] = useState(false);
   const [linkingAccessory, setLinkingAccessory] = useState(false);
 
-  const fetchAssetDetails = async () => {
+  const fetchAssetDetails = async (showFullLoader = true) => {
     try {
-      setLoading(true);
+      if (showFullLoader) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       const res = await api.get(`/r4/flotilla/${id}`);
       const data = res.data?.data || res.data;
       setAsset(data);
@@ -45,28 +61,37 @@ export default function AssetCarnetPage() {
       toast.error('Error al cargar los detalles del equipo');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    if (id) fetchAssetDetails();
+    if (id) fetchAssetDetails(true);
   }, [id]);
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!newStatus) return;
+    if (!newStatus || updating) return;
     try {
       setUpdating(true);
       if (isAdc) {
         await api.post(`/r4/flotilla/${id}/solicitar-cambio`, {
           estatus: newStatus,
-          estatus_operativo: newStatus
+          estatus_operativo: newStatus,
+          fecha_efectiva: effectiveDate,
+          motivo_cambio: statusMotivo
         });
-        toast.success(`Solicitud enviada: Cambio de estatus a "${newStatus}" enviado para aprobación de Gerencia`);
+        toast.success(`Solicitud enviada: Cambio de estatus a "${newStatus}" con fecha efectiva ${effectiveDate} enviado para aprobación`);
       } else {
-        await api.put(`/r4/flotilla/${id}/estatus`, { estatus: newStatus });
-        toast.success(`Estatus actualizado a ${newStatus}`);
+        await api.put(`/r4/flotilla/${id}/estatus`, { 
+          estatus: newStatus,
+          fecha_efectiva: effectiveDate,
+          motivo: statusMotivo
+        });
+        toast.success(`Estatus actualizado a ${newStatus} (Fecha efectiva: ${effectiveDate})`);
       }
-      fetchAssetDetails(); // Refresh logs and data
+      setStatusMotivo('');
+      // Immediately refresh asset details and history without leaving the page
+      await fetchAssetDetails(false);
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Error al actualizar el estatus');
@@ -137,7 +162,7 @@ export default function AssetCarnetPage() {
       setLinkModalOpen(false);
       setAccessorySearch('');
       setAccessoryResults([]);
-      fetchAssetDetails();
+      await fetchAssetDetails(false);
     } catch (error) {
       toast.error('Error al solicitar la vinculación del accesorio');
     } finally {
@@ -156,7 +181,7 @@ export default function AssetCarnetPage() {
         await api.delete(`/r4/flotilla/${targetId}/accesorios/${accesorioId}`);
         toast.success('Accesorio desvinculado');
       }
-      fetchAssetDetails();
+      await fetchAssetDetails(false);
     } catch (error) {
       toast.error('Error al desvincular el accesorio');
     }
@@ -231,29 +256,60 @@ export default function AssetCarnetPage() {
             </div>
             
             {/* Control para cambiar estatus */}
-            <div className="pt-4 border-t border-slate-100">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Modificar Estatus</label>
-              <div className="flex gap-2">
-                <select
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                  Modificar Estatus
+                </label>
+                <Select
                   value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  onValueChange={(val) => setSelectedStatus(val)}
                   disabled={updating}
-                  className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500 appearance-none cursor-pointer"
                 >
-                  <option value="Activo">Activo</option>
-                  <option value="Inactivo">Inactivo</option>
-                  <option value="Comodato">Comodato</option>
-                  <option value="Back Up">Back Up</option>
-                  <option value="Inactivo con Cliente">Inactivo con Cliente</option>
-                </select>
-                <button
-                  onClick={() => handleStatusChange(selectedStatus)}
-                  disabled={updating || selectedStatus === asset.estatus}
-                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-amber-100"
-                >
-                  Guardar
-                </button>
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold text-slate-800 h-[42px] focus:ring-0 focus:border-amber-500 transition-all shadow-xs hover:border-slate-300">
+                    <SelectValue placeholder="Seleccionar estatus" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-slate-200 shadow-xl rounded-2xl z-50">
+                    <SelectItem value="Activo" className="text-xs font-bold py-2">Activo</SelectItem>
+                    <SelectItem value="Inactivo" className="text-xs font-bold py-2">Inactivo</SelectItem>
+                    <SelectItem value="Comodato" className="text-xs font-bold py-2">Comodato</SelectItem>
+                    <SelectItem value="Back Up" className="text-xs font-bold py-2">Back Up</SelectItem>
+                    <SelectItem value="Inactivo con Cliente" className="text-xs font-bold py-2">Inactivo con Cliente</SelectItem>
+                    <SelectItem value="Por Entregar" className="text-xs font-bold py-2">Por Entregar</SelectItem>
+                    <SelectItem value="Por Retirar" className="text-xs font-bold py-2">Por Retirar</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Fecha Efectiva si se selecciona un estatus diferente */}
+              {selectedStatus !== asset.estatus && (
+                <div className="p-3.5 bg-amber-50/60 border border-amber-200 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                  <label className="block text-[10px] font-black text-amber-900 uppercase tracking-wider mb-1">
+                    Fecha Efectiva del Evento / Baja *
+                  </label>
+                  <input
+                    type="date"
+                    value={effectiveDate}
+                    onChange={(e) => setEffectiveDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={() => handleStatusChange(selectedStatus)}
+                disabled={updating || selectedStatus === asset.estatus}
+                className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-amber-100 flex items-center justify-center gap-2"
+              >
+                {updating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{isAdc ? 'Enviando Solicitud...' : 'Guardando...'}</span>
+                  </>
+                ) : (
+                  <span>{isAdc ? 'Enviar Solicitud de Cambio' : 'Guardar Estatus'}</span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -296,33 +352,6 @@ export default function AssetCarnetPage() {
                 <Wrench className="w-4 h-4 text-rose-600" />
                 Registrar Mantenimiento
               </button>
-            </div>
-          </div>
-
-          {/* Ficha Técnica */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Especificaciones Técnicas</h3>
-            <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-600">
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Modelo</p>
-                <p className="text-slate-900 text-sm">{asset.modelo || '-'}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Clase</p>
-                <p className="text-slate-900 text-sm">Clase {asset.clase || '-'}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">OACH</p>
-                <p className="text-slate-900 text-sm">{asset.oach || '-'}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Altura</p>
-                <p className="text-slate-900 text-sm">{asset.altura || '-'}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 col-span-2">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">BC</p>
-                <p className="text-slate-900 text-sm">{asset.bc || '-'}</p>
-              </div>
             </div>
           </div>
 
@@ -460,12 +489,23 @@ export default function AssetCarnetPage() {
 
           {/* Timeline Tracking */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6 overflow-hidden max-w-full">
-            <div>
-              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Historial de Cambios y Tracking</h3>
-              <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Historial completo de transferencias, cambios de sitio y estatus con trazabilidad de usuarios</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Historial de Cambios y Tracking</h3>
+                <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Historial completo de transferencias, cambios de sitio y estatus con trazabilidad en tiempo real</p>
+              </div>
+              <button
+                onClick={() => fetchAssetDetails(false)}
+                disabled={isRefreshing}
+                className="self-start sm:self-auto text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3.5 py-2 rounded-xl flex items-center gap-2 transition-all shadow-2xs disabled:opacity-50"
+                title="Actualizar historial de movimientos sin recargar"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5 text-slate-500", isRefreshing && "animate-spin text-amber-600")} />
+                <span>{isRefreshing ? 'Actualizando...' : 'Refrescar Historial'}</span>
+              </button>
             </div>
             
-            <div className="relative border-l border-slate-200 pl-6 ml-3 space-y-6 max-w-full">
+            <div className="max-h-[520px] overflow-y-auto pr-3 py-2 space-y-6 relative border-l border-slate-200 pl-6 ml-3 max-w-full scrollbar-thin">
               {asset.historialCambios?.length === 0 ? (
                 <p className="text-xs font-bold text-slate-400 py-4">No hay registros de movimientos previos.</p>
               ) : (
@@ -490,6 +530,9 @@ export default function AssetCarnetPage() {
 
                   const sitioAnterior = log.sitioAnterior || parsedJson?.sitio_anterior_nombre || null;
                   const sitioNuevo = log.sitioNuevo || parsedJson?.sitio_nuevo_nombre || log.sitioNuevoId || null;
+
+                  const fechaEfectivaValue = log.fechaEfectiva || parsedJson?.fecha_efectiva || parsedJson?.datos?.fecha_efectiva || null;
+                  const motivoCambioValue = log.motivoCambio || parsedJson?.motivo_cambio || parsedJson?.datos?.motivo_cambio || parsedJson?.datos?.motivo || null;
 
                   if (typeof motivoText === 'string' && motivoText.trim().startsWith('{')) {
                     if (tipo === 'TRANSFERENCIA' || parsedJson?.accion_nombre?.includes('Transferencia')) {
@@ -550,10 +593,27 @@ export default function AssetCarnetPage() {
                         </span>
                       </div>
 
+                      {/* Highlight Badge for Effective Event Date (e.g. 31 de Julio) */}
+                      {fechaEfectivaValue && (
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-100/70 border border-amber-300 rounded-xl text-xs font-bold text-amber-900 shadow-2xs">
+                          <Calendar className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>
+                            <strong>Fecha Efectiva del Evento / Baja:</strong> {fechaEfectivaValue}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Main description text with explicit line wrapping */}
                       <p className="text-xs font-bold text-slate-800 leading-relaxed break-words whitespace-normal max-w-full">
                         {motivoText}
                       </p>
+
+                      {/* Motivo Justificación extra if available */}
+                      {motivoCambioValue && (
+                        <p className="text-xs font-medium text-slate-600 italic bg-white p-2.5 rounded-xl border border-slate-200/60">
+                          <strong className="text-slate-800 not-italic">Justificación:</strong> {motivoCambioValue}
+                        </p>
+                      )}
 
                       {/* Transfer Route Box if sites exist */}
                       {(sitioAnterior || sitioNuevo) && (
@@ -673,7 +733,7 @@ export default function AssetCarnetPage() {
         equipoId={asset.id}
         serie={asset.serie}
         distribuidorActual={asset.propietario || 'Raymond MTY'}
-        onSuccess={() => fetchAssetDetails()}
+        onSuccess={() => fetchAssetDetails(false)}
       />
     </div>
   );

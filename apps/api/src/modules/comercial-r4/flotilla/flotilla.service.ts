@@ -8,6 +8,37 @@ import * as nodemailer from 'nodemailer';
 const flotillaCache = new Map<string, { timestamp: number, data: any }>();
 const FLOTILLA_CACHE_TTL = 60 * 1000; // 60 seconds
 
+function cleanAdcName(name: string | null | undefined): string {
+    if (!name) return '';
+    return name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isSameAdc(adcCandidate: string | null | undefined, targetAdc: string): boolean {
+    const c = cleanAdcName(adcCandidate);
+    const t = cleanAdcName(targetAdc);
+    if (!c || !t) return false;
+    if (c === t) return true;
+
+    const cTokens = c.split(' ').filter(w => w.length > 2);
+    const tTokens = t.split(' ').filter(w => w.length > 2);
+    if (cTokens.length === 0 || tTokens.length === 0) return false;
+
+    const allTargetInCandidate = tTokens.every(token => cTokens.includes(token));
+    const allCandidateInTarget = cTokens.every(token => tTokens.includes(token));
+    if (allTargetInCandidate || allCandidateInTarget) return true;
+
+    if (tTokens.length === 1 && cTokens.includes(tTokens[0]) && tTokens[0].length >= 4) return true;
+    if (cTokens.length === 1 && tTokens.includes(cTokens[0]) && cTokens[0].length >= 4) return true;
+
+    return false;
+}
+
 @Injectable()
 export class FlotillaService {
     private readonly logger = new Logger(FlotillaService.name);
@@ -63,7 +94,7 @@ export class FlotillaService {
         }
     }
 
-    private async notificarAdmins(title: string, message: string) {
+    private async notificarAdmins(title: string, message: string, targetAdcNames?: (string | null | undefined)[]) {
         try {
             const admins = await this.prismaService.users.findMany({
                 where: {
@@ -72,7 +103,22 @@ export class FlotillaService {
                 }
             });
             
+            const validTargetAdcs = (targetAdcNames || []).filter(Boolean).map(s => String(s).trim());
+
             for (const admin of admins) {
+                // If administrator/coordinator has specific assigned ADCs, only notify if the request matches their assigned ADCs
+                const rawAssigned = (admin.adc_asociado_name || '').trim();
+                if (rawAssigned && rawAssigned !== 'ninguno' && rawAssigned !== 'todos' && validTargetAdcs.length > 0) {
+                    const assignedAdcList = rawAssigned.split(',').map(s => s.trim()).filter(Boolean);
+                    const matchesAdmin = assignedAdcList.some(assigned =>
+                        validTargetAdcs.some(target => isSameAdc(assigned, target))
+                    );
+                    if (!matchesAdmin) {
+                        // Request belongs to another coordinator's/admin's ADCs; skip notification
+                        continue;
+                    }
+                }
+
                 await this.prismaService.notifications.create({
                     data: {
                         user_id: admin.id,
@@ -592,16 +638,23 @@ export class FlotillaService {
         };
     }
 
-    async actualizarEstatus(id: string, nuevoEstatus: string, usuarioId: string) {
+    async actualizarEstatus(id: string, nuevoEstatus: string, usuarioId: string, fechaEfectiva?: string, motivo?: string) {
         const db = this.getDb();
-        const activo = await db.activo.findUnique({ where: { id } });
+        const activo = await db.activo.findFirst({
+            where: {
+                OR: [
+                    { id: id },
+                    { serie: id }
+                ]
+            }
+        });
         if (!activo) throw new NotFoundException(`Equipo con serie ${id} no encontrado`);
 
         const estatusAnterior = activo.estatus || activo.estatus_operativo;
         const estatusLimpio = this.unificarEstatus(nuevoEstatus);
 
         const updated = await db.activo.update({
-            where: { id },
+            where: { id: activo.id },
             data: { 
               estatus: estatusLimpio,
               estatus_operativo: estatusLimpio  // keep legacy in sync
@@ -609,17 +662,47 @@ export class FlotillaService {
         });
 
         const detalleAutor = await this.obtenerDetalleUsuario(usuarioId);
+        const fechaEfectivaInfo = fechaEfectiva ? ` (Fecha Efectiva: ${fechaEfectiva})` : '';
+        const motivoInfo = motivo ? `. Motivo: ${motivo}` : '';
 
         // Auditoría completa con usuario
         await db.auditoria.create({
             data: {
                 modulo: 'FLOTILLA',
-                registro_id: id,
+                registro_id: activo.id,
                 accion: 'CAMBIO_ESTATUS',
                 usuario_id: usuarioId,
                 valor_anterior: { estatus: estatusAnterior },
-                valor_nuevo: { estatus: estatusLimpio },
-                observaciones: `Cambio de estatus: ${estatusAnterior} → ${estatusLimpio}. Realizado por: ${detalleAutor}`
+                valor_nuevo: { estatus: estatusLimpio, fecha_efectiva: fechaEfectiva || null },
+                observaciones: `Cambio de estatus: ${estatusAnterior} → ${estatusLimpio}${fechaEfectivaInfo}${motivoInfo}. Realizado por: ${detalleAutor}`
+            }
+        });
+
+        const motivoData = {
+            tipo: 'EDICION',
+            accion_nombre: `Cambio de Estatus a "${estatusLimpio}"`,
+            solicitante: detalleAutor,
+            solicitante_id: usuarioId,
+            aprobado_por: detalleAutor,
+            estado: 'APROBADA',
+            fecha_efectiva: fechaEfectiva || null,
+            motivo_cambio: motivo || null,
+            datos: {
+                estatus: estatusLimpio,
+                estatus_operativo: estatusLimpio,
+                ...(fechaEfectiva && { fecha_efectiva: fechaEfectiva }),
+                ...(motivo && { motivo_cambio: motivo })
+            }
+        };
+
+        await db.cambioSitioLog.create({
+            data: {
+                activo_id: activo.id,
+                sitio_anterior_id: activo.sitio_id,
+                sitio_nuevo_id: activo.sitio_id || 'sin_sitio',
+                motivo: JSON.stringify(motivoData),
+                aprobado: true,
+                usuario_id: usuarioId
             }
         });
 
@@ -769,8 +852,13 @@ export class FlotillaService {
         const sitioNuevo = dto.sitio_id ? await db.sitio.findUnique({ where: { id: dto.sitio_id } }) : sitioAnterior;
         const clienteObj = activo.cliente || (dto.cliente_id ? await db.cliente.findUnique({ where: { id: dto.cliente_id } }) : null);
 
+        const isStatusChange = Boolean((dto.estatus && dto.estatus !== activo.estatus) || (dto.estatus_operativo && dto.estatus_operativo !== activo.estatus_operativo));
         const isTransfer = Boolean(dto.sitio_id && dto.sitio_id !== activo.sitio_id);
-        const accionNombre = isTransfer ? 'Transferencia de Sitio' : 'Edición de Equipo';
+        const accionNombre = isTransfer 
+            ? 'Transferencia de Sitio' 
+            : isStatusChange 
+                ? `Cambio de Estatus a "${dto.estatus || dto.estatus_operativo}"` 
+                : 'Edición de Equipo';
         const fechaEnvio = new Date();
         const fechaEnvioFormatted = this.formatFechaLarga(fechaEnvio);
 
@@ -786,6 +874,8 @@ export class FlotillaService {
             sitio_nuevo_nombre: sitioNuevo?.nombre || 'Sin sitio nuevo',
             fecha_envio: fechaEnvio.toISOString(),
             fecha_envio_formatted: fechaEnvioFormatted,
+            fecha_efectiva: dto.fecha_efectiva || null,
+            motivo_cambio: dto.motivo_cambio || dto.motivo || null,
             datos: dto
         };
 
@@ -800,6 +890,19 @@ export class FlotillaService {
             }
         });
 
+        const fechaEfectivaInfo = dto.fecha_efectiva ? `\n• Fecha Efectiva del Evento: ${dto.fecha_efectiva}` : '';
+        const motivoInfo = (dto.motivo_cambio || dto.motivo) ? `\n• Motivo / Justificación: ${dto.motivo_cambio || dto.motivo}` : '';
+
+        const targetAdcCandidates = [
+            activo.adc,
+            dto.adc,
+            sitioNuevo?.adc,
+            sitioAnterior?.adc,
+            (clienteObj as any)?.adc,
+            (clienteObj as any)?.datos_comerciales?.adc,
+            detalleAutor
+        ];
+
         await this.notificarAdmins(
             `📋 Nueva Solicitud: ${accionNombre} - Serie: ${activo.serie}`,
             `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
@@ -808,8 +911,9 @@ export class FlotillaService {
             `• Equipo: Serie ${activo.serie} (Modelo: ${activo.modelo || '-'})\n` +
             `• Cliente: ${clienteObj?.razon_social || '-'}\n` +
             `• Sitio Anterior: ${sitioAnterior?.nombre || 'Sin sitio anterior'}\n` +
-            `• Sitio Propuesto (Nuevo): ${sitioNuevo?.nombre || 'Sin sitio nuevo'}\n` +
-            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
+            `• Sitio Propuesto (Nuevo): ${sitioNuevo?.nombre || 'Sin sitio nuevo'}${fechaEfectivaInfo}${motivoInfo}\n` +
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`,
+            targetAdcCandidates
         );
 
         return { success: true, message: `Solicitud de ${accionNombre.toLowerCase()} enviada para aprobación`, logId: log.id };
@@ -865,12 +969,15 @@ export class FlotillaService {
             const sitioNuevo = s.sitio_nuevo_id ? await db.sitio.findUnique({ where: { id: s.sitio_nuevo_id } }) : null;
             const fechaEnvioFormatted = datosPropuestos?.fecha_envio_formatted || this.formatFechaLarga(s.fecha);
 
+            const requestAdc = s.activo?.adc || datosPropuestos?.datos?.adc || s.activo?.sitio?.adc || (s.activo?.cliente as any)?.datos_comerciales?.adc || (s.activo?.cliente as any)?.adc || datosPropuestos?.solicitante || '';
+
             result.push({
                 id: s.id,
                 activoId: s.activo_id,
                 activoSerie: s.activo?.serie || datosPropuestos?.equipo_serie || 'Nuevo',
                 activoModelo: s.activo?.modelo || datosPropuestos?.equipo_modelo || 'Nuevo',
                 solicitante: solicitanteDetalle,
+                adc: requestAdc,
                 accionNombre: datosPropuestos?.accion_nombre || (datosPropuestos?.tipo === 'ALTA' ? 'Alta de Equipo' : datosPropuestos?.tipo === 'EDICION' ? 'Edición de Equipo' : 'Transferencia de Sitio'),
                 sitioAnteriorId: s.sitio_anterior_id,
                 sitioAnteriorNombre: datosPropuestos?.sitio_anterior_nombre || sitioAnterior?.nombre || 'Sin sitio anterior',
@@ -934,7 +1041,7 @@ export class FlotillaService {
                     usuario_id: usuarioAprobador || log.usuario_id,
                     valor_anterior: { estado: 'PENDIENTE' },
                     valor_nuevo: { ...d, estatus: statusLimpio },
-                    observaciones: `Solicitud aprobada por ${detalleAprobador}. Solicitado originalmente por ${datosPropuestos.solicitante || log.usuario_id} el ${datosPropuestos.fecha_envio_formatted || this.formatFechaLarga(log.fecha)}.`
+                    observaciones: `Solicitud aprobada por ${detalleAprobador}. Solicitado originalmente por ${datosPropuestos.solicitante || log.usuario_id} el ${datosPropuestos.fecha_envio_formatted || this.formatFechaLarga(log.fecha)}${d.fecha_efectiva ? ` (Fecha Efectiva del Evento: ${d.fecha_efectiva})` : ''}${d.motivo_cambio ? `. Motivo: ${d.motivo_cambio}` : ''}.`
                 }
             });
 
@@ -1247,6 +1354,14 @@ export class FlotillaService {
             }
         });
 
+        const targetAdcCandidates = [
+            principal.adc,
+            principal.sitio?.adc,
+            (principal.cliente as any)?.adc,
+            (principal.cliente as any)?.datos_comerciales?.adc,
+            detalleAutor
+        ];
+
         await this.notificarAdmins(
             `📋 Nueva Solicitud: ${accionNombre} - Serie: ${principal.serie}`,
             `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
@@ -1254,7 +1369,8 @@ export class FlotillaService {
             `• Solicitante / ADC: ${detalleAutor}\n` +
             `• Equipo Principal: Serie ${principal.serie} (${principal.modelo || '-'})\n` +
             `• Accesorio: Serie ${accesorio.serie} (${accesorio.modelo || '-'})\n` +
-            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`,
+            targetAdcCandidates
         );
 
         return {
@@ -1325,6 +1441,14 @@ export class FlotillaService {
             }
         });
 
+        const targetAdcDesvinculo = [
+            principal.adc,
+            principal.sitio?.adc,
+            (principal.cliente as any)?.adc,
+            (principal.cliente as any)?.datos_comerciales?.adc,
+            detalleAutor
+        ];
+
         await this.notificarAdmins(
             `📋 Nueva Solicitud: ${accionNombre} - Serie: ${principal.serie}`,
             `📋 NUEVA SOLICITUD PENDIENTE DE APROBACIÓN\n` +
@@ -1332,7 +1456,8 @@ export class FlotillaService {
             `• Solicitante / ADC: ${detalleAutor}\n` +
             `• Equipo Principal: Serie ${principal.serie}\n` +
             `• Accesorio a Desvincular: Serie ${accesorio.serie}\n` +
-            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`
+            `• Fecha y Hora de Envío: ${fechaEnvioFormatted}`,
+            targetAdcDesvinculo
         );
 
         return {
