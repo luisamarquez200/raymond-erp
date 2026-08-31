@@ -202,20 +202,19 @@ export class PresupuestosService {
             const currencyStat = stats[rMoneda as keyof typeof stats];
             if (!currencyStat) continue;
 
-            // Monthly Budget Contribution: VIGENTE, IMPORTADA, ACTIVA, ACTIVO
+            // Monthly Budget Contribution: Estatus = Activo
             const estadoNorm = (r.estado || '').toUpperCase().trim();
             const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
+            const estatusNorm = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
+            const isActivo = estatusNorm === 'ACTIVO' || estatusNorm === 'OPERATIVO' || estatusNorm === 'DISPONIBLE' || estatusNorm === 'VIGENTE';
+            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'POR RETIRAR';
 
             if (isRentaActiva) {
                 const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
 
-                // Equipos Detenidos: exclude ALL inactive variants (Inactivo, Inactivo con Cliente, Inactivo - Con Cliente)
-                const estatusNorm = (r.activo?.estatus || '').trim().toUpperCase();
-                const isInactive = estatusNorm.startsWith('INACTIVO');
-
                 if (isInactive) {
                     currencyStat.equipos_detenidos += budgetAmount * months.length;
-                } else {
+                } else if (isActivo || !isInactive) {
                     currencyStat.presupuesto_mes += budgetAmount * months.length;
                     // ADC Compliance tracking
                     const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
@@ -234,7 +233,7 @@ export class PresupuestosService {
             }
         }
 
-        // Processing Orders
+        // Processing Orders (Pendiente Acumulado within annual cycle)
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
                 const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
@@ -248,20 +247,23 @@ export class PresupuestosService {
             const currencyStat = stats[rMoneda as keyof typeof stats];
             if (!currencyStat) continue;
 
-            // Skip inactive equipment (all variants) from accumulated calculation
-            const estatusNormAcc = (r.activo?.estatus || '').trim().toUpperCase();
-            if (estatusNormAcc.startsWith('INACTIVO')) continue;
+            // Skip inactive equipment from accumulated calculation
+            const estatusNormAcc = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
+            if (estatusNormAcc.startsWith('INACTIVO') || estatusNormAcc === 'BACK UP' || estatusNormAcc === 'POR RETIRAR') continue;
 
+            const currentYear = dayjs(`${earliestPeriodStr}-01`).year();
+            const yearStart = dayjs(`${currentYear}-01-01`).startOf('month');
             const startM = dayjs(r.fecha_inicio).startOf('month');
+            const effectiveStart = startM.isAfter(yearStart) ? startM : yearStart;
             const endM = dayjs(`${earliestPeriodStr}-01`).startOf('month');
-            let monthsActive = endM.diff(startM, 'month');
+            let monthsActive = endM.diff(effectiveStart, 'month');
             if (monthsActive < 0) monthsActive = 0;
             
             const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
             const expectedPast = budgetAmount * monthsActive;
             
-            // Find past orders for this renta (before the earliest month in selection)
-            const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
+            // Find past orders for this renta (in current year before the earliest month in selection)
+            const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr && o.periodo >= `${currentYear}-01`);
             const pastSent = pastOrders.reduce((sum, o) => sum + (o.tarifa || 0), 0);
             
             const pending = expectedPast - pastSent;
@@ -466,26 +468,30 @@ export class PresupuestosService {
 
             const estadoNorm = (r.estado || '').toUpperCase().trim();
             const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
-            const estatusNorm = (r.activo?.estatus || '').trim().toUpperCase();
-            const isInactive = estatusNorm.startsWith('INACTIVO');
+            const estatusNorm = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
+            const isActivo = estatusNorm === 'ACTIVO' || estatusNorm === 'OPERATIVO' || estatusNorm === 'DISPONIBLE' || estatusNorm === 'VIGENTE';
+            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'POR RETIRAR';
 
             if (isRentaActiva) {
                 if (isInactive) {
                     item.equipos_detenidos += budgetAmount;
-                } else {
+                } else if (isActivo || !isInactive) {
                     item.presupuesto += budgetAmount;
                 }
             }
 
-            // Pending accumulation for past months
+            // Pending accumulation for past months (annual cycle)
             if (!isInactive) {
+                const currentYear = dayjs(`${earliestPeriodStr}-01`).year();
+                const yearStart = dayjs(`${currentYear}-01-01`).startOf('month');
                 const startM = dayjs(r.fecha_inicio).startOf('month');
+                const effectiveStart = startM.isAfter(yearStart) ? startM : yearStart;
                 const endM = dayjs(`${earliestPeriodStr}-01`).startOf('month');
-                let monthsActive = endM.diff(startM, 'month');
+                let monthsActive = endM.diff(effectiveStart, 'month');
                 if (monthsActive < 0) monthsActive = 0;
 
                 const expectedPast = budgetAmount * monthsActive;
-                const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
+                const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr && o.periodo >= `${currentYear}-01`);
                 const pastSent = pastOrders.reduce((sum, o) => sum + (o.tarifa || 0), 0);
                 const pending = expectedPast - pastSent;
                 if (pending > 0) {
