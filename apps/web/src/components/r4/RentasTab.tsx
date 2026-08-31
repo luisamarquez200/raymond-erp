@@ -859,6 +859,8 @@ export default function RentasTab({
           renta: nuevaRenta,
           periodo: '',
           po: '',
+          pedido_totvs: '',
+          fecha_pedido_totvs: '',
           isSubmitting: false,
           pdfFile: null,
           isDragging: false

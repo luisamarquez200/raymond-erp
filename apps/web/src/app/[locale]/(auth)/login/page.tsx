@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { useAuthStore } from '@/store/auth.store';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, ChevronLeft, ChevronRight, Mail, Lock } from 'lucide-react';
 
