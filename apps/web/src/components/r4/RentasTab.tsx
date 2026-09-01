@@ -668,21 +668,42 @@ export default function RentasTab({
     const sitiosDelCliente = client?.sitios || [];
     const clientSiteIds = new Set(sitiosDelCliente.map((s: any) => s.id));
 
-    // Find all assets assigned to this client across all sites, or matched by renta/cliente_id
+    const isAssetEstatusActivo = (statusStr?: string | null) => {
+      if (!statusStr) return true;
+      const s = statusStr.trim().toUpperCase();
+      if (s === 'ACTIVO' || s === 'OPERATIVO' || s === 'DISPONIBLE' || s === 'VIGENTE') return true;
+      if (s.includes('INACTIV') || s.includes('BACK') || s.includes('RETIRAR') || s.includes('COMODATO') || s.includes('BAJA') || s.includes('TALLER')) {
+        return false;
+      }
+      return true;
+    };
+
+    const isRentaActiva = (r: any) => {
+      if (!r) return false;
+      const estadoRenta = (r.estado || '').trim().toUpperCase();
+      const estadoActivo = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
+      if (estadoRenta === 'CANCELADA' || estadoRenta === 'TERMINADA' || estadoRenta.includes('INACTIV')) return false;
+      if (estadoActivo.includes('INACTIV') || estadoActivo.includes('BACK') || estadoActivo.includes('RETIRAR') || estadoActivo.includes('BAJA') || estadoActivo.includes('TALLER')) return false;
+      return true;
+    };
+
+    // Find all active assets assigned to this client across all sites, or matched by renta/cliente_id
     let siteAssets = equiposDisponibles.filter(e => {
+      if (!isAssetEstatusActivo(e.estatus || e.estatus_operativo)) return false;
+
       if (selectedFichaSitioId) {
         return e.sitio_id === selectedFichaSitioId;
       }
       return (
         (e.sitio_id && clientSiteIds.has(e.sitio_id)) ||
         e.cliente_id === selectedFichaClienteId ||
-        rentas.some(r => r.activo?.id === e.id && (r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId))
+        rentas.some(r => r.activo?.id === e.id && (r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId) && isRentaActiva(r))
       );
     });
 
     // Also include any asset that has an active renta with this client even if not in equiposDisponibles
     rentas.forEach(r => {
-      if ((r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId) && r.activo && r.estado !== 'CANCELADA') {
+      if ((r.cliente_id === selectedFichaClienteId || r.cliente?.id === selectedFichaClienteId) && r.activo && isRentaActiva(r)) {
         if (selectedFichaSitioId && r.sitio_id !== selectedFichaSitioId) return;
         if (!siteAssets.some(e => e.id === r.activo.id)) {
           siteAssets.push({
@@ -692,7 +713,7 @@ export default function RentasTab({
             clase: r.activo.clase,
             sitio_id: r.sitio_id,
             cuenta: r.cuenta,
-            estatus: r.estado,
+            estatus: r.activo.estatus || 'Activo',
           });
         }
       }
@@ -2628,7 +2649,7 @@ export default function RentasTab({
                         const availCount = totalCount - alreadyCount;
                         return (
                           <div className="flex flex-wrap items-center gap-3 text-xs bg-white border border-slate-200/80 rounded-xl px-4 py-2">
-                            <span className="text-slate-500">Total series del cliente: <strong className="text-slate-900 font-bold">{totalCount}</strong></span>
+                            <span className="text-slate-500">Total series activas: <strong className="text-slate-900 font-bold">{totalCount}</strong></span>
                             <span className="text-slate-300">|</span>
                             <span className="text-emerald-700 font-bold">Disponibles sin OC este mes: {availCount}</span>
                             {alreadyCount > 0 && (
