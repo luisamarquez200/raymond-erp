@@ -831,14 +831,14 @@ export default function RentasTab({
     }
   };
 
-  // Select-all toggle for OC equipment table (only selects available series)
+  // Select-all toggle for OC equipment table
   const availableSeries = fichaSeriesGrid.filter(i => !showOnlyAvailableInMonth || !i.alreadyHasOrderInMonth);
   const allSeriesChecked = availableSeries.length > 0 && availableSeries.every(i => i.checked);
   const someSeriesChecked = availableSeries.some(i => i.checked) && !allSeriesChecked;
   const handleSelectAllSeries = () => {
     const nextChecked = !allSeriesChecked;
     setFichaSeriesGrid(prev => prev.map(i => {
-      if (i.alreadyHasOrderInMonth) return { ...i, checked: false };
+      if (showOnlyAvailableInMonth && i.alreadyHasOrderInMonth) return { ...i, checked: false };
       return { ...i, checked: nextChecked };
     }));
   };
@@ -2711,9 +2711,8 @@ export default function RentasTab({
                                       <input
                                         type="checkbox"
                                         checked={item.checked}
-                                        disabled={item.alreadyHasOrderInMonth}
                                         onChange={e => handleGridFieldChange(realIdx, 'checked', e.target.checked)}
-                                        className="w-4.5 h-4.5 rounded text-red-600 focus:ring-red-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="w-4.5 h-4.5 rounded text-red-600 focus:ring-red-500 cursor-pointer"
                                       />
                                     </td>
                                     <td className="p-3">
@@ -2736,7 +2735,7 @@ export default function RentasTab({
                                     </td>
                                     <td className="p-3">
                                       {item.alreadyHasOrderInMonth ? (
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1 rounded-lg">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1 rounded-lg" title="Ya tiene OC registrada este mes. Puedes marcarla para actualizar o reasignar.">
                                           <Check className="w-3 h-3 text-amber-600" />
                                           OC: {item.orderInMonthPo || 'Registrada'}
                                         </span>
@@ -2752,11 +2751,10 @@ export default function RentasTab({
                                     <td className="p-3">
                                       <input
                                         type="text"
-                                        disabled={item.alreadyHasOrderInMonth}
                                         value={item.pedido_totvs || ""}
                                         onChange={e => handleGridFieldChange(realIdx, 'pedido_totvs', e.target.value)}
                                         placeholder={fichaPedidoTotvs || "Pedido TOTVS"}
-                                        className="w-28 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold disabled:bg-slate-100 disabled:cursor-not-allowed placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-28 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold placeholder:font-normal placeholder:text-slate-400"
                                       />
                                     </td>
                                     <td className="p-3">
@@ -2772,11 +2770,10 @@ export default function RentasTab({
                                         type="number"
                                         min="0"
                                         max="30"
-                                        disabled={item.alreadyHasOrderInMonth}
                                         value={item.dias_caidos || ""}
                                         onChange={e => handleGridFieldChange(realIdx, 'dias_caidos', e.target.value)}
                                         placeholder="0"
-                                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-red-500 text-xs font-bold"
                                       />
                                     </td>
                                     <td className="p-3 font-semibold text-slate-500">

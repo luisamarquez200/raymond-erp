@@ -251,24 +251,18 @@ export class PresupuestosService {
             const estatusNormAcc = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
             if (estatusNormAcc.startsWith('INACTIVO') || estatusNormAcc === 'BACK UP' || estatusNormAcc === 'POR RETIRAR') continue;
 
-            const currentYear = dayjs(`${earliestPeriodStr}-01`).year();
-            const yearStart = dayjs(`${currentYear}-01-01`).startOf('month');
-            const startM = dayjs(r.fecha_inicio).startOf('month');
-            const effectiveStart = startM.isAfter(yearStart) ? startM : yearStart;
-            const endM = dayjs(`${earliestPeriodStr}-01`).startOf('month');
-            let monthsActive = endM.diff(effectiveStart, 'month');
-            if (monthsActive < 0) monthsActive = 0;
+            // Find actual past recovery orders for this renta
+            const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
+            const pastRecovery = pastOrders.reduce((sum, o) => {
+                const cond = o.condiciones as any;
+                if (cond?.recuperacion || o.periodo < earliestPeriodStr) {
+                    return sum + (o.tarifa || 0);
+                }
+                return sum;
+            }, 0);
             
-            const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
-            const expectedPast = budgetAmount * monthsActive;
-            
-            // Find past orders for this renta (in current year before the earliest month in selection)
-            const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr && o.periodo >= `${currentYear}-01`);
-            const pastSent = pastOrders.reduce((sum, o) => sum + (o.tarifa || 0), 0);
-            
-            const pending = expectedPast - pastSent;
-            if (pending > 0) {
-                currencyStat.acumulado += pending;
+            if (pastRecovery > 0) {
+                currencyStat.acumulado += pastRecovery;
                 
                 const clientName = r.cliente.razon_social;
                 const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
@@ -278,11 +272,11 @@ export class PresupuestosService {
                     cliente: clientName,
                     adc: adcName,
                     moneda: rMoneda,
-                    pendiente: pending
+                    pendiente: pastRecovery
                 });
 
                 if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
-                clientTotals.get(clientName)!.pendiente += pending;
+                clientTotals.get(clientName)!.pendiente += pastRecovery;
             }
         }
 
@@ -346,10 +340,10 @@ export class PresupuestosService {
         const isAdcFiltered = adcKeywords.length > 0;
         for (const key of ['MXN', 'USD'] as const) {
             const s = stats[key];
-            s.total_a_facturar = (s.presupuesto_mes + s.acumulado) - s.equipos_detenidos;
+            s.total_a_facturar = s.presupuesto_mes + s.acumulado;
             // Use manually entered facturado value from Gerente when not filtered by ADC; fallback to pedidos_enviados
             s.facturado = (!isAdcFiltered && facturadoByMoneda[key] > 0) ? facturadoByMoneda[key] : s.pedidos_enviados;
-            s.faltante = s.total_a_facturar - s.pedidos_enviados;
+            s.faltante = Math.max(0, s.total_a_facturar - s.pedidos_enviados);
             s.cumplimiento_general = s.total_a_facturar > 0 ? (s.pedidos_enviados / s.total_a_facturar) * 100 : (s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0);
         }
 
@@ -480,22 +474,18 @@ export class PresupuestosService {
                 }
             }
 
-            // Pending accumulation for past months (annual cycle)
+            // Pending accumulation for past months (actual recovery orders)
             if (!isInactive) {
-                const currentYear = dayjs(`${earliestPeriodStr}-01`).year();
-                const yearStart = dayjs(`${currentYear}-01-01`).startOf('month');
-                const startM = dayjs(r.fecha_inicio).startOf('month');
-                const effectiveStart = startM.isAfter(yearStart) ? startM : yearStart;
-                const endM = dayjs(`${earliestPeriodStr}-01`).startOf('month');
-                let monthsActive = endM.diff(effectiveStart, 'month');
-                if (monthsActive < 0) monthsActive = 0;
-
-                const expectedPast = budgetAmount * monthsActive;
-                const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr && o.periodo >= `${currentYear}-01`);
-                const pastSent = pastOrders.reduce((sum, o) => sum + (o.tarifa || 0), 0);
-                const pending = expectedPast - pastSent;
-                if (pending > 0) {
-                    item.pendiente_acumulado += pending;
+                const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
+                const pastRecovery = pastOrders.reduce((sum, o) => {
+                    const cond = o.condiciones as any;
+                    if (cond?.recuperacion || o.periodo < earliestPeriodStr) {
+                        return sum + (o.tarifa || 0);
+                    }
+                    return sum;
+                }, 0);
+                if (pastRecovery > 0) {
+                    item.pendiente_acumulado += pastRecovery;
                 }
             }
         }
@@ -545,7 +535,7 @@ export class PresupuestosService {
         }
 
         const tabla_maestra = Array.from(masterMap.values()).map(item => {
-            const total_facturar = (item.presupuesto + item.pendiente_acumulado) - item.equipos_detenidos;
+            const total_facturar = item.presupuesto + item.pendiente_acumulado;
             const cumplimiento = total_facturar > 0 ? (item.enviado / total_facturar) * 100 : (item.presupuesto > 0 ? (item.enviado / item.presupuesto) * 100 : 0);
             return {
                 ...item,
