@@ -567,7 +567,8 @@ export default function FlotillaTab({
 
       // Close modal immediately upon successful request
       cancelEditing();
-      await Promise.all([fetchFlotilla(), fetchPendingApprovals()]);
+      fetchFlotilla().catch(() => {});
+      fetchPendingApprovals().catch(() => {});
     } catch (error) {
       console.error(error);
       toast.error('Error al procesar la actualización del activo');

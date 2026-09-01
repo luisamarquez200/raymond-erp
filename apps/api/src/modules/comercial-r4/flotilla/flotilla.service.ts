@@ -185,9 +185,9 @@ export class FlotillaService {
                     const adcName = ((u as any).adc_asociado_name || '').trim().toLowerCase();
 
                     if (
-                        (fullName && (fullName.includes(normItem) || normItem.includes(fullName))) ||
+                        (fullName && (fullName === normItem || (normItem.length > 4 && (fullName.includes(normItem) || normItem.includes(fullName))))) ||
                         (email && email === normItem) ||
-                        (adcName && normItem.includes(adcName))
+                        (adcName && isSameAdc(adcName, normItem))
                     ) {
                         targetUserIds.add(u.id);
                     }
@@ -879,6 +879,32 @@ export class FlotillaService {
             datos: dto
         };
 
+        // Deduplication: If a pending request already exists for this active, update it instead of creating duplicates
+        const existingPending = await db.cambioSitioLog.findFirst({
+            where: {
+                activo_id: activo.id,
+                aprobado: false
+            },
+            orderBy: { fecha: 'desc' }
+        });
+
+        if (existingPending) {
+            let pendingMotivo: any = {};
+            try { pendingMotivo = JSON.parse(existingPending.motivo || '{}'); } catch(e) {}
+            const isRecent = existingPending.fecha && (Date.now() - new Date(existingPending.fecha).getTime() < 10 * 60 * 1000);
+            if (isRecent && pendingMotivo?.tipo === (isTransfer ? 'TRANSFERENCIA' : 'EDICION')) {
+                await db.cambioSitioLog.update({
+                    where: { id: existingPending.id },
+                    data: {
+                        sitio_nuevo_id: dto.sitio_id || activo.sitio_id || 'sin_sitio',
+                        motivo: JSON.stringify(motivoData),
+                        usuario_id: usuarioId
+                    }
+                });
+                return { success: true, message: `Solicitud de ${accionNombre.toLowerCase()} actualizada para aprobación`, logId: existingPending.id };
+            }
+        }
+
         const log = await db.cambioSitioLog.create({
             data: {
                 activo_id: activo.id,
@@ -899,8 +925,7 @@ export class FlotillaService {
             sitioNuevo?.adc,
             sitioAnterior?.adc,
             (clienteObj as any)?.adc,
-            (clienteObj as any)?.datos_comerciales?.adc,
-            detalleAutor
+            (clienteObj as any)?.datos_comerciales?.adc
         ];
 
         await this.notificarAdmins(
@@ -989,7 +1014,18 @@ export class FlotillaService {
                 usuarioId: s.usuario_id
             });
         }
-        return result;
+        
+        // Deduplicate in memory: Keep only the most recent pending request per (activoId + type)
+        const seen = new Set<string>();
+        const uniqueResult = [];
+        for (const item of result) {
+            const dedupeKey = `${item.activoId || item.activoSerie}___${item.datosPropuestos?.tipo || item.accionNombre}`;
+            if (!seen.has(dedupeKey)) {
+                seen.add(dedupeKey);
+                uniqueResult.push(item);
+            }
+        }
+        return uniqueResult;
     }
 
     async aprobarSolicitud(id: string, usuarioAprobador?: string) {
@@ -1214,6 +1250,27 @@ export class FlotillaService {
             [solicitanteNombre, equipo?.adc]
         );
 
+        // Auto-resolve any identical pending duplicate requests for this same active to keep pending queue clean
+        try {
+            const duplicates = await db.cambioSitioLog.findMany({
+                where: {
+                    activo_id: log.activo_id,
+                    aprobado: false,
+                    id: { not: id }
+                }
+            });
+            for (const dup of duplicates) {
+                let dupMotivo: any = {};
+                try { dupMotivo = JSON.parse(dup.motivo || '{}'); } catch(e) {}
+                if (dupMotivo?.tipo === datosPropuestos?.tipo) {
+                    await db.cambioSitioLog.update({
+                        where: { id: dup.id },
+                        data: { aprobado: true, motivo: JSON.stringify({ ...dupMotivo, aprobado: true, auto_resolved: true }) }
+                    });
+                }
+            }
+        } catch (e) {}
+
         return { success: true, message: 'Solicitud aprobada con éxito' };
     }
 
@@ -1358,8 +1415,7 @@ export class FlotillaService {
             principal.adc,
             principal.sitio?.adc,
             (principal.cliente as any)?.adc,
-            (principal.cliente as any)?.datos_comerciales?.adc,
-            detalleAutor
+            (principal.cliente as any)?.datos_comerciales?.adc
         ];
 
         await this.notificarAdmins(
@@ -1445,8 +1501,7 @@ export class FlotillaService {
             principal.adc,
             principal.sitio?.adc,
             (principal.cliente as any)?.adc,
-            (principal.cliente as any)?.datos_comerciales?.adc,
-            detalleAutor
+            (principal.cliente as any)?.datos_comerciales?.adc
         ];
 
         await this.notificarAdmins(
