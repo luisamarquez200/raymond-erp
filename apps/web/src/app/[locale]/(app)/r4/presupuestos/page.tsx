@@ -35,7 +35,7 @@ export default function PresupuestosPage() {
     const currentDate = dayjs();
     const initialFilters = {
         year: currentDate.year().toString(),
-        month: [(currentDate.month() + 1).toString()], // Array for multi-select
+        month: [(currentDate.month() + 1).toString()], // Mes actual dinámico
         cliente_id: '',
         sitio_id: '',
         adc: '',
