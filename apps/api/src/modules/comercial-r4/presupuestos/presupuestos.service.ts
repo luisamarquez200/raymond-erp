@@ -153,10 +153,15 @@ export class PresupuestosService {
             where: ordersWhere,
             include: {
                 cliente: true,
+                activo: {
+                    include: { sitio: true }
+                },
                 renta: {
                     include: {
                         sitio: true,
-                        activo: true,
+                        activo: {
+                            include: { sitio: true }
+                        },
                         detalles: true,
                     }
                 }
@@ -186,6 +191,15 @@ export class PresupuestosService {
         const adcsMap = new Map<string, { adc: string; cliente: string; moneda: string; budget: number; sentPOs: number }>();
         const pendingByClientAdc: any[] = [];
         const clientTotals = new Map<string, { presupuesto: number, pendiente: number }>();
+        const masterMap = new Map<string, {
+            adc: string;
+            cliente: string;
+            moneda: string;
+            presupuesto: number;
+            enviado: number;
+            equipos_detenidos: number;
+            pendiente_acumulado: number;
+        }>();
 
         for (const r of allRentas) {
             // Apply ADC and Sitio filters manually
@@ -233,7 +247,14 @@ export class PresupuestosService {
             }
         }
 
-        // Processing Orders (Pendiente Acumulado within annual cycle)
+        // Find distinct past periods that actually exist in the database orders
+        const pastPeriodsInDb = Array.from(new Set(
+            allOrders
+                .map(o => o.periodo)
+                .filter(p => p && p < earliestPeriodStr)
+        )).sort();
+
+        // Processing Orders (Pendiente Acumulado calculated dynamically from DB)
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
                 const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
@@ -242,47 +263,91 @@ export class PresupuestosService {
                 }
             }
 
-            const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
+            const rMoneda = (r.detalles?.moneda || 'MXN').toUpperCase();
             if (moneda && moneda !== rMoneda) continue;
             const currencyStat = stats[rMoneda as keyof typeof stats];
             if (!currencyStat) continue;
 
-            // Skip inactive equipment from accumulated calculation
             const estatusNormAcc = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
             if (estatusNormAcc.startsWith('INACTIVO') || estatusNormAcc === 'BACK UP' || estatusNormAcc === 'POR RETIRAR') continue;
 
-            // Find actual past recovery orders for this renta
-            const pastOrders = allOrders.filter(o => o.renta_id === r.id);
-            const pastRecovery = pastOrders.reduce((sum, o) => {
+            const rentaTarifa = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
+            const clientName = r.cliente.razon_social;
+            const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
+            const adcName = rawAdc?.trim() || 'Sin ADC';
+
+            // Check unbilled difference across past periods loaded in DB
+            let totalPastPending = 0;
+            for (const pastPeriod of pastPeriodsInDb) {
+                const pastOrdersForRenta = allOrders.filter(o => o.renta_id === r.id && o.periodo === pastPeriod);
+                const pastBilled = pastOrdersForRenta.reduce((sum, o) => sum + (o.tarifa || 0), 0);
+                const unbilled = Math.max(0, rentaTarifa - pastBilled);
+                totalPastPending += unbilled;
+            }
+
+            // Also check if current orders have explicit recovery
+            const currentOrdersForRenta = allOrders.filter(o => o.renta_id === r.id && currentPeriodStrs.includes(o.periodo));
+            const explicitRecovery = currentOrdersForRenta.reduce((sum, o) => {
                 const cond = o.condiciones as any;
                 if (cond?.recuperacion === true || cond?.tipo === 'RECUPERACION' || (o.estado as string) === 'RECUPERACION') {
                     return sum + (o.tarifa || 0);
                 }
                 return sum;
             }, 0);
-            
-            if (pastRecovery > 0) {
-                currencyStat.acumulado += pastRecovery;
-                
-                const clientName = r.cliente.razon_social;
-                const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
-                const adcName = rawAdc?.trim() || 'Sin ADC';
-                
+
+            const pendingToAdd = totalPastPending + explicitRecovery;
+
+            if (pendingToAdd > 0) {
+                currencyStat.acumulado += pendingToAdd;
+
                 pendingByClientAdc.push({
                     cliente: clientName,
                     adc: adcName,
                     moneda: rMoneda,
-                    pendiente: pastRecovery
+                    pendiente: pendingToAdd
                 });
 
                 if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
-                clientTotals.get(clientName)!.pendiente += pastRecovery;
+                clientTotals.get(clientName)!.pendiente += pendingToAdd;
+
+                const masterKey = `${adcName}___${clientName}___${rMoneda}`;
+                if (masterMap.has(masterKey)) {
+                    masterMap.get(masterKey)!.pendiente_acumulado += pendingToAdd;
+                } else {
+                    let found = false;
+                    for (const item of masterMap.values()) {
+                        if (item.moneda === rMoneda && item.cliente.trim().toUpperCase() === clientName.trim().toUpperCase()) {
+                            item.pendiente_acumulado += pendingToAdd;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        masterMap.set(masterKey, {
+                            adc: adcName,
+                            cliente: clientName,
+                            moneda: rMoneda,
+                            presupuesto: 0,
+                            enviado: 0,
+                            equipos_detenidos: 0,
+                            pendiente_acumulado: pendingToAdd
+                        });
+                    }
+                }
             }
         }
 
-        // Sent POs in current month
+        // Sent POs in current month - Consolidated by OC / Sitio / Cliente
         const currentMonthOrders = allOrders.filter(o => currentPeriodStrs.includes(o.periodo));
-        const pedidos_del_mes: any[] = [];
+        const consolidatedOrdersMap = new Map<string, {
+            cliente: string;
+            po: string;
+            sitio: string;
+            pedido_totvs: string;
+            moneda: string;
+            importe: number;
+            cantidad_equipos: number;
+        }>();
 
         for (const o of currentMonthOrders) {
             // Check filters
@@ -326,15 +391,37 @@ export class PresupuestosService {
                 }
 
                 const condicionesObj = (o.condiciones as any) || {};
-                pedidos_del_mes.push({
-                    cliente: o.cliente.razon_social,
-                    moneda: oMoneda,
-                    importe: amount,
-                    po: o.po,
-                    pedido_totvs: condicionesObj.pedido_totvs || condicionesObj.pedido || condicionesObj.pedido_tovts || o.renta?.no_registro_totvs || '-'
-                });
+                const poNum = (o.po || '-').trim();
+                const sitioNombre = (o.renta?.sitio?.nombre || o.activo?.sitio?.nombre || o.renta?.activo?.sitio?.nombre || (o.renta?.sitio as any)?.ciudad || (o.activo?.sitio as any)?.ciudad || '-').trim();
+                const totvsNum = (condicionesObj.pedido_totvs || condicionesObj.pedido || condicionesObj.pedido_tovts || o.renta?.no_registro_totvs || '-').trim();
+
+                const groupKey = `${clientName}___${poNum}___${sitioNombre}___${oMoneda}`;
+                if (!consolidatedOrdersMap.has(groupKey)) {
+                    consolidatedOrdersMap.set(groupKey, {
+                        cliente: clientName,
+                        po: poNum,
+                        sitio: sitioNombre,
+                        pedido_totvs: totvsNum,
+                        moneda: oMoneda,
+                        importe: 0,
+                        cantidad_equipos: 0
+                    });
+                }
+                const group = consolidatedOrdersMap.get(groupKey)!;
+                group.importe += amount;
+                group.cantidad_equipos += 1;
+                if ((group.pedido_totvs === '-' || group.pedido_totvs.toUpperCase() === 'PENDIENTE') && totvsNum && totvsNum !== '-' && totvsNum.toUpperCase() !== 'PENDIENTE') {
+                    group.pedido_totvs = totvsNum;
+                }
             }
         }
+
+        // Sort: Items with positive amount first (descending), zeros at the end
+        const pedidos_del_mes = Array.from(consolidatedOrdersMap.values()).sort((a, b) => {
+            if (a.importe > 0 && b.importe === 0) return -1;
+            if (a.importe === 0 && b.importe > 0) return 1;
+            return b.importe - a.importe;
+        });
 
         // Calculate totals according to business rule: (Presupuesto + Pendiente acumulado) - Equipos Detenidos = Total a facturar
         const isAdcFiltered = adcKeywords.length > 0;
@@ -418,17 +505,6 @@ export class PresupuestosService {
         if (observaciones.length === 0) {
             observaciones.push({ tipo: 'Info', mensaje: 'Reporte generado automáticamente. Todos los indicadores en orden.' });
         }
-
-        // Master Consolidated Table
-        const masterMap = new Map<string, {
-            adc: string;
-            cliente: string;
-            moneda: string;
-            presupuesto: number;
-            enviado: number;
-            equipos_detenidos: number;
-            pendiente_acumulado: number;
-        }>();
 
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {

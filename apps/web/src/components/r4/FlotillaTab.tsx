@@ -1257,7 +1257,16 @@ export default function FlotillaTab({
                         ) : <span className="text-slate-400 italic">Transferencia de sitio</span>}
                       </td>
                       <td className="px-4 py-3 text-slate-500 text-[10px] font-medium">
-                        {sol.fechaEnvioFormatted || new Date(sol.fecha).toLocaleString('es-MX')}
+                        {sol.fechaEnvioFormatted || new Date(sol.fecha).toLocaleString('es-MX', {
+                          timeZone: 'America/Mexico_City',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: true
+                        })}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex gap-2 justify-end">
