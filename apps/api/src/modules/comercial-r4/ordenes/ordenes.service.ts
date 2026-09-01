@@ -219,15 +219,24 @@ export class OrdenesService {
                 include: { activo: true, cliente: true, detalles: true }
             });
 
-            let procesadas = 0;
+            const activoIds = rentas.map(r => r.activo_id).filter(Boolean) as string[];
+
+            // 1. Obtener órdenes existentes en 1 sola consulta
+            const existingOrders = await db.ordenMensual.findMany({
+                where: {
+                    activo_id: { in: activoIds },
+                    periodo: dto.periodo
+                }
+            });
+            const existingMap = new Map<string, any>(existingOrders.map(o => [o.activo_id!, o]));
+
+            const toCreate: any[] = [];
+            const updates: Promise<any>[] = [];
+
             for (const renta of rentas) {
+                if (!renta.activo_id) continue;
                 const tarifaFinal = Number(renta.detalles?.renta_real || renta.detalles?.renta_base || renta.tarifa || 0);
-                const existing = await db.ordenMensual.findFirst({
-                    where: {
-                        activo_id: renta.activo_id,
-                        periodo: dto.periodo,
-                    }
-                });
+                const existing = existingMap.get(renta.activo_id);
 
                 const condiciones = {
                     ...((existing?.condiciones as any) || {}),
@@ -236,39 +245,55 @@ export class OrdenesService {
                 };
 
                 if (existing) {
-                    await db.ordenMensual.update({
-                        where: { id: existing.id },
-                        data: {
-                            po: dto.po,
-                            tarifa: tarifaFinal,
-                            moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
-                            estado: 'GENERADA',
-                            condiciones
-                        }
-                    });
+                    updates.push(
+                        db.ordenMensual.update({
+                            where: { id: existing.id },
+                            data: {
+                                po: dto.po,
+                                tarifa: tarifaFinal,
+                                moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
+                                estado: 'GENERADA',
+                                condiciones
+                            }
+                        })
+                    );
                 } else {
-                    await db.ordenMensual.create({
-                        data: {
-                            cliente_id: renta.cliente_id,
-                            renta_id: renta.id,
-                            activo_id: renta.activo_id,
-                            contrato_id: renta.contrato_id,
-                            periodo: dto.periodo,
-                            po: dto.po,
-                            tarifa: tarifaFinal,
-                            moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
-                            estado: 'GENERADA',
-                            condiciones
-                        }
+                    toCreate.push({
+                        cliente_id: renta.cliente_id,
+                        renta_id: renta.id,
+                        activo_id: renta.activo_id,
+                        contrato_id: renta.contrato_id,
+                        periodo: dto.periodo,
+                        po: dto.po,
+                        tarifa: tarifaFinal,
+                        moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
+                        estado: 'GENERADA',
+                        condiciones
                     });
                 }
-                procesadas++;
+            }
+
+            if (updates.length > 0) {
+                const updateChunk = 50;
+                for (let i = 0; i < updates.length; i += updateChunk) {
+                    await Promise.all(updates.slice(i, i + updateChunk));
+                }
+            }
+
+            if (toCreate.length > 0) {
+                const chunkSize = 200;
+                for (let i = 0; i < toCreate.length; i += chunkSize) {
+                    await db.ordenMensual.createMany({
+                        data: toCreate.slice(i, i + chunkSize),
+                        skipDuplicates: true
+                    });
+                }
             }
 
             return {
                 success: true,
-                message: `Se asignaron ${procesadas} órdenes correctamente con la OC: ${dto.po}`,
-                procesadas
+                message: `Se asignaron ${rentas.length} órdenes correctamente con la OC: ${dto.po}`,
+                procesadas: rentas.length
             };
         } catch (error: any) {
             this.logger.error(`Error en asignarMasivo: ${error.message}`);
@@ -285,7 +310,7 @@ export class OrdenesService {
 
             const adcKeywords = dto.adc ? dto.adc.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
 
-            // Buscar todas las órdenes del periodo origen
+            // 1. Buscar todas las órdenes del periodo origen en 1 sola consulta
             const ordenesOrigen = await db.ordenMensual.findMany({
                 where: {
                     periodo: dto.periodo_origen,
@@ -304,7 +329,7 @@ export class OrdenesService {
                 }
             });
 
-            // Filtrar por ADC si aplica
+            // 2. Filtrar por ADC si aplica
             const ordenesFiltradas = ordenesOrigen.filter((o: any) => {
                 if (adcKeywords.length === 0) return true;
                 const candidates = [
@@ -317,47 +342,69 @@ export class OrdenesService {
                 return matchAdcKeywords(candidates, adcKeywords);
             });
 
-            let copiadas = 0;
+            if (ordenesFiltradas.length === 0) {
+                return {
+                    success: true,
+                    message: `No se encontraron órdenes en ${dto.periodo_origen} para replicar.`,
+                    copiadas: 0,
+                    yaExistian: 0,
+                    totalOrigen: 0
+                };
+            }
+
+            // 3. Obtener todas las órdenes existentes del periodo destino en 1 sola consulta rápida
+            const existingDestino = await db.ordenMensual.findMany({
+                where: {
+                    periodo: dto.periodo_destino,
+                    ...(dto.cliente_id ? { cliente_id: dto.cliente_id } : {}),
+                    activo_id: { not: null }
+                },
+                select: { activo_id: true }
+            });
+            const existingActivoIds = new Set(existingDestino.map(e => e.activo_id).filter(Boolean));
+
             let yaExistian = 0;
+            const toCreate: any[] = [];
 
             for (const o of ordenesFiltradas) {
-                // Verificar si ya existe una orden para este activo en el periodo destino
-                const existing = await db.ordenMensual.findFirst({
-                    where: {
-                        activo_id: o.activo_id,
-                        periodo: dto.periodo_destino
-                    }
-                });
-
-                if (existing) {
+                if (!o.activo_id) continue;
+                if (existingActivoIds.has(o.activo_id)) {
                     yaExistian++;
                     continue;
                 }
 
-                // Crear la orden en el periodo destino
                 const tarifaFinal = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.tarifa || 0);
-
-                await db.ordenMensual.create({
-                    data: {
-                        cliente_id: o.cliente_id,
-                        renta_id: o.renta_id,
-                        activo_id: o.activo_id,
-                        contrato_id: o.contrato_id,
-                        periodo: dto.periodo_destino,
-                        po: o.po,
-                        tarifa: tarifaFinal,
-                        moneda: o.moneda || o.renta?.detalles?.moneda || 'MXN',
-                        estado: 'GENERADA',
-                        condiciones: o.condiciones || {}
-                    }
+                toCreate.push({
+                    cliente_id: o.cliente_id,
+                    renta_id: o.renta_id,
+                    activo_id: o.activo_id,
+                    contrato_id: o.contrato_id,
+                    periodo: dto.periodo_destino,
+                    po: o.po,
+                    tarifa: tarifaFinal,
+                    moneda: o.moneda || o.renta?.detalles?.moneda || 'MXN',
+                    estado: 'GENERADA',
+                    condiciones: o.condiciones || {}
                 });
-                copiadas++;
+                existingActivoIds.add(o.activo_id);
+            }
+
+            // 4. Inserción masiva en chunks ultra rápida (1-2 queries en total)
+            if (toCreate.length > 0) {
+                const chunkSize = 200;
+                for (let i = 0; i < toCreate.length; i += chunkSize) {
+                    const chunk = toCreate.slice(i, i + chunkSize);
+                    await db.ordenMensual.createMany({
+                        data: chunk,
+                        skipDuplicates: true
+                    });
+                }
             }
 
             return {
                 success: true,
-                message: `Se copiaron ${copiadas} órdenes de ${dto.periodo_origen} a ${dto.periodo_destino} (${yaExistian} ya existían).`,
-                copiadas,
+                message: `Se copiaron ${toCreate.length} órdenes de ${dto.periodo_origen} a ${dto.periodo_destino} (${yaExistian} ya existían).`,
+                copiadas: toCreate.length,
                 yaExistian,
                 totalOrigen: ordenesFiltradas.length
             };
