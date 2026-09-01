@@ -247,14 +247,7 @@ export class PresupuestosService {
             }
         }
 
-        // Find distinct past periods that actually exist in the database orders
-        const pastPeriodsInDb = Array.from(new Set(
-            allOrders
-                .map(o => o.periodo)
-                .filter(p => p && p < earliestPeriodStr)
-        )).sort();
-
-        // Processing Orders (Pendiente Acumulado calculated dynamically from DB)
+        // Processing Orders (Pendiente Acumulado strictly from explicit recovery orders)
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
                 const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
@@ -271,23 +264,13 @@ export class PresupuestosService {
             const estatusNormAcc = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
             if (estatusNormAcc.startsWith('INACTIVO') || estatusNormAcc === 'BACK UP' || estatusNormAcc === 'POR RETIRAR') continue;
 
-            const rentaTarifa = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
             const clientName = r.cliente.razon_social;
             const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
             const adcName = rawAdc?.trim() || 'Sin ADC';
 
-            // Check unbilled difference across past periods loaded in DB
-            let totalPastPending = 0;
-            for (const pastPeriod of pastPeriodsInDb) {
-                const pastOrdersForRenta = allOrders.filter(o => o.renta_id === r.id && o.periodo === pastPeriod);
-                const pastBilled = pastOrdersForRenta.reduce((sum, o) => sum + (o.tarifa || 0), 0);
-                const unbilled = Math.max(0, rentaTarifa - pastBilled);
-                totalPastPending += unbilled;
-            }
-
-            // Also check if current orders have explicit recovery
-            const currentOrdersForRenta = allOrders.filter(o => o.renta_id === r.id && currentPeriodStrs.includes(o.periodo));
-            const explicitRecovery = currentOrdersForRenta.reduce((sum, o) => {
+            // Find actual recovery orders for this renta
+            const ordersForRenta = allOrders.filter(o => o.renta_id === r.id);
+            const explicitRecovery = ordersForRenta.reduce((sum, o) => {
                 const cond = o.condiciones as any;
                 if (cond?.recuperacion === true || cond?.tipo === 'RECUPERACION' || (o.estado as string) === 'RECUPERACION') {
                     return sum + (o.tarifa || 0);
@@ -295,29 +278,27 @@ export class PresupuestosService {
                 return sum;
             }, 0);
 
-            const pendingToAdd = totalPastPending + explicitRecovery;
-
-            if (pendingToAdd > 0) {
-                currencyStat.acumulado += pendingToAdd;
+            if (explicitRecovery > 0) {
+                currencyStat.acumulado += explicitRecovery;
 
                 pendingByClientAdc.push({
                     cliente: clientName,
                     adc: adcName,
                     moneda: rMoneda,
-                    pendiente: pendingToAdd
+                    pendiente: explicitRecovery
                 });
 
                 if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
-                clientTotals.get(clientName)!.pendiente += pendingToAdd;
+                clientTotals.get(clientName)!.pendiente += explicitRecovery;
 
                 const masterKey = `${adcName}___${clientName}___${rMoneda}`;
                 if (masterMap.has(masterKey)) {
-                    masterMap.get(masterKey)!.pendiente_acumulado += pendingToAdd;
+                    masterMap.get(masterKey)!.pendiente_acumulado += explicitRecovery;
                 } else {
                     let found = false;
                     for (const item of masterMap.values()) {
                         if (item.moneda === rMoneda && item.cliente.trim().toUpperCase() === clientName.trim().toUpperCase()) {
-                            item.pendiente_acumulado += pendingToAdd;
+                            item.pendiente_acumulado += explicitRecovery;
                             found = true;
                             break;
                         }
@@ -330,7 +311,7 @@ export class PresupuestosService {
                             presupuesto: 0,
                             enviado: 0,
                             equipos_detenidos: 0,
-                            pendiente_acumulado: pendingToAdd
+                            pendiente_acumulado: explicitRecovery
                         });
                     }
                 }
