@@ -252,10 +252,10 @@ export class PresupuestosService {
             if (estatusNormAcc.startsWith('INACTIVO') || estatusNormAcc === 'BACK UP' || estatusNormAcc === 'POR RETIRAR') continue;
 
             // Find actual past recovery orders for this renta
-            const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
+            const pastOrders = allOrders.filter(o => o.renta_id === r.id);
             const pastRecovery = pastOrders.reduce((sum, o) => {
                 const cond = o.condiciones as any;
-                if (cond?.recuperacion || o.periodo < earliestPeriodStr) {
+                if (cond?.recuperacion === true || cond?.tipo === 'RECUPERACION' || (o.estado as string) === 'RECUPERACION') {
                     return sum + (o.tarifa || 0);
                 }
                 return sum;
@@ -476,10 +476,10 @@ export class PresupuestosService {
 
             // Pending accumulation for past months (actual recovery orders)
             if (!isInactive) {
-                const pastOrders = allOrders.filter(o => o.renta_id === r.id && o.periodo < earliestPeriodStr);
+                const pastOrders = allOrders.filter(o => o.renta_id === r.id);
                 const pastRecovery = pastOrders.reduce((sum, o) => {
                     const cond = o.condiciones as any;
-                    if (cond?.recuperacion || o.periodo < earliestPeriodStr) {
+                    if (cond?.recuperacion === true || cond?.tipo === 'RECUPERACION' || (o.estado as string) === 'RECUPERACION') {
                         return sum + (o.tarifa || 0);
                     }
                     return sum;
