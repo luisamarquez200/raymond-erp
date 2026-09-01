@@ -13,6 +13,8 @@ import { useAuthStore } from '@/store/auth.store';
 import { useUser } from '@/hooks/useUsers';
 import TooltipInfo from '@/components/ui/TooltipInfo';
 import PageLoader from '@/components/ui/PageLoader';
+import AsignarOcMasivoModal from '@/components/r4/ordenes/AsignarOcMasivoModal';
+import CopiarMesAnteriorModal from '@/components/r4/ordenes/CopiarMesAnteriorModal';
 
 export default function OrdenesMensualesPage() {
   const [ordenes, setOrdenes] = useState<any[]>([]);
@@ -28,6 +30,8 @@ export default function OrdenesMensualesPage() {
   const itemsPerPage = 15;
 
   const [adminAdcScope, setAdminAdcScope] = useState<'todos' | 'mis_adcs'>('todos');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
 
   const { user } = useAuthStore();
   const { data: freshUserProfile } = useUser(user?.id || '');
@@ -333,17 +337,39 @@ export default function OrdenesMensualesPage() {
 
       {/* BODY CONTENT */}
       <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
-        {/* Header Title */}
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1" style={{ color: currentColor }}>
-            RAYMOND
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Órdenes Mensuales
-          </h1>
-          <p className="text-slate-500 font-medium mt-1 text-sm">
-            Control de órdenes de compra (PO) y pedidos registrados en TOTVS
-          </p>
+        {/* Header Title & Action Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1" style={{ color: currentColor }}>
+              RAYMOND
+            </span>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+              Órdenes Mensuales
+            </h1>
+            <p className="text-slate-500 font-medium mt-1 text-sm">
+              Control de órdenes de compra (PO) y pedidos registrados en TOTVS
+            </p>
+          </div>
+
+          {/* Action Buttons: Carga Masiva y Replicar Mes Anterior */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => setIsCopyModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold text-xs shadow-xs transition-all hover:scale-102"
+            >
+              <RotateCcw className="w-4 h-4 text-blue-600" />
+              <span>Copiar Mes Anterior</span>
+            </button>
+
+            <button
+              onClick={() => setIsBulkModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-white rounded-xl font-bold text-xs shadow-md transition-all hover:opacity-95 hover:scale-102"
+              style={{ backgroundColor: currentColor }}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Asignación Masiva de OC</span>
+            </button>
+          </div>
         </div>
 
       {/* Indicators Row (Matching FlotillaTab Indicator Cards) */}
@@ -778,6 +804,22 @@ export default function OrdenesMensualesPage() {
         )}
       </div>
     </div>
-  </div>
+      {/* Modales de Asignación Masiva y Copia */}
+      <AsignarOcMasivoModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        onSuccess={() => fetchData()}
+        initialPeriod={selectedPeriod !== 'ALL' ? selectedPeriod : '2026-09'}
+        currentColor={currentColor}
+      />
+
+      <CopiarMesAnteriorModal
+        isOpen={isCopyModalOpen}
+        onClose={() => setIsCopyModalOpen(false)}
+        onSuccess={() => fetchData()}
+        currentPeriod={selectedPeriod !== 'ALL' ? selectedPeriod : '2026-09'}
+        currentColor={currentColor}
+      />
+    </div>
   );
 }

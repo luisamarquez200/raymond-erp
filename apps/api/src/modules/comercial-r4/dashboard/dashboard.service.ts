@@ -18,13 +18,14 @@ export class DashboardService {
         return db;
     }
 
-    async obtenerMetricas() {
+    async obtenerMetricas(query?: any) {
         const db = this.getDb();
         try {
             const now = dayjs();
-            const currentYear = now.year();
-            const currentMonth = now.month() + 1;
+            const currentYear = query?.year ? parseInt(query.year, 10) : now.year();
+            const currentMonth = query?.month ? parseInt(query.month, 10) : (now.month() + 1);
             const currentPeriod = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+            const targetMoneda = query?.moneda ? query.moneda.toUpperCase() : undefined;
             
             // 1. Equipos en flotilla (Activos con estatus operativo no inactivo)
             const allActivosRaw = await db.activo.findMany({
@@ -52,7 +53,7 @@ export class DashboardService {
             const presStats = await this.presupuestosService.getDashboardStats({
                 year: currentYear,
                 months: [currentMonth],
-                moneda: 'MXN'
+                moneda: targetMoneda
             });
 
             const exchangeRate = presStats?.exchangeRate || 18.0;
@@ -166,19 +167,25 @@ export class DashboardService {
             };
 
             // --- SECCIÓN: Presupuesto por cuenta ---
-            const clientRows = (presStats?.totalPorCliente || []).map((c: any) => {
-                const montoEstimado = Math.round(c.presupuesto_mes || 0);
-                const montoReal = Math.round(
-                    (presStats?.masterTable || [])
-                        .filter((m: any) => m.cliente === c.cliente)
-                        .reduce((sum: number, m: any) => sum + (m.enviado || 0), 0)
-                );
-                
-                const unidadesReal = activos.filter(a => a.cliente?.razon_social === c.cliente).length;
+            const clientAggMap = new Map<string, { presupuesto: number, enviado: number }>();
+            for (const row of (presStats?.tabla_maestra || [])) {
+                const cName = row.cliente || 'Sin Cliente';
+                const isUSD = (row.moneda || '').toUpperCase() === 'USD';
+                const rate = isUSD ? exchangeRate : 1;
+                const existing = clientAggMap.get(cName) || { presupuesto: 0, enviado: 0 };
+                existing.presupuesto += (row.presupuesto || 0) * rate;
+                existing.enviado += (row.enviado || 0) * rate;
+                clientAggMap.set(cName, existing);
+            }
+
+            const clientRows = Array.from(clientAggMap.entries()).map(([cliente, data]) => {
+                const montoEstimado = Math.round(data.presupuesto);
+                const montoReal = Math.round(data.enviado);
+                const unidadesReal = activos.filter(a => (a.cliente?.razon_social || '').trim().toUpperCase() === cliente.trim().toUpperCase()).length;
                 const unidadesEstimado = unidadesReal > 0 ? unidadesReal : 1;
 
                 return {
-                    cliente: c.cliente.length > 28 ? c.cliente.substring(0, 28) + '...' : c.cliente,
+                    cliente: cliente.length > 28 ? cliente.substring(0, 28) + '...' : cliente,
                     montoReal,
                     montoEstimado,
                     unidadesReal,

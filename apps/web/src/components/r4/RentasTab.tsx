@@ -15,6 +15,8 @@ import { useUser } from "@/hooks/useUsers";
 import PageLoader from "@/components/ui/PageLoader";
 import { motion, AnimatePresence } from "motion/react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { RotateCcw } from "lucide-react";
+import CopiarMesAnteriorModal from "@/components/r4/ordenes/CopiarMesAnteriorModal";
 
 const formatFilterText = (str: string) => {
   if (!str) return '-';
@@ -182,6 +184,7 @@ export default function RentasTab({
 
   // Registro OC Modal State
   const [isFichaOcModalOpen, setIsFichaOcModalOpen] = useState(false);
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [selectedFichaClienteId, setSelectedFichaClienteId] = useState("");
   const [selectedFichaSitioId, setSelectedFichaSitioId] = useState("");
   const [fichaFolioOc, setFichaFolioOc] = useState("");
@@ -495,8 +498,13 @@ export default function RentasTab({
           const sAdc = (s.adc || '').toLowerCase();
           return adcKeywords.some((kw: string) => sAdc === kw || sAdc.includes(kw) || kw.includes(sAdc)) || (userFirstName && sAdc.includes(userFirstName));
         });
+        const hasMatchingRenta = rentas.some((r: any) => {
+          if (r.cliente_id !== c.id && r.cliente?.id !== c.id) return false;
+          const rAdc = (r.adc || r.activo?.adc || '').toLowerCase();
+          return adcKeywords.some((kw: string) => rAdc === kw || rAdc.includes(kw) || kw.includes(rAdc)) || (userFirstName && rAdc.includes(userFirstName));
+        });
         return adcKeywords.some((kw: string) => adcLower === kw || adcLower.includes(kw) || kw.includes(adcLower)) ||
-          (userFirstName && adcLower.includes(userFirstName)) || hasMatchingSitio;
+          (userFirstName && adcLower.includes(userFirstName)) || hasMatchingSitio || hasMatchingRenta;
       })
     : clientesDisponibles;
 
@@ -1589,6 +1597,14 @@ export default function RentasTab({
             >
               <Download className="w-3.5 h-3.5 text-slate-500" />
               <span>Exportar</span>
+            </button>
+            <button
+              onClick={() => setIsCopyModalOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer"
+              title="Copiar y replicar OCs del mes anterior"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
+              <span>Copiar Mes Anterior</span>
             </button>
             <button
               onClick={() => setIsFichaOcModalOpen(true)}
@@ -3983,6 +3999,17 @@ export default function RentasTab({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Copiar Mes Anterior Modal */}
+      <CopiarMesAnteriorModal
+        isOpen={isCopyModalOpen}
+        onClose={() => setIsCopyModalOpen(false)}
+        onSuccess={() => {
+          fetchRentasYClientes();
+          toast.success('Órdenes replicadas correctamente');
+        }}
+        currentPeriod={new Date().toISOString().slice(0, 7)}
+        currentColor={currentColor}
+      />
     </div>
   );
 }

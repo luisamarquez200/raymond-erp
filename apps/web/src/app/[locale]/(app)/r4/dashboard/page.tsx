@@ -19,13 +19,30 @@ export default function R4DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<any>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number>(8);
+
+  const months = [
+    { value: 1, label: 'Ene' },
+    { value: 2, label: 'Feb' },
+    { value: 3, label: 'Mar' },
+    { value: 4, label: 'Abr' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'Jun' },
+    { value: 7, label: 'Jul' },
+    { value: 8, label: 'Ago' },
+    { value: 9, label: 'Sep' },
+    { value: 10, label: 'Oct' },
+    { value: 11, label: 'Nov' },
+    { value: 12, label: 'Dic' },
+  ];
 
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
         setLoading(true);
         setApiError(null);
-        const res = await api.get('/r4/dashboard/metrics');
+        const res = await api.get(`/r4/dashboard/metrics?year=${selectedYear}&month=${selectedMonth}`);
         setMetrics(res.data?.data || res.data);
       } catch (error: any) {
         setApiError(error?.response?.data?.message || error?.message || 'Error al cargar métricas');
@@ -34,9 +51,9 @@ export default function R4DashboardPage() {
       }
     };
     fetchMetrics();
-  }, []);
+  }, [selectedYear, selectedMonth]);
 
-  if (loading) {
+  if (loading && !metrics) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col items-center gap-6 max-w-sm w-full animate-in fade-in zoom-in duration-500">
@@ -101,6 +118,38 @@ export default function R4DashboardPage() {
           <span className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 block" style={{ color: currentColor }}>RAYMOND</span>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Ejecutivo</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Vista estratégica y datos ejecutivos de flotilla</p>
+        </div>
+
+        {/* Filtros de Año y Mes */}
+        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="bg-white px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 border border-slate-200 focus:outline-none"
+          >
+            <option value={2025}>2025</option>
+            <option value={2026}>2026</option>
+            <option value={2027}>2027</option>
+          </select>
+          <div className="flex gap-1">
+            {months.map((m) => {
+              const isSelected = selectedMonth === m.value;
+              return (
+                <button
+                  key={m.value}
+                  onClick={() => setSelectedMonth(m.value)}
+                  className={`px-2.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                    isSelected
+                      ? 'bg-red-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-200/60'
+                  }`}
+                  style={isSelected ? { backgroundColor: currentColor } : {}}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

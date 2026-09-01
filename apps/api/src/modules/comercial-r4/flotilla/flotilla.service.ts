@@ -3,7 +3,6 @@ import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../../database/prisma.service';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 
 const flotillaCache = new Map<string, { timestamp: number, data: any }>();
 const FLOTILLA_CACHE_TTL = 60 * 1000; // 60 seconds
@@ -42,28 +41,12 @@ function isSameAdc(adcCandidate: string | null | undefined, targetAdc: string): 
 @Injectable()
 export class FlotillaService {
     private readonly logger = new Logger(FlotillaService.name);
-    private transporter: nodemailer.Transporter;
 
     constructor(
         private readonly prismaDynamicService: PrismaDynamicService,
         private readonly prismaService: PrismaService,
         private readonly configService: ConfigService
-    ) {
-        const host = this.configService.get<string>('SMTP_HOST');
-        const port = this.configService.get<number>('SMTP_PORT');
-        const user = this.configService.get<string>('SMTP_USER');
-        const pass = this.configService.get<string>('SMTP_PASS');
-
-        if (host && user && pass) {
-            this.transporter = nodemailer.createTransport({
-                host,
-                port,
-                secure: Number(port) === 465,
-                auth: { user, pass },
-                tls: { rejectUnauthorized: false }
-            });
-        }
-    }
+    ) {}
 
     private getDb() {
         const db = PrismaDynamicService.clients.r4;
@@ -127,19 +110,6 @@ export class FlotillaService {
                         type: 'INFO'
                     }
                 });
-
-                if (this.transporter && admin.email) {
-                    try {
-                        await this.transporter.sendMail({
-                            from: '"Raymond ERP" <no-reply@raymond.com>',
-                            to: admin.email,
-                            subject: `[Raymond ERP] ${title}`,
-                            text: message
-                        });
-                    } catch (e: any) {
-                        this.logger.error(`Error enviando email a admin ${admin.email}: ${e.message}`);
-                    }
-                }
             }
         } catch (e: any) {
             this.logger.error(`Error enviando notificación a admins: ${e.message}`);
@@ -203,20 +173,6 @@ export class FlotillaService {
                         type: type as any
                     }
                 });
-
-                if (this.transporter) {
-                    const user = allUsers.find(u => u.id === targetId);
-                    if (user?.email) {
-                        try {
-                            await this.transporter.sendMail({
-                                from: '"Raymond ERP" <no-reply@raymond.com>',
-                                to: user.email,
-                                subject: `[Raymond ERP] ${title}`,
-                                text: message
-                            });
-                        } catch (e: any) {}
-                    }
-                }
             }
         } catch (e: any) {
             this.logger.error(`Error enviando notificación al usuario: ${e.message}`);
@@ -258,7 +214,6 @@ export class FlotillaService {
                             detalles: true
                         }
                     },
-                    ordenes: true,
                     accesorios: {
                         include: { accesorio: true }
                     },
@@ -969,6 +924,38 @@ export class FlotillaService {
             orderBy: { fecha: 'desc' }
         });
 
+        if (solicitudes.length === 0) return [];
+
+        // Batch pre-fetch all sites and users to avoid N+1 queries
+        const siteIds = new Set<string>();
+        const userIds = new Set<string>();
+        for (const s of solicitudes) {
+            if (s.sitio_anterior_id) siteIds.add(s.sitio_anterior_id);
+            if (s.sitio_nuevo_id) siteIds.add(s.sitio_nuevo_id);
+            if (s.usuario_id) userIds.add(s.usuario_id);
+        }
+
+        const [sitesList, usersList] = await Promise.all([
+            siteIds.size > 0 ? db.sitio.findMany({ where: { id: { in: Array.from(siteIds) } } }) : [],
+            userIds.size > 0 ? this.prismaService.users.findMany({ where: { id: { in: Array.from(userIds) } }, include: { roles: true } }) : []
+        ]);
+
+        const sitesMap = new Map<string, string>();
+        for (const site of sitesList) {
+            sitesMap.set(site.id, site.nombre);
+        }
+
+        const usersMap = new Map<string, string>();
+        for (const u of usersList) {
+            let det = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
+            if (u.roles?.name === 'AUXILIAR' || u.roles?.name === 'Auxiliar') {
+                if (u.adc_asociado_name) {
+                    det += ` (Auxiliar en representación del ADC: ${u.adc_asociado_name})`;
+                }
+            }
+            usersMap.set(u.id, det);
+        }
+
         const result = [];
         for (const s of solicitudes) {
             let datosPropuestos: any = null;
@@ -982,13 +969,14 @@ export class FlotillaService {
 
             let solicitanteDetalle = (datosPropuestos?.solicitante && datosPropuestos.solicitante !== 'sistema' && datosPropuestos.solicitante !== 'Usuario' && datosPropuestos.solicitante !== 'ADC / Solicitante')
                 ? datosPropuestos.solicitante
-                : await this.obtenerDetalleUsuario(s.usuario_id);
+                : (usersMap.get(s.usuario_id) || s.usuario_id);
 
             if (!solicitanteDetalle || solicitanteDetalle === 'sistema' || solicitanteDetalle === 'Usuario' || solicitanteDetalle === 'ADC / Solicitante') {
                 solicitanteDetalle = s.activo?.adc || datosPropuestos?.datos?.adc || 'Sin especificar';
             }
-            const sitioAnterior = s.sitio_anterior_id ? await db.sitio.findUnique({ where: { id: s.sitio_anterior_id } }) : null;
-            const sitioNuevo = s.sitio_nuevo_id ? await db.sitio.findUnique({ where: { id: s.sitio_nuevo_id } }) : null;
+
+            const sitioAnteriorNombre = datosPropuestos?.sitio_anterior_nombre || (s.sitio_anterior_id ? sitesMap.get(s.sitio_anterior_id) : null) || 'Sin sitio anterior';
+            const sitioNuevoNombre = datosPropuestos?.sitio_nuevo_nombre || (s.sitio_nuevo_id ? sitesMap.get(s.sitio_nuevo_id) : null) || 'Sin sitio nuevo';
             const fechaEnvioFormatted = datosPropuestos?.fecha_envio_formatted || this.formatFechaLarga(s.fecha);
 
             const requestAdc = s.activo?.adc || datosPropuestos?.datos?.adc || s.activo?.sitio?.adc || (s.activo?.cliente as any)?.datos_comerciales?.adc || (s.activo?.cliente as any)?.adc || datosPropuestos?.solicitante || '';
@@ -1002,9 +990,9 @@ export class FlotillaService {
                 adc: requestAdc,
                 accionNombre: datosPropuestos?.accion_nombre || (datosPropuestos?.tipo === 'ALTA' ? 'Alta de Equipo' : datosPropuestos?.tipo === 'EDICION' ? 'Edición de Equipo' : 'Transferencia de Sitio'),
                 sitioAnteriorId: s.sitio_anterior_id,
-                sitioAnteriorNombre: datosPropuestos?.sitio_anterior_nombre || sitioAnterior?.nombre || 'Sin sitio anterior',
+                sitioAnteriorNombre,
                 sitioNuevoId: s.sitio_nuevo_id,
-                sitioNuevoNombre: datosPropuestos?.sitio_nuevo_nombre || sitioNuevo?.nombre || 'Sin sitio nuevo',
+                sitioNuevoNombre,
                 datosPropuestos,
                 fecha: s.fecha,
                 fechaEnvioFormatted,
@@ -1268,6 +1256,7 @@ export class FlotillaService {
             }
         } catch (e) {}
 
+        flotillaCache.clear();
         return { success: true, message: 'Solicitud aprobada con éxito' };
     }
 

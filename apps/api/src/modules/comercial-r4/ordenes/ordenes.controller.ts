@@ -23,4 +23,14 @@ export class OrdenesController {
             data: await this.ordenesService.registrarOrdenManual(dto)
         };
     }
+
+    @Post('asignar-masivo')
+    async asignarMasivo(@Body() dto: { renta_ids: string[], periodo: string, po: string, pedido_totvs?: string, fecha_pedido_totvs?: string }) {
+        return await this.ordenesService.asignarMasivo(dto);
+    }
+
+    @Post('copiar-mes-anterior')
+    async copiarMesAnterior(@Body() dto: { periodo_origen: string, periodo_destino: string, cliente_id?: string, adc?: string }) {
+        return await this.ordenesService.copiarMesAnterior(dto);
+    }
 }

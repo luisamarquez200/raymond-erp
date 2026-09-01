@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 
 @Controller('r4/dashboard')
@@ -6,10 +6,10 @@ export class DashboardController {
     constructor(private readonly dashboardService: DashboardService) {}
 
     @Get('metrics')
-    async getMetrics() {
+    async getMetrics(@Query() query: any) {
         return {
             success: true,
-            data: await this.dashboardService.obtenerMetricas()
+            data: await this.dashboardService.obtenerMetricas(query)
         };
     }
 }

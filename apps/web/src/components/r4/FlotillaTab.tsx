@@ -191,12 +191,14 @@ export default function FlotillaTab({
   const [openFilters, setOpenFilters] = useState<Record<string, boolean>>({});
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
   const [searchPropietario, setSearchPropietario] = useState('');
+  const [filterRentaTerceros, setFilterRentaTerceros] = useState(false);
 
-  const hasActiveFilters = Object.values(activeFilters).some(arr => arr && arr.length > 0 && !arr.includes('Todos')) || searchTerm !== '';
+  const hasActiveFilters = Object.values(activeFilters).some(arr => arr && arr.length > 0 && !arr.includes('Todos')) || searchTerm !== '' || filterRentaTerceros;
 
   const clearFilters = () => {
     setActiveFilters({});
     setSearchTerm('');
+    setFilterRentaTerceros(false);
     setCurrentPage(1);
   };
 
@@ -820,31 +822,33 @@ export default function FlotillaTab({
     return true;
   });
 
-  const normalizedAssets = baseAssets.map(a => {
-    // Normalize ESTATUS to the master file nomenclature
-    let estatus = a.estatus || a.estatus_operativo || '';
-    const estatusUpper = estatus.toUpperCase().trim();
-    if (estatusUpper === 'ACTIVO' || estatusUpper === 'OPERATIVO' || estatusUpper === 'DISPONIBLE') {
-      estatus = 'Activo';
-    } else if (estatusUpper.includes('INACTIVO') && estatusUpper.includes('CLIENTE')) {
-      estatus = 'Inactivo con Cliente';
-    } else if (estatusUpper.startsWith('INACTIVO')) {
-      estatus = 'Inactivo';
-    } else if (estatusUpper === 'BACK UP' || estatusUpper === 'BACKUP' || estatusUpper === 'COMODATO') {
-      estatus = 'Back Up';
-    } else if (estatusUpper.includes('ENTREGAR') || estatusUpper.includes('ENTREGAR')) {
-      estatus = 'Por Entregar';
-    } else if (estatusUpper.includes('RETIRAR')) {
-      estatus = 'Por Retirar';
-    }
-    return {
-      ...a,
-      estatus,
-      distribuidor: typeof a.distribuidor === 'string' ? a.distribuidor.toUpperCase() : a.distribuidor,
-      modelo: typeof a.modelo === 'string' ? a.modelo.toUpperCase() : a.modelo,
-      serie: typeof a.serie === 'string' ? a.serie.toUpperCase() : a.serie,
-    };
-  });
+  const normalizedAssets = useMemo(() => {
+    return baseAssets.map(a => {
+      // Normalize ESTATUS to the master file nomenclature
+      let estatus = a.estatus || a.estatus_operativo || '';
+      const estatusUpper = estatus.toUpperCase().trim();
+      if (estatusUpper === 'ACTIVO' || estatusUpper === 'OPERATIVO' || estatusUpper === 'DISPONIBLE') {
+        estatus = 'Activo';
+      } else if (estatusUpper.includes('INACTIVO') && estatusUpper.includes('CLIENTE')) {
+        estatus = 'Inactivo con Cliente';
+      } else if (estatusUpper.startsWith('INACTIVO')) {
+        estatus = 'Inactivo';
+      } else if (estatusUpper === 'BACK UP' || estatusUpper === 'BACKUP' || estatusUpper === 'COMODATO') {
+        estatus = 'Back Up';
+      } else if (estatusUpper.includes('ENTREGAR')) {
+        estatus = 'Por Entregar';
+      } else if (estatusUpper.includes('RETIRAR')) {
+        estatus = 'Por Retirar';
+      }
+      return {
+        ...a,
+        estatus,
+        distribuidor: typeof a.distribuidor === 'string' ? a.distribuidor.toUpperCase() : a.distribuidor,
+        modelo: typeof a.modelo === 'string' ? a.modelo.toUpperCase() : a.modelo,
+        serie: typeof a.serie === 'string' ? a.serie.toUpperCase() : a.serie,
+      };
+    });
+  }, [baseAssets]);
 
   const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
   
@@ -853,35 +857,47 @@ export default function FlotillaTab({
     return filterVals.includes(valToTest);
   };
 
-  const getFilteredFor = (skipFilterName: string) => {
+  const filteredAssets = useMemo(() => {
+    const hasActive = Object.keys(activeFilters).length > 0;
+    const term = searchTerm ? searchTerm.toLowerCase().trim() : '';
+
     return normalizedAssets.filter((asset: any) => {
-      for (const [key, selected] of Object.entries(activeFilters)) {
-        if (key === skipFilterName) continue;
-        const val = asset[key];
+      if (filterRentaTerceros) {
+        const p = (asset.propietario || '').toUpperCase();
+        const d = (asset.distribuidor || '').trim().toUpperCase();
+        const costo = Number(asset.costo_poliza_distribuidor || 0);
+        const isTerceros = p.includes('TERCERO') || (d && d !== '-' && d !== 'RAYMOND') || costo > 0;
+        if (!isTerceros) return false;
+      }
+
+      if (hasActive) {
+        for (const [key, selected] of Object.entries(activeFilters)) {
+          const val = asset[key];
+          if (!isMatchFilter(selected, val)) return false;
+        }
+      }
+      
+      if (!term) return true;
+      return (
+        asset.serie?.toLowerCase().includes(term) ||
+        asset.cliente?.toLowerCase().includes(term) ||
+        asset.modelo?.toLowerCase().includes(term)
+      );
+    });
+  }, [normalizedAssets, activeFilters, searchTerm, filterRentaTerceros]);
+
+  const getUnique = useCallback((key: string) => {
+    const skipFilterName = key;
+    const items = normalizedAssets.filter((asset: any) => {
+      for (const [fKey, selected] of Object.entries(activeFilters)) {
+        if (fKey === skipFilterName) continue;
+        const val = asset[fKey];
         if (!isMatchFilter(selected, val)) return false;
       }
       return true;
     });
-  };
-
-  const getUnique = (key: string) => {
-    return Array.from(new Set(getFilteredFor(key).map(a => getValidString(a[key])).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  };
-
-  const filteredAssets = normalizedAssets.filter((asset: any) => {
-    for (const [key, selected] of Object.entries(activeFilters)) {
-      const val = asset[key];
-      if (!isMatchFilter(selected, val)) return false;
-    }
-    
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      asset.serie?.toLowerCase().includes(term) ||
-      asset.cliente?.toLowerCase().includes(term) ||
-      asset.modelo?.toLowerCase().includes(term)
-    );
-  });
+    return Array.from(new Set(items.map(a => getValidString(a[key])).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
+  }, [normalizedAssets, activeFilters]);
 
   const renderFilter = (key: string, label: string, title: string) => (
     <TableHeaderFilter
@@ -899,15 +915,17 @@ export default function FlotillaTab({
   );
 
   // Sort alphabetically by client name, then secondary by series
-  const sortedAssets = [...filteredAssets].sort((a: any, b: any) => {
-    const clientA = (a.cliente || a.cliente_nombre || '').toString().trim();
-    const clientB = (b.cliente || b.cliente_nombre || '').toString().trim();
-    const clientCompare = clientA.localeCompare(clientB, 'es', { sensitivity: 'base' });
-    if (clientCompare !== 0) return clientCompare;
-    const serieA = (a.serie || '').toString().trim();
-    const serieB = (b.serie || '').toString().trim();
-    return serieA.localeCompare(serieB, 'es', { sensitivity: 'base' });
-  });
+  const sortedAssets = useMemo(() => {
+    return [...filteredAssets].sort((a: any, b: any) => {
+      const clientA = (a.cliente || a.cliente_nombre || '').toString().trim();
+      const clientB = (b.cliente || b.cliente_nombre || '').toString().trim();
+      const clientCompare = clientA.localeCompare(clientB, 'es', { sensitivity: 'base' });
+      if (clientCompare !== 0) return clientCompare;
+      const serieA = (a.serie || '').toString().trim();
+      const serieB = (b.serie || '').toString().trim();
+      return serieA.localeCompare(serieB, 'es', { sensitivity: 'base' });
+    });
+  }, [filteredAssets]);
 
   const totalPages = Math.ceil(sortedAssets.length / itemsPerPage);
   const paginatedAssets = sortedAssets.slice(
@@ -968,6 +986,14 @@ export default function FlotillaTab({
     // Row 2: Indicadores para Accesorios
     accesoriosActivos: getEstatusCount(['Activo', 'Activa', 'En Renta', 'Vigente', 'Comodato', 'Asignado'], 'accesorios'),
     accesoriosInactivos: getEstatusCount(['Inactivo', 'Inactivo con Cliente'], 'accesorios'),
+
+    // Renta con Terceros (Subarrendados o costo dealer)
+    rentaTerceros: baseAssets.filter((a: any) => {
+      const p = (a.propietario || '').toUpperCase();
+      const d = (a.distribuidor || '').trim().toUpperCase();
+      const costo = Number(a.costo_poliza_distribuidor || 0);
+      return p.includes('TERCERO') || (d && d !== '-' && d !== 'RAYMOND') || costo > 0;
+    }).length,
   };
 
   const handleDownloadExcel = async () => {
@@ -1322,6 +1348,24 @@ export default function FlotillaTab({
               </button>
             )}
           </div>
+
+          {/* Botón Filtro Renta con Terceros */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilterRentaTerceros(prev => !prev);
+              setCurrentPage(1);
+            }}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border-2 text-xs font-black uppercase tracking-wider transition-all shadow-xs shrink-0 ${
+              filterRentaTerceros
+                ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-102'
+                : 'bg-amber-50/70 hover:bg-amber-100 text-amber-800 border-amber-200'
+            }`}
+            title="Filtrar equipos subarrendados o en renta con terceros"
+          >
+            <Layers className={`w-3.5 h-3.5 ${filterRentaTerceros ? 'text-white' : 'text-amber-600'}`} />
+            <span>Renta Terceros ({statusCounts.rentaTerceros})</span>
+          </button>
 
           {hasActiveFilters && (
             <button 

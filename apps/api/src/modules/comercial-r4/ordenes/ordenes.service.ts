@@ -206,4 +206,164 @@ export class OrdenesService {
             throw error;
         }
     }
+
+    async asignarMasivo(dto: { renta_ids: string[], periodo: string, po: string, pedido_totvs?: string, fecha_pedido_totvs?: string }) {
+        const db = this.getDb();
+        try {
+            if (!dto.renta_ids || dto.renta_ids.length === 0) {
+                throw new Error('Debe proporcionar al menos una renta');
+            }
+
+            const rentas = await db.renta.findMany({
+                where: { id: { in: dto.renta_ids } },
+                include: { activo: true, cliente: true, detalles: true }
+            });
+
+            let procesadas = 0;
+            for (const renta of rentas) {
+                const tarifaFinal = Number(renta.detalles?.renta_real || renta.detalles?.renta_base || renta.tarifa || 0);
+                const existing = await db.ordenMensual.findFirst({
+                    where: {
+                        activo_id: renta.activo_id,
+                        periodo: dto.periodo,
+                    }
+                });
+
+                const condiciones = {
+                    ...((existing?.condiciones as any) || {}),
+                    ...(dto.pedido_totvs ? { pedido_totvs: dto.pedido_totvs } : {}),
+                    ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: dto.fecha_pedido_totvs } : {}),
+                };
+
+                if (existing) {
+                    await db.ordenMensual.update({
+                        where: { id: existing.id },
+                        data: {
+                            po: dto.po,
+                            tarifa: tarifaFinal,
+                            moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
+                            estado: 'GENERADA',
+                            condiciones
+                        }
+                    });
+                } else {
+                    await db.ordenMensual.create({
+                        data: {
+                            cliente_id: renta.cliente_id,
+                            renta_id: renta.id,
+                            activo_id: renta.activo_id,
+                            contrato_id: renta.contrato_id,
+                            periodo: dto.periodo,
+                            po: dto.po,
+                            tarifa: tarifaFinal,
+                            moneda: renta.detalles?.moneda || renta.moneda || 'MXN',
+                            estado: 'GENERADA',
+                            condiciones
+                        }
+                    });
+                }
+                procesadas++;
+            }
+
+            return {
+                success: true,
+                message: `Se asignaron ${procesadas} órdenes correctamente con la OC: ${dto.po}`,
+                procesadas
+            };
+        } catch (error: any) {
+            this.logger.error(`Error en asignarMasivo: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async copiarMesAnterior(dto: { periodo_origen: string, periodo_destino: string, cliente_id?: string, adc?: string }) {
+        const db = this.getDb();
+        try {
+            if (!dto.periodo_origen || !dto.periodo_destino) {
+                throw new Error('periodo_origen y periodo_destino son requeridos');
+            }
+
+            const adcKeywords = dto.adc ? dto.adc.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+
+            // Buscar todas las órdenes del periodo origen
+            const ordenesOrigen = await db.ordenMensual.findMany({
+                where: {
+                    periodo: dto.periodo_origen,
+                    ...(dto.cliente_id ? { cliente_id: dto.cliente_id } : {}),
+                    activo_id: { not: null }
+                },
+                include: {
+                    renta: {
+                        include: {
+                            detalles: true,
+                            activo: true,
+                            sitio: true
+                        }
+                    },
+                    cliente: true
+                }
+            });
+
+            // Filtrar por ADC si aplica
+            const ordenesFiltradas = ordenesOrigen.filter((o: any) => {
+                if (adcKeywords.length === 0) return true;
+                const candidates = [
+                    o.renta?.adc,
+                    o.renta?.activo?.adc,
+                    o.renta?.sitio?.adc,
+                    (o.cliente as any)?.adc,
+                    (o.cliente as any)?.datos_comerciales?.adc
+                ];
+                return matchAdcKeywords(candidates, adcKeywords);
+            });
+
+            let copiadas = 0;
+            let yaExistian = 0;
+
+            for (const o of ordenesFiltradas) {
+                // Verificar si ya existe una orden para este activo en el periodo destino
+                const existing = await db.ordenMensual.findFirst({
+                    where: {
+                        activo_id: o.activo_id,
+                        periodo: dto.periodo_destino
+                    }
+                });
+
+                if (existing) {
+                    yaExistian++;
+                    continue;
+                }
+
+                // Crear la orden en el periodo destino
+                const tarifaFinal = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.tarifa || 0);
+
+                await db.ordenMensual.create({
+                    data: {
+                        cliente_id: o.cliente_id,
+                        renta_id: o.renta_id,
+                        activo_id: o.activo_id,
+                        contrato_id: o.contrato_id,
+                        periodo: dto.periodo_destino,
+                        po: o.po,
+                        tarifa: tarifaFinal,
+                        moneda: o.moneda || o.renta?.detalles?.moneda || 'MXN',
+                        estado: 'GENERADA',
+                        condiciones: o.condiciones || {}
+                    }
+                });
+                copiadas++;
+            }
+
+            return {
+                success: true,
+                message: `Se copiaron ${copiadas} órdenes de ${dto.periodo_origen} a ${dto.periodo_destino} (${yaExistian} ya existían).`,
+                copiadas,
+                yaExistian,
+                totalOrigen: ordenesFiltradas.length
+            };
+        } catch (error: any) {
+            this.logger.error(`Error en copiarMesAnterior: ${error.message}`);
+            throw error;
+        }
+    }
 }
