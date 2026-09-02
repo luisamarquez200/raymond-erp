@@ -112,16 +112,27 @@ export class OrdenesService {
 
             return filtered.map((o: any) => {
                 const adcName = o.renta?.adc || o.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
+                const cond = (o.condiciones as any) || {};
+                let rawTotvs = cond.pedido_totvs || cond.pedido || cond.pedido_tovts || (o.renta as any)?.no_registro_totvs || null;
+                if (rawTotvs && ['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED'].includes(String(rawTotvs).toUpperCase().trim())) {
+                    rawTotvs = null;
+                }
+                let rawFecha = cond.fecha_pedido_totvs || cond.fecha_ped || (o.renta as any)?.fecha_pedido_totvs || null;
+                if (rawFecha && ['NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(String(rawFecha).toUpperCase().trim())) {
+                    rawFecha = null;
+                }
+                const mon = (o.moneda && !['NA', 'N/A', 'NO', '-'].includes(String(o.moneda).toUpperCase().trim())) ? o.moneda : (o.renta?.detalles?.moneda || 'MXN');
+
                 return {
                     id: o.id,
                     periodo: o.periodo,
                     po: o.po,
                     tarifa: o.tarifa,
-                    moneda: o.moneda,
+                    moneda: mon,
                     estado: o.estado,
                     condiciones: o.condiciones,
-                    pedido_totvs: (o.condiciones as any)?.pedido_totvs || (o.condiciones as any)?.pedido || (o.condiciones as any)?.pedido_tovts || (o.renta as any)?.no_registro_totvs || null,
-                    fecha_pedido_totvs: (o.condiciones as any)?.fecha_pedido_totvs || (o.condiciones as any)?.fecha_ped || (o.renta as any)?.fecha_pedido_totvs || null,
+                    pedido_totvs: rawTotvs,
+                    fecha_pedido_totvs: rawFecha,
                     cliente: o.cliente?.razon_social || 'Desconocido',
                     activo: o.activo?.serie || o.activo_id,
                     activo_modelo: o.activo?.modelo || '-',
@@ -168,8 +179,18 @@ export class OrdenesService {
             const condiciones = {
                 ...((existing?.condiciones as any) || {}),
                 ...(dto.pedido_totvs ? { pedido_totvs: dto.pedido_totvs } : {}),
-                ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: dto.fecha_pedido_totvs } : {}),
+                ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: dto.fecha_pedido_totvs } : {})
             };
+
+            if (dto.pedido_totvs || dto.fecha_pedido_totvs) {
+                await db.renta.update({
+                    where: { id: renta.id },
+                    data: {
+                        ...(dto.pedido_totvs ? { no_registro_totvs: dto.pedido_totvs } : {}),
+                        ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {})
+                    }
+                }).catch((e: any) => this.logger.warn(`Could not sync renta totvs: ${e.message}`));
+            }
 
             if (existing) {
                 const updated = await db.ordenMensual.update({
@@ -275,28 +296,25 @@ export class OrdenesService {
                 }
             }
 
-            if (updates.length > 0) {
-                const updateChunk = 50;
-                for (let i = 0; i < updates.length; i += updateChunk) {
-                    await Promise.all(updates.slice(i, i + updateChunk));
-                }
-            }
-
-            if (toCreate.length > 0) {
-                const chunkSize = 200;
-                for (let i = 0; i < toCreate.length; i += chunkSize) {
-                    await db.ordenMensual.createMany({
-                        data: toCreate.slice(i, i + chunkSize),
-                        skipDuplicates: true
-                    });
-                }
-            }
+            // Execute in parallel
+            await Promise.all([
+                ...updates,
+                toCreate.length > 0 ? db.ordenMensual.createMany({ data: toCreate, skipDuplicates: true }) : Promise.resolve(),
+                (dto.pedido_totvs || dto.fecha_pedido_totvs) ? db.renta.updateMany({
+                    where: { id: { in: dto.renta_ids } },
+                    data: {
+                        ...(dto.pedido_totvs ? { no_registro_totvs: dto.pedido_totvs } : {}),
+                        ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {})
+                    }
+                }) : Promise.resolve()
+            ]);
 
             clearPresupuestosCache();
+
             return {
                 success: true,
-                message: `Se asignaron ${rentas.length} órdenes correctamente con la OC: ${dto.po}`,
-                procesadas: rentas.length
+                message: `Se asignó la OC ${dto.po} a ${rentas.length} series para el periodo ${dto.periodo}.`,
+                count: rentas.length
             };
         } catch (error: any) {
             this.logger.error(`Error en asignarMasivo: ${error.message}`);
@@ -362,25 +380,66 @@ export class OrdenesService {
                     ...(dto.cliente_id ? { cliente_id: dto.cliente_id } : {}),
                     activo_id: { not: null }
                 },
-                select: { activo_id: true }
+                select: { id: true, activo_id: true, condiciones: true }
             });
-            const existingActivoIds = new Set(existingDestino.map(e => e.activo_id).filter(Boolean));
+            const existingMap = new Map<string, any>(existingDestino.map(e => [e.activo_id!, e]));
 
             let yaExistian = 0;
             const toCreate: any[] = [];
+            const toUpdate: { id: string, condiciones: any }[] = [];
+            const rentaUpdatesMap = new Map<string, { no_registro_totvs?: string, fecha_pedido_totvs?: Date }>();
 
             for (const o of ordenesFiltradas) {
                 if (!o.activo_id) continue;
-                if (existingActivoIds.has(o.activo_id)) {
+
+                // Resolve origin TOTVS and date from all possible representations
+                const originTotvs = (o.condiciones as any)?.pedido_totvs || 
+                                    (o.condiciones as any)?.pedido || 
+                                    (o.condiciones as any)?.pedido_tovts || 
+                                    o.renta?.no_registro_totvs || 
+                                    undefined;
+
+                const originFechaTotvs = (o.condiciones as any)?.fecha_pedido_totvs || 
+                                         (o.condiciones as any)?.fecha_ped || 
+                                         (o.renta?.fecha_pedido_totvs ? new Date(o.renta.fecha_pedido_totvs).toISOString().split('T')[0] : undefined) || 
+                                         undefined;
+
+                const finalTotvs = (dto.pedido_totvs && dto.pedido_totvs.trim()) ? dto.pedido_totvs.trim() : originTotvs;
+                const finalFechaTotvs = (dto.fecha_pedido_totvs && dto.fecha_pedido_totvs.trim()) ? dto.fecha_pedido_totvs.trim() : originFechaTotvs;
+
+                if (existingMap.has(o.activo_id)) {
                     yaExistian++;
+                    const existing = existingMap.get(o.activo_id)!;
+                    const existingCond = (existing.condiciones as any) || {};
+                    const currentTotvs = existingCond.pedido_totvs || existingCond.pedido || existingCond.pedido_tovts;
+
+                    // If existing destination order lacks TOTVS or a new TOTVS was explicitly provided in DTO:
+                    if ((!currentTotvs && finalTotvs) || (dto.pedido_totvs && dto.pedido_totvs.trim())) {
+                        const updatedCond = {
+                            ...existingCond,
+                            ...(finalTotvs ? { pedido_totvs: finalTotvs } : {}),
+                            ...(finalFechaTotvs ? { fecha_pedido_totvs: finalFechaTotvs } : {})
+                        };
+                        toUpdate.push({
+                            id: existing.id,
+                            condiciones: updatedCond
+                        });
+                    }
+
+                    if (o.renta_id && (dto.pedido_totvs || finalTotvs)) {
+                        rentaUpdatesMap.set(o.renta_id, {
+                            no_registro_totvs: dto.pedido_totvs?.trim() || finalTotvs,
+                            ...(finalFechaTotvs ? { fecha_pedido_totvs: new Date(finalFechaTotvs) } : {})
+                        });
+                    }
                     continue;
                 }
 
                 const tarifaFinal = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.tarifa || 0);
                 const condiciones = {
                     ...((o.condiciones as any) || {}),
-                    ...(dto.pedido_totvs ? { pedido_totvs: dto.pedido_totvs } : {}),
-                    ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: dto.fecha_pedido_totvs } : {})
+                    ...(finalTotvs ? { pedido_totvs: finalTotvs } : {}),
+                    ...(finalFechaTotvs ? { fecha_pedido_totvs: finalFechaTotvs } : {})
                 };
 
                 toCreate.push({
@@ -395,10 +454,25 @@ export class OrdenesService {
                     estado: 'GENERADA',
                     condiciones
                 });
-                existingActivoIds.add(o.activo_id);
+
+                if (o.renta_id && (dto.pedido_totvs || finalTotvs)) {
+                    rentaUpdatesMap.set(o.renta_id, {
+                        no_registro_totvs: dto.pedido_totvs?.trim() || finalTotvs,
+                        ...(finalFechaTotvs ? { fecha_pedido_totvs: new Date(finalFechaTotvs) } : {})
+                    });
+                }
             }
 
-            // 4. Inserción masiva en chunks ultra rápida (1-2 queries en total)
+            // 4. Inserción y actualización masiva
+            if (toUpdate.length > 0) {
+                await Promise.all(
+                    toUpdate.map(u => db.ordenMensual.update({
+                        where: { id: u.id },
+                        data: { condiciones: u.condiciones }
+                    }))
+                );
+            }
+
             if (toCreate.length > 0) {
                 const chunkSize = 200;
                 for (let i = 0; i < toCreate.length; i += chunkSize) {
@@ -410,13 +484,26 @@ export class OrdenesService {
                 }
             }
 
+            // 5. Sincronizar renta si aplica
+            if (dto.pedido_totvs && rentaUpdatesMap.size > 0) {
+                const rentaIds = Array.from(rentaUpdatesMap.keys());
+                await db.renta.updateMany({
+                    where: { id: { in: rentaIds } },
+                    data: {
+                        no_registro_totvs: dto.pedido_totvs.trim(),
+                        ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {})
+                    }
+                }).catch((e: any) => this.logger.warn(`Could not sync rentas totvs: ${e.message}`));
+            }
+
             clearPresupuestosCache();
 
             return {
                 success: true,
-                message: `Se copiaron ${toCreate.length} órdenes de ${dto.periodo_origen} a ${dto.periodo_destino} (${yaExistian} ya existían).`,
+                message: `Se copiaron ${toCreate.length} órdenes de ${dto.periodo_origen} a ${dto.periodo_destino} (${yaExistian} ya existían${toUpdate.length > 0 ? `, ${toUpdate.length} actualizadas con No. TOTVS` : ''}).`,
                 copiadas: toCreate.length,
                 yaExistian,
+                actualizadas: toUpdate.length,
                 totalOrigen: ordenesFiltradas.length
             };
         } catch (error: any) {

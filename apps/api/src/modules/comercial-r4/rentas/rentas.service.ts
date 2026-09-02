@@ -77,18 +77,29 @@ export class RentasService {
             condiciones: renta.condiciones ?? null,
             propietario: renta.propietario || renta.activo?.propietario || '-',
             detalles: renta.detalles ?? null,
-            ordenes: (renta.ordenes || []).map((o: any) => ({
-                id: o.id,
-                periodo: o.periodo,
-                po: o.po,
-                tarifa: o.tarifa,
-                moneda: o.moneda,
-                estado: o.estado,
-                condiciones: o.condiciones,
-                pedido_totvs: (o.condiciones as any)?.pedido_totvs || (o.condiciones as any)?.pedido || (o.condiciones as any)?.pedido_tovts || renta.no_registro_totvs || null,
-                fecha_pedido_totvs: (o.condiciones as any)?.fecha_pedido_totvs || (o.condiciones as any)?.fecha_ped || renta.fecha_pedido_totvs || null,
-                created_at: o.created_at
-            })),
+            ordenes: (renta.ordenes || []).map((o: any) => {
+                const cond = (o.condiciones as any) || {};
+                let rawTotvs = cond.pedido_totvs || cond.pedido || cond.pedido_tovts || renta.no_registro_totvs || null;
+                if (rawTotvs && ['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED'].includes(String(rawTotvs).toUpperCase().trim())) {
+                    rawTotvs = null;
+                }
+                let rawFecha = cond.fecha_pedido_totvs || cond.fecha_ped || renta.fecha_pedido_totvs || null;
+                if (rawFecha && ['NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(String(rawFecha).toUpperCase().trim())) {
+                    rawFecha = null;
+                }
+                return {
+                    id: o.id,
+                    periodo: o.periodo,
+                    po: o.po,
+                    tarifa: o.tarifa,
+                    moneda: (o.moneda && !['NA', 'N/A', 'NO', '-'].includes(String(o.moneda).toUpperCase().trim())) ? o.moneda : (renta.detalles?.moneda || 'MXN'),
+                    estado: o.estado,
+                    condiciones: o.condiciones,
+                    pedido_totvs: rawTotvs,
+                    fecha_pedido_totvs: rawFecha,
+                    created_at: o.created_at
+                };
+            }),
         };
     }
 

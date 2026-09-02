@@ -760,7 +760,7 @@ export default function RentasTab({
       const hadOrderInPrev = prevPeriod ? orders.some((o: any) => o.periodo === prevPeriod) : false;
 
       const alreadyHasOrder = !!orderInCurrentMonth;
-      const existingTotvs = (orderInCurrentMonth?.condiciones as any)?.pedido_totvs || (orderInCurrentMonth?.condiciones as any)?.pedido || activeRenta?.no_registro_totvs || '';
+      const existingTotvs = orderInCurrentMonth?.pedido_totvs || (orderInCurrentMonth?.condiciones as any)?.pedido_totvs || (orderInCurrentMonth?.condiciones as any)?.pedido || (orderInCurrentMonth?.condiciones as any)?.pedido_tovts || activeRenta?.no_registro_totvs || '';
 
       const assetSitio = sitiosDelCliente.find((s: any) => s.id === (asset.sitio_id || activeRenta?.sitio_id)) || activeRenta?.sitio;
       const assetCuenta = asset.cuenta || activeRenta?.cuenta || assetSitio?.cuenta || '-';
@@ -3831,12 +3831,26 @@ export default function RentasTab({
                     </div>
                     <div>
                       <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">No. Registro TOTVS</span>
-                      <p className="font-bold text-slate-800 text-sm mt-0.5">{viewRentaConfig.renta.no_registro_totvs || '-'}</p>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">
+                        {viewRentaConfig.renta.no_registro_totvs || 
+                         viewRentaConfig.renta.ordenes?.[0]?.pedido_totvs || 
+                         (viewRentaConfig.renta.ordenes?.[0]?.condiciones as any)?.pedido_totvs || 
+                         (viewRentaConfig.renta.ordenes?.[0]?.condiciones as any)?.pedido || 
+                         (viewRentaConfig.renta.ordenes?.[0]?.condiciones as any)?.pedido_tovts || 
+                         (viewRentaConfig.renta.condiciones as any)?.pedido_totvs || 
+                         '-'}
+                      </p>
                     </div>
                     <div>
                       <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Fecha Pedido TOTVS / Mes Cobro</span>
                       <p className="font-bold text-slate-800 text-sm mt-0.5">
-                        {viewRentaConfig.renta.fecha_pedido_totvs ? new Date(viewRentaConfig.renta.fecha_pedido_totvs).toLocaleDateString('es-ES') : '-'}
+                        {(() => {
+                          const d = viewRentaConfig.renta.fecha_pedido_totvs || 
+                                    viewRentaConfig.renta.ordenes?.[0]?.fecha_pedido_totvs || 
+                                    (viewRentaConfig.renta.ordenes?.[0]?.condiciones as any)?.fecha_pedido_totvs || 
+                                    (viewRentaConfig.renta.ordenes?.[0]?.condiciones as any)?.fecha_ped;
+                          return d ? new Date(d).toLocaleDateString('es-ES') : '-';
+                        })()}
                         {viewRentaConfig.renta.detalles?.mes_cobro ? ` (${viewRentaConfig.renta.detalles.mes_cobro})` : ''}
                       </p>
                     </div>
@@ -3932,7 +3946,7 @@ export default function RentasTab({
                           <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                             {ordenes.map((ord: any) => {
                               const cond = ord.condiciones || {};
-                              const rawTotvs = ord.pedido_totvs || cond.pedido_totvs || cond.pedido || viewRentaConfig.renta.no_registro_totvs || '-';
+                              const rawTotvs = ord.pedido_totvs || cond.pedido_totvs || cond.pedido || cond.pedido_tovts || viewRentaConfig.renta.no_registro_totvs || '-';
                               const invalid = ['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED'];
                               const noTotvs = invalid.includes(String(rawTotvs).toUpperCase().trim()) ? '-' : rawTotvs;
                               const isPendingNote = String(noTotvs).toUpperCase().includes('PORTAL');
@@ -3970,10 +3984,21 @@ export default function RentasTab({
                                     )}
                                   </td>
                                   <td className="p-3.5 text-slate-500">
-                                    {fTotvs ? new Date(fTotvs).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                    {(() => {
+                                      if (!fTotvs) return '-';
+                                      const s = String(fTotvs).trim();
+                                      if (['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(s.toUpperCase())) return '-';
+                                      const d = new Date(fTotvs);
+                                      return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+                                    })()}
                                   </td>
                                   <td className="p-3.5 text-right font-black text-slate-900">
-                                    ${(Number(ord.tarifa) || Number(viewRentaConfig.renta.detalles?.renta_base) || Number(viewRentaConfig.renta.tarifa) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {ord.moneda || viewRentaConfig.renta.detalles?.moneda || 'MXN'}
+                                    ${(Number(ord.tarifa) || Number(viewRentaConfig.renta.detalles?.renta_base) || Number(viewRentaConfig.renta.tarifa) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {
+                                      (() => {
+                                        const m = String(ord.moneda || viewRentaConfig.renta.detalles?.moneda || 'MXN').trim().toUpperCase();
+                                        return ['NA', 'N/A', 'NO', '-'].includes(m) ? 'USD' : m;
+                                      })()
+                                    }
                                   </td>
                                 </tr>
                               );

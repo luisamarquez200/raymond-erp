@@ -133,7 +133,7 @@ export default function OrdenesMensualesPage() {
       if (!searchTerm) return true;
       const term = searchTerm.toLowerCase();
       const condiciones = (o.condiciones as any) || {};
-      const rawPedidoTotvs = o.pedido_totvs || condiciones.pedido_totvs || condiciones.pedido || '';
+      const rawPedidoTotvs = o.pedido_totvs || condiciones.pedido_totvs || condiciones.pedido || condiciones.pedido_tovts || '';
       const pedidoTotvs = sanitizePedidoTotvs(rawPedidoTotvs);
       return (
         (o.po || '').toLowerCase().includes(term) ||
@@ -702,7 +702,7 @@ export default function OrdenesMensualesPage() {
                   <tr><td colSpan={isAdministrator ? 9 : 8} className="px-6 py-12 text-center text-slate-400 font-bold">No se encontraron órdenes.</td></tr>
                 ) : paginatedData.map((orden: any) => {
                   const condiciones = (orden.condiciones as any) || {};
-                  const pedidoTotvs = sanitizePedidoTotvs(orden.pedido_totvs || condiciones.pedido_totvs || condiciones.pedido);
+                  const pedidoTotvs = sanitizePedidoTotvs(orden.pedido_totvs || condiciones.pedido_totvs || condiciones.pedido || condiciones.pedido_tovts);
                   const isPendingNote = pedidoTotvs && pedidoTotvs.toUpperCase().includes('PORTAL');
 
                   return (
