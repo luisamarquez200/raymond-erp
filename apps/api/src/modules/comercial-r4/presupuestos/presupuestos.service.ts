@@ -72,6 +72,10 @@ function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: s
 const dashboardCache = new Map<string, { timestamp: number, data: any }>();
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
+export function clearPresupuestosCache() {
+    dashboardCache.clear();
+}
+
 @Injectable()
 export class PresupuestosService {
     private readonly logger = new Logger(PresupuestosService.name);

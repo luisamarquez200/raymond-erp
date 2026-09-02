@@ -273,6 +273,11 @@ export default function RentasTab({
   const [selectedFilterCostoPoliza, setSelectedFilterCostoPoliza] = useState<string[]>([]);
   const [selectedFilterMonedaPago, setSelectedFilterMonedaPago] = useState<string[]>([]);
 
+  // Period / Mes Filter States
+  const [selectedPeriodoView, setSelectedPeriodoView] = useState<string>('2026-09');
+  const [selectedOcPeriodoStatus, setSelectedOcPeriodoStatus] = useState<'TODOS' | 'CON_OC' | 'SIN_OC'>('TODOS');
+  const [openPeriodoViewPopover, setOpenPeriodoViewPopover] = useState(false);
+
   // Combobox open states
   const [openFilterCuenta, setOpenFilterCuenta] = useState(false);
   const [openFilterSitio, setOpenFilterSitio] = useState(false);
@@ -1190,6 +1195,15 @@ export default function RentasTab({
     const matchesCostoPoliza = isMatchFilter(selectedFilterCostoPoliza, rCostoPolizaFormatted);
     const matchesMonedaPago = isMatchFilter(selectedFilterMonedaPago, cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN');
 
+    const matchesOcPeriodo = (() => {
+      if (selectedOcPeriodoStatus === 'TODOS' || selectedPeriodoView === 'todos') return true;
+      const ord = (renta.ordenes || []).find((o: any) => o.periodo === selectedPeriodoView);
+      const hasOc = !!(ord && ord.po && ord.po.trim() !== '' && ord.po !== '-');
+      if (selectedOcPeriodoStatus === 'CON_OC') return hasOc;
+      if (selectedOcPeriodoStatus === 'SIN_OC') return !hasOc;
+      return true;
+    })();
+
     return (
       matchesSearch &&
       matchesCuenta &&
@@ -1213,9 +1227,25 @@ export default function RentasTab({
       matchesPoliza &&
       matchesDistribuidor &&
       matchesCostoPoliza &&
-      matchesMonedaPago
+      matchesMonedaPago &&
+      matchesOcPeriodo
     );
   });
+
+  const periodOcStats = (() => {
+    if (!selectedPeriodoView || selectedPeriodoView === 'todos') {
+      return { total: baseRentas.length, conOc: 0, sinOc: 0 };
+    }
+    let conOc = 0;
+    let sinOc = 0;
+    for (const r of baseRentas) {
+      const ord = (r.ordenes || []).find((o: any) => o.periodo === selectedPeriodoView);
+      const hasOc = !!(ord && ord.po && ord.po.trim() !== '' && ord.po !== '-');
+      if (hasOc) conOc++;
+      else sinOc++;
+    }
+    return { total: baseRentas.length, conOc, sinOc };
+  })();
 
   const totalRentas = filteredRentas.length;
   const activas = filteredRentas.filter(r => {
@@ -1588,8 +1618,111 @@ export default function RentasTab({
           )}
         </div>
 
-        {/* Right: Data Actions (Export & Registro OC) + Scope Selector */}
+        {/* Right: Period Selector & Quick Filters & Actions */}
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 justify-between md:justify-end w-full md:w-auto">
+          {/* Period Selector Popover */}
+          <div className="flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-slate-200 shadow-2xs">
+            <Popover open={openPeriodoViewPopover} onOpenChange={setOpenPeriodoViewPopover}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-black text-slate-800 transition-all border border-slate-200 cursor-pointer"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-red-600" />
+                  <span>
+                    {selectedPeriodoView === 'todos' 
+                      ? 'Todos los Periodos' 
+                      : (() => {
+                          const [y, m] = selectedPeriodoView.split('-');
+                          const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                          return `${monthNames[Number(m) - 1]} ${y}`;
+                        })()
+                    }
+                  </span>
+                  <ChevronsUpDown className="w-3 h-3 text-slate-400" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-2 bg-white rounded-2xl shadow-xl border border-slate-200">
+                <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1 tracking-wider">
+                  Seleccionar Periodo
+                </div>
+                <div className="space-y-1">
+                  {[
+                    { value: '2026-07', label: 'Julio 2026' },
+                    { value: '2026-08', label: 'Agosto 2026' },
+                    { value: '2026-09', label: 'Septiembre 2026' },
+                    { value: '2026-10', label: 'Octubre 2026' },
+                    { value: '2026-11', label: 'Noviembre 2026' },
+                    { value: '2026-12', label: 'Diciembre 2026' },
+                    { value: '2027-01', label: 'Enero 2027' },
+                    { value: 'todos', label: 'Todos los periodos' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPeriodoView(opt.value);
+                        setOpenPeriodoViewPopover(false);
+                        setCurrentPage(1);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-xs font-bold rounded-xl transition-colors flex items-center justify-between",
+                        selectedPeriodoView === opt.value ? "bg-red-50 text-red-600" : "text-slate-700 hover:bg-slate-50"
+                      )}
+                    >
+                      <span>{opt.label}</span>
+                      {selectedPeriodoView === opt.value && <Check className="w-3.5 h-3.5 text-red-600" />}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Quick Status Pills when a period is selected */}
+            {selectedPeriodoView !== 'todos' && (
+              <div className="flex items-center gap-1 pl-1">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedOcPeriodoStatus('TODOS'); setCurrentPage(1); }}
+                  className={cn(
+                    "px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer",
+                    selectedOcPeriodoStatus === 'TODOS'
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "text-slate-600 hover:bg-slate-100"
+                  )}
+                >
+                  Todos ({periodOcStats.total})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedOcPeriodoStatus('CON_OC'); setCurrentPage(1); }}
+                  className={cn(
+                    "px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer flex items-center gap-1",
+                    selectedOcPeriodoStatus === 'CON_OC'
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                  )}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  Con OC ({periodOcStats.conOc})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedOcPeriodoStatus('SIN_OC'); setCurrentPage(1); }}
+                  className={cn(
+                    "px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer flex items-center gap-1",
+                    selectedOcPeriodoStatus === 'SIN_OC'
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                  )}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  Sin OC ({periodOcStats.sinOc})
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               onClick={exportRentasToCSV}
@@ -1745,8 +1878,34 @@ export default function RentasTab({
                         <td className="px-4 py-3.5 text-slate-500">{renta.activo?.oach || '-'}</td>
                         <td className="px-4 py-3.5 text-slate-500">{renta.activo?.altura || '-'}</td>
                         <td className="px-4 py-3.5 text-slate-500">{renta.activo?.bc || '-'}</td>
-                        <td className="px-4 py-3.5 font-bold text-[#E5222D]">
-                          {renta.orden_compra || detalles.oc_cliente || '-'}
+                        <td className="px-4 py-3.5">
+                          {(() => {
+                            if (selectedPeriodoView !== 'todos') {
+                              const ord = (renta.ordenes || []).find((o: any) => o.periodo === selectedPeriodoView);
+                              if (ord?.po && ord.po.trim() !== '' && ord.po !== '-') {
+                                return (
+                                  <span 
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                                    title={`TOTVS: ${ord.pedido_totvs || '-'} | Tarifa: $${Number(ord.tarifa || 0).toLocaleString()}`}
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    {ord.po}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  Sin OC
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="font-bold text-[#E5222D]">
+                                {renta.orden_compra || detalles.oc_cliente || '-'}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3.5 text-slate-500">
                           {renta.fecha_inicio ? new Date(renta.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}

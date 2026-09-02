@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
+import { clearPresupuestosCache } from '../presupuestos/presupuestos.service';
 
 const ADC_ALIASES: Record<string, string[]> = {
     'daniel': ['daniel', 'daniel romero', 'romero'],
@@ -200,6 +201,7 @@ export class OrdenesService {
                 }
             });
 
+            clearPresupuestosCache();
             return nuevaOrden;
         } catch (error: any) {
             this.logger.error(`Error en registrarOrdenManual: ${error.message}`);
@@ -290,6 +292,7 @@ export class OrdenesService {
                 }
             }
 
+            clearPresupuestosCache();
             return {
                 success: true,
                 message: `Se asignaron ${rentas.length} órdenes correctamente con la OC: ${dto.po}`,
@@ -301,7 +304,7 @@ export class OrdenesService {
         }
     }
 
-    async copiarMesAnterior(dto: { periodo_origen: string, periodo_destino: string, cliente_id?: string, adc?: string }) {
+    async copiarMesAnterior(dto: { periodo_origen: string, periodo_destino: string, cliente_id?: string, adc?: string, pedido_totvs?: string, fecha_pedido_totvs?: string }) {
         const db = this.getDb();
         try {
             if (!dto.periodo_origen || !dto.periodo_destino) {
@@ -374,6 +377,12 @@ export class OrdenesService {
                 }
 
                 const tarifaFinal = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.tarifa || 0);
+                const condiciones = {
+                    ...((o.condiciones as any) || {}),
+                    ...(dto.pedido_totvs ? { pedido_totvs: dto.pedido_totvs } : {}),
+                    ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: dto.fecha_pedido_totvs } : {})
+                };
+
                 toCreate.push({
                     cliente_id: o.cliente_id,
                     renta_id: o.renta_id,
@@ -384,7 +393,7 @@ export class OrdenesService {
                     tarifa: tarifaFinal,
                     moneda: o.moneda || o.renta?.detalles?.moneda || 'MXN',
                     estado: 'GENERADA',
-                    condiciones: o.condiciones || {}
+                    condiciones
                 });
                 existingActivoIds.add(o.activo_id);
             }
@@ -400,6 +409,8 @@ export class OrdenesService {
                     });
                 }
             }
+
+            clearPresupuestosCache();
 
             return {
                 success: true,

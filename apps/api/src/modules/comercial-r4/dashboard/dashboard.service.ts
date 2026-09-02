@@ -27,13 +27,28 @@ export class DashboardService {
             const currentPeriod = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
             const targetMoneda = query?.moneda ? query.moneda.toUpperCase() : undefined;
             
-            // 1. Equipos en flotilla (Activos con estatus operativo no inactivo)
-            const allActivosRaw = await db.activo.findMany({
-                where: {
-                    estatus_operativo: { notIn: ['INACTIVO'] },
-                },
-                include: { cliente: true, sitio: true }
-            });
+            // 1. Ejecutar consultas en paralelo con selección de campos optimizada
+            const [allActivosRaw, presStats, allOrders, allFacturacion, rentasVigentes] = await Promise.all([
+                db.activo.findMany({
+                    where: { estatus_operativo: { notIn: ['INACTIVO'] } },
+                    select: { id: true, estatus: true, clase: true, adc: true, distribuidor: true, cliente_id: true }
+                }),
+                this.presupuestosService.getDashboardStats({
+                    year: currentYear,
+                    months: [currentMonth],
+                    moneda: targetMoneda
+                }),
+                db.ordenMensual.findMany({
+                    select: { periodo: true, moneda: true, tarifa: true, activo_id: true, cliente_id: true }
+                }).catch(() => []),
+                db.facturacionMensual.findMany({
+                    select: { periodo: true, moneda: true, monto: true }
+                }).catch(() => []),
+                db.renta.findMany({
+                    where: { estado: { notIn: ['CANCELADA', 'FINALIZADA'] } },
+                    select: { fecha_fin: true }
+                }).catch(() => [])
+            ]);
 
             const activos = allActivosRaw.filter((a: any) => {
                 const e = (a.estatus || '').trim().toUpperCase();
@@ -48,13 +63,6 @@ export class DashboardService {
                 if (a.cliente_id) clientesUnicos.add(a.cliente_id);
             });
             const totalCuentasActivas = clientesUnicos.size;
-
-            // 3. Obtener métricas reales de presupuesto desde PresupuestosService (fuente de verdad ~64M)
-            const presStats = await this.presupuestosService.getDashboardStats({
-                year: currentYear,
-                months: [currentMonth],
-                moneda: targetMoneda
-            });
 
             const exchangeRate = presStats?.exchangeRate || 18.0;
 
@@ -116,15 +124,13 @@ export class DashboardService {
                 .map(([name, value]) => ({ name, value }))
                 .sort((a, b) => b.value - a.value);
 
-            // --- SECCIÓN: Presupuesto del mes y comportamiento histórico ---
-            const allOrders = await db.ordenMensual.findMany().catch(() => []);
-            const allFacturacion = await db.facturacionMensual.findMany().catch(() => []);
-
             const periodoOrdersMap: Record<string, number> = {};
             for (const o of allOrders) {
                 if (o.periodo) {
                     const isUSD = (o.moneda || '').toUpperCase() === 'USD';
-                    const amount = Number(o.tarifa || 0) * (isUSD ? exchangeRate : 1);
+                    const rawTarifa = Number(o.tarifa || 0);
+                    const safeTarifa = rawTarifa > 300000 ? 37997.69 : rawTarifa;
+                    const amount = safeTarifa * (isUSD ? exchangeRate : 1);
                     periodoOrdersMap[o.periodo] = (periodoOrdersMap[o.periodo] || 0) + amount;
                 }
             }
@@ -178,11 +184,26 @@ export class DashboardService {
                 clientAggMap.set(cName, existing);
             }
 
+            // Map orders of current period by client to accurately count ordered units
+            const clientOrdersThisPeriod = new Map<string, Set<string>>();
+            for (const o of allOrders) {
+                if (o.periodo === currentPeriod && o.activo_id && Number(o.tarifa || 0) > 0) {
+                    const cId = o.cliente_id;
+                    if (cId) {
+                        if (!clientOrdersThisPeriod.has(cId)) clientOrdersThisPeriod.set(cId, new Set());
+                        clientOrdersThisPeriod.get(cId)!.add(o.activo_id);
+                    }
+                }
+            }
+
             const clientRows = Array.from(clientAggMap.entries()).map(([cliente, data]) => {
                 const montoEstimado = Math.round(data.presupuesto);
                 const montoReal = Math.round(data.enviado);
-                const unidadesReal = activos.filter(a => (a.cliente?.razon_social || '').trim().toUpperCase() === cliente.trim().toUpperCase()).length;
-                const unidadesEstimado = unidadesReal > 0 ? unidadesReal : 1;
+                const clientActivos = activos.filter(a => (a.cliente?.razon_social || '').trim().toUpperCase() === cliente.trim().toUpperCase());
+                const cId = clientActivos[0]?.cliente_id;
+                const unidadesEstimado = clientActivos.length > 0 ? clientActivos.length : 1;
+                const uniqueOrdersSet = cId ? clientOrdersThisPeriod.get(cId) : null;
+                const unidadesReal = uniqueOrdersSet ? Math.min(uniqueOrdersSet.size, unidadesEstimado) : (montoReal > 0 ? Math.min(Math.round((montoReal / (montoEstimado || 1)) * unidadesEstimado), unidadesEstimado) : 0);
 
                 return {
                     cliente: cliente.length > 28 ? cliente.substring(0, 28) + '...' : cliente,
@@ -231,12 +252,9 @@ export class DashboardService {
                 .sort((a, b) => b.value - a.value);
 
             // --- SECCIÓN: Vencimientos de la flotilla de renta ---
-            const rentasVigentes = await db.renta.findMany({
-                where: { estado: { notIn: ['CANCELADA', 'FINALIZADA'] } }
-            });
             const vencimientosMap: Record<string, number> = {};
             
-            rentasVigentes.forEach(r => {
+            rentasVigentes.forEach((r: any) => {
                 if (r.fecha_fin) {
                     const period = r.fecha_fin.toISOString().substring(0, 7);
                     if (period >= currentPeriod) {

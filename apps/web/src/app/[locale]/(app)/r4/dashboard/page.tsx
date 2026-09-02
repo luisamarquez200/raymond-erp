@@ -19,8 +19,8 @@ export default function R4DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<any>(null);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [selectedMonth, setSelectedMonth] = useState<number>(8);
+  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
 
   const months = [
     { value: 1, label: 'Ene' },
@@ -121,39 +121,47 @@ export default function R4DashboardPage() {
         </div>
 
         {/* Filtros de Año y Mes */}
-        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="bg-white px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 border border-slate-200 focus:outline-none"
-          >
-            <option value={2025}>2025</option>
-            <option value={2026}>2026</option>
-            <option value={2027}>2027</option>
-          </select>
-          <div className="flex gap-1">
-            {months.map((m) => {
-              const isSelected = selectedMonth === m.value;
-              return (
-                <button
-                  key={m.value}
-                  onClick={() => setSelectedMonth(m.value)}
-                  className={`px-2.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                    isSelected
-                      ? 'bg-red-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-200/60'
-                  }`}
-                  style={isSelected ? { backgroundColor: currentColor } : {}}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
+        <div className="flex items-center gap-3">
+          {loading && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 rounded-xl border border-red-200 text-xs font-bold animate-in fade-in duration-200">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Cargando {months.find(m => m.value === selectedMonth)?.label}...</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="bg-white px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 border border-slate-200 focus:outline-none cursor-pointer"
+            >
+              <option value={2025}>2025</option>
+              <option value={2026}>2026</option>
+              <option value={2027}>2027</option>
+            </select>
+            <div className="flex gap-1">
+              {months.map((m) => {
+                const isSelected = selectedMonth === m.value;
+                return (
+                  <button
+                    key={m.value}
+                    onClick={() => setSelectedMonth(m.value)}
+                    className={`px-2.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-red-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-200/60'
+                    }`}
+                    style={isSelected ? { backgroundColor: currentColor } : {}}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-8 pt-8">
+      <div className={`max-w-[1600px] mx-auto px-8 pt-8 transition-opacity duration-300 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
 
         {/* SECTION 1: KPIs Principales (4 Tarjetas) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
@@ -195,11 +203,13 @@ export default function R4DashboardPage() {
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
                     Pedidos generados
-                    <TooltipInfo text="Suma monetaria total de las órdenes colocadas durante el mes corriente." />
+                    <TooltipInfo text="Suma monetaria total de las órdenes colocadas durante el mes seleccionado." />
                   </p>
                 </div>
                 <h3 className="text-3xl font-bold text-slate-900 mt-2">{formatCurrency(kpisPrincipales?.pedidosGenerados || 0)}</h3>
-                <p className="text-[11px] text-slate-400 font-semibold mt-2">Mes corriente</p>
+                <p className="text-[11px] text-slate-400 font-semibold mt-2">
+                  {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                </p>
             </div>
 
             {/* Tarjeta 4 */}
@@ -214,7 +224,9 @@ export default function R4DashboardPage() {
                   </p>
                 </div>
                 <h3 className="text-3xl font-bold text-slate-900 mt-2">{(kpisPrincipales?.avancePresupuesto || 0).toFixed(0)}%</h3>
-                <p className="text-[11px] text-slate-400 font-semibold mt-2">Mes corriente</p>
+                <p className="text-[11px] text-slate-400 font-semibold mt-2">
+                  {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                </p>
             </div>
         </div>
 

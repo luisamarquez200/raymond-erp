@@ -29,9 +29,13 @@ export default function CopiarMesAnteriorModal({
   const [selectedClienteId, setSelectedClienteId] = useState<string>('ALL');
   const [openClientePopover, setOpenClientePopover] = useState(false);
   const [clienteSearchTerm, setClienteSearchTerm] = useState('');
+  const [nuevoPedidoTotvs, setNuevoPedidoTotvs] = useState('');
+  const [fechaPedidoTotvs, setFechaPedidoTotvs] = useState('');
 
   useEffect(() => {
     if (isOpen) {
+      setNuevoPedidoTotvs('');
+      setFechaPedidoTotvs('');
       setPeriodoDestino(currentPeriod);
       // Auto-compute 1 month before
       const parts = currentPeriod.split('-');
@@ -81,7 +85,9 @@ export default function CopiarMesAnteriorModal({
       const res = await api.post('/r4/ordenes/copiar-mes-anterior', {
         periodo_origen: periodoOrigen,
         periodo_destino: periodoDestino,
-        cliente_id: selectedClienteId !== 'ALL' ? selectedClienteId : undefined
+        cliente_id: selectedClienteId !== 'ALL' ? selectedClienteId : undefined,
+        pedido_totvs: nuevoPedidoTotvs.trim() || undefined,
+        fecha_pedido_totvs: fechaPedidoTotvs || undefined
       });
 
       toast.success(res.data?.message || 'Órdenes copiadas con éxito');
@@ -214,10 +220,37 @@ export default function CopiarMesAnteriorModal({
             </Popover>
           </div>
 
+          {/* Nuevo Pedido TOTVS (Opcional) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                Nuevo Pedido TOTVS <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+              </label>
+              <input
+                type="text"
+                value={nuevoPedidoTotvs}
+                onChange={e => setNuevoPedidoTotvs(e.target.value)}
+                placeholder="Ej. PED-2026-09 (dejar vacío para copiar el anterior)"
+                className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-red-500 transition-all placeholder:text-slate-400 placeholder:font-normal"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                Fecha Registro TOTVS <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+              </label>
+              <input
+                type="date"
+                value={fechaPedidoTotvs}
+                onChange={e => setFechaPedidoTotvs(e.target.value)}
+                className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-red-500 transition-all"
+              />
+            </div>
+          </div>
+
           <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900 font-medium">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <span>
-              Las órdenes ya existentes en el periodo destino <strong>no se sobreescribirán</strong>. Solo se generarán las órdenes faltantes.
+              Las órdenes ya existentes en el periodo destino <strong>no se sobreescribirán</strong>. Si ingresas un nuevo Pedido TOTVS, se asignará a todas las órdenes replicadas.
             </span>
           </div>
 
