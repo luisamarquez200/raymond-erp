@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Patch, Body } from '@nestjs/common';
+import { Controller, Get, Query, Patch, Post, Body } from '@nestjs/common';
 import { PresupuestosService } from './presupuestos.service';
 
 @Controller('r4/presupuestos')
@@ -32,5 +32,17 @@ export class PresupuestosController {
         @Body() body: { periodo: string; moneda: string; monto: number; updated_by_id?: string; updated_by_name?: string }
     ) {
         return this.presupuestosService.updateFacturado(body);
+    }
+
+    /**
+     * POST /r4/presupuestos/pendiente-inicial
+     * Carga masiva de valores de pendiente acumulado inicial (ej: faltantes de julio del Excel).
+     * Body: { entries: [{ razon_social: "AMAZON", moneda: "MXN", importe: 1874626.02 }, ...] }
+     */
+    @Post('pendiente-inicial')
+    async setPendienteInicial(
+        @Body() body: { entries: { razon_social: string; moneda: string; importe: number }[] }
+    ) {
+        return this.presupuestosService.setPendienteInicial(body.entries || []);
     }
 }

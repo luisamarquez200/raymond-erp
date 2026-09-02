@@ -80,7 +80,7 @@ export function clearPresupuestosCache() {
 export class PresupuestosService {
     private readonly logger = new Logger(PresupuestosService.name);
 
-    constructor(private readonly prismaService: PrismaDynamicService) {}
+    constructor(private readonly prismaService: PrismaDynamicService) { }
 
     private getDb() {
         const db = PrismaDynamicService.clients.r4;
@@ -112,12 +112,12 @@ export class PresupuestosService {
 
         // Sort months ascending
         months.sort((a, b) => a - b);
-        
+
         const earliestMonth = months[0];
         const earliestPeriodStr = `${year}-${String(earliestMonth).padStart(2, '0')}`;
-        
+
         const currentPeriodStrs = months.map(m => `${year}-${String(m).padStart(2, '0')}`);
-        
+
         // Fetch dynamic exchange rate for the requested period (year, latest month)
         const latestMonth = months[months.length - 1];
         let rateConfig = await db.tipoCambioMensual.findUnique({
@@ -136,7 +136,7 @@ export class PresupuestosService {
         let rentasWhere: any = {};
         if (cliente_id) rentasWhere.cliente_id = cliente_id;
         if (sitio_id) rentasWhere.sitio_id = sitio_id;
-        
+
         const adcKeywords = adc ? adc.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
 
         const allRentas = await db.renta.findMany({
@@ -152,7 +152,7 @@ export class PresupuestosService {
         // 2. Fetch all orders (OrdenMensual)
         let ordersWhere: any = { activo_id: { not: null } };
         if (cliente_id) ordersWhere.cliente_id = cliente_id;
-        
+
         const allOrders = await db.ordenMensual.findMany({
             where: ordersWhere,
             include: {
@@ -213,7 +213,7 @@ export class PresupuestosService {
                     continue;
                 }
             }
-            
+
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
 
@@ -251,13 +251,13 @@ export class PresupuestosService {
             }
         }
 
-        // Processing Orders (Pendiente Acumulado strictly from explicit recovery orders)
+        // PENDIENTE ACUMULADO AL MES ANTERIOR:
+        // Fuente oficial: campo importe_recuperado de DetallesRenta (cargado desde el Excel/sistema).
+        // Si no tiene importe_recuperado registrado, el pendiente acumulado es 0 (-).
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
                 const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
-                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
-                    continue;
-                }
+                if (!matchAdcKeywords(adcCandidates, adcKeywords)) continue;
             }
 
             const rMoneda = (r.detalles?.moneda || 'MXN').toUpperCase();
@@ -265,62 +265,30 @@ export class PresupuestosService {
             const currencyStat = stats[rMoneda as keyof typeof stats];
             if (!currencyStat) continue;
 
-            const estatusNormAcc = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
-            if (estatusNormAcc.startsWith('INACTIVO') || estatusNormAcc === 'BACK UP' || estatusNormAcc === 'POR RETIRAR') continue;
+            const estadoNormAcc = (r.estado || '').toUpperCase().trim();
+            const isRentaVigente = estadoNormAcc === 'VIGENTE' || estadoNormAcc === 'IMPORTADA' || estadoNormAcc === 'ACTIVA' || estadoNormAcc === 'ACTIVO';
+            if (!isRentaVigente) continue;
+
+            const importeRecuperado = Number(r.detalles?.importe_recuperado || 0);
+            if (importeRecuperado <= 0) continue;
 
             const clientName = r.cliente.razon_social;
             const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
             const adcName = rawAdc?.trim() || 'Sin ADC';
 
-            // Find actual recovery orders for this renta
-            const ordersForRenta = allOrders.filter(o => o.renta_id === r.id);
-            const explicitRecovery = ordersForRenta.reduce((sum, o) => {
-                const cond = o.condiciones as any;
-                if (cond?.recuperacion === true || cond?.tipo === 'RECUPERACION' || (o.estado as string) === 'RECUPERACION') {
-                    return sum + (o.tarifa || 0);
-                }
-                return sum;
-            }, 0);
+            currencyStat.acumulado += importeRecuperado;
 
-            if (explicitRecovery > 0) {
-                currencyStat.acumulado += explicitRecovery;
+            pendingByClientAdc.push({
+                cliente: clientName,
+                adc: adcName,
+                moneda: rMoneda,
+                pendiente: importeRecuperado
+            });
 
-                pendingByClientAdc.push({
-                    cliente: clientName,
-                    adc: adcName,
-                    moneda: rMoneda,
-                    pendiente: explicitRecovery
-                });
-
-                if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
-                clientTotals.get(clientName)!.pendiente += explicitRecovery;
-
-                const masterKey = `${adcName}___${clientName}___${rMoneda}`;
-                if (masterMap.has(masterKey)) {
-                    masterMap.get(masterKey)!.pendiente_acumulado += explicitRecovery;
-                } else {
-                    let found = false;
-                    for (const item of masterMap.values()) {
-                        if (item.moneda === rMoneda && item.cliente.trim().toUpperCase() === clientName.trim().toUpperCase()) {
-                            item.pendiente_acumulado += explicitRecovery;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        masterMap.set(masterKey, {
-                            adc: adcName,
-                            cliente: clientName,
-                            moneda: rMoneda,
-                            presupuesto: 0,
-                            enviado: 0,
-                            equipos_detenidos: 0,
-                            pendiente_acumulado: explicitRecovery
-                        });
-                    }
-                }
-            }
+            if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
+            clientTotals.get(clientName)!.pendiente += importeRecuperado;
         }
+
 
         // Sent POs in current month - Consolidated by OC / Sitio / Cliente
         const currentMonthOrders = allOrders.filter(o => currentPeriodStrs.includes(o.periodo));
@@ -354,11 +322,11 @@ export class PresupuestosService {
                 const rentaTarifa = Number(o.renta?.detalles?.renta_real || o.renta?.detalles?.renta_base || o.renta?.tarifa || 0);
                 const amount = (o.tarifa && o.tarifa > 0 && o.tarifa <= (rentaTarifa * 3 || 300000)) ? o.tarifa : (rentaTarifa || o.tarifa || 0);
                 currencyStat.pedidos_enviados += amount;
-                
+
                 // Add to ADC compliance
                 const clientName = o.cliente?.razon_social || '';
                 const adcKey = `${adcName}___${clientName}___${oMoneda}`;
-                
+
                 if (adcsMap.has(adcKey)) {
                     adcsMap.get(adcKey)!.sentPOs += amount;
                 } else {
@@ -408,14 +376,14 @@ export class PresupuestosService {
             return b.importe - a.importe;
         });
 
-        // Calculate totals according to business rule: (Presupuesto + Pendiente acumulado) - Equipos Detenidos = Total a facturar
         const isAdcFiltered = adcKeywords.length > 0;
         for (const key of ['MXN', 'USD'] as const) {
             const s = stats[key];
-            s.total_a_facturar = s.presupuesto_mes + s.acumulado;
+            s.total_a_facturar = (s.presupuesto_mes - s.equipos_detenidos) + s.acumulado;
             // Use manually entered facturado value from Gerente when not filtered by ADC; fallback to pedidos_enviados
             s.facturado = (!isAdcFiltered && facturadoByMoneda[key] > 0) ? facturadoByMoneda[key] : s.pedidos_enviados;
-            s.faltante = Math.max(0, s.total_a_facturar - s.pedidos_enviados);
+            // Faltante puede ser negativo (sobrecumplimiento/excedente)
+            s.faltante = s.total_a_facturar - s.pedidos_enviados;
             s.cumplimiento_general = s.total_a_facturar > 0 ? (s.pedidos_enviados / s.total_a_facturar) * 100 : (s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0);
         }
 
@@ -467,23 +435,23 @@ export class PresupuestosService {
         const adcsBajoCumplimiento = adcs.filter(a => a.cumplimiento < 50);
         if (adcsBajoCumplimiento.length > 0) {
             const names = Array.from(new Set(adcsBajoCumplimiento.map(a => a.adc))).join(', ');
-            observaciones.push({ 
-                tipo: 'Alerta', 
-                mensaje: `Atención: Los ADCs (${names}) tienen un cumplimiento menor al 50%.` 
+            observaciones.push({
+                tipo: 'Alerta',
+                mensaje: `Atención: Los ADCs (${names}) tienen un cumplimiento menor al 50%.`
             });
         }
 
         if (stats.MXN.equipos_detenidos > 0 || stats.USD.equipos_detenidos > 0) {
-            observaciones.push({ 
-                tipo: 'Warning', 
-                mensaje: `Existen equipos inactivos con clientes que continúan afectando el presupuesto del mes.` 
+            observaciones.push({
+                tipo: 'Warning',
+                mensaje: `Existen equipos inactivos con clientes que continúan afectando el presupuesto del mes.`
             });
         }
 
         if (pendingByClientAdc.length > 0) {
-            observaciones.push({ 
-                tipo: 'Info', 
-                mensaje: `Existen ${pendingByClientAdc.length} registros de clientes con montos pendientes de facturar acumulados.` 
+            observaciones.push({
+                tipo: 'Info',
+                mensaje: `Existen ${pendingByClientAdc.length} registros de clientes con montos pendientes de facturar acumulados.`
             });
         }
 
@@ -535,18 +503,12 @@ export class PresupuestosService {
                 }
             }
 
-            // Pending accumulation for past months (actual recovery orders)
-            if (!isInactive) {
-                const pastOrders = allOrders.filter(o => o.renta_id === r.id);
-                const pastRecovery = pastOrders.reduce((sum, o) => {
-                    const cond = o.condiciones as any;
-                    if (cond?.recuperacion === true || cond?.tipo === 'RECUPERACION' || (o.estado as string) === 'RECUPERACION') {
-                        return sum + (o.tarifa || 0);
-                    }
-                    return sum;
-                }, 0);
-                if (pastRecovery > 0) {
-                    item.pendiente_acumulado += pastRecovery;
+            // Pendiente Acumulado al Mes Anterior (tabla maestra):
+            // Fuente: importe_recuperado en DetallesRenta (aplica a la cuenta del cliente)
+            if (isRentaActiva) {
+                const totalPendiente = Number(r.detalles?.importe_recuperado || 0);
+                if (totalPendiente > 0) {
+                    item.pendiente_acumulado += totalPendiente;
                 }
             }
         }
@@ -596,8 +558,15 @@ export class PresupuestosService {
         }
 
         const tabla_maestra = Array.from(masterMap.values()).map(item => {
-            const total_facturar = item.presupuesto + item.pendiente_acumulado;
-            const cumplimiento = total_facturar > 0 ? (item.enviado / total_facturar) * 100 : (item.presupuesto > 0 ? (item.enviado / item.presupuesto) * 100 : 0);
+            // Fórmula Excel: Total a Facturar = (Presupuesto - Equipos Detenidos) + Pendiente Acumulado
+            // La diferencia (presupuesto - equipos_detenidos) nunca puede ser negativa:
+            // si todos los equipos están detenidos, la base es 0 y el total = solo el acumulado.
+            const baseFacturar = Math.max(0, item.presupuesto - item.equipos_detenidos);
+            const total_facturar = baseFacturar + item.pendiente_acumulado;
+            // % Cumplimiento contra el Total a Facturar neto
+            const cumplimiento = total_facturar > 0
+                ? (item.enviado / total_facturar) * 100
+                : (item.presupuesto > 0 ? (item.enviado / item.presupuesto) * 100 : 0);
             return {
                 ...item,
                 cumplimiento,
@@ -797,5 +766,73 @@ export class PresupuestosService {
             },
         });
         return { success: true, data: result };
+    }
+    /**
+     * Carga masiva del Pendiente Acumulado Inicial.
+     * 
+     * Recibe una lista de entradas {razon_social, moneda, importe} — los valores del Excel de julio
+     * (o cualquier mes base) — y los guarda en importe_recuperado de las rentas correspondientes.
+     *
+     * Lógica de distribución:
+     *   - Para cada cliente+moneda, busca TODAS las rentas VIGENTE/ACTIVA del cliente.
+     *   - Pone importe_recuperado=0 en todas excepto la de mayor tarifa,
+     *     donde coloca el importe completo.
+     *   - Así la suma que aparece en el dashboard = el importe deseado.
+     */
+    async setPendienteInicial(entries: { razon_social: string; moneda: string; importe: number }[]) {
+        const db = this.getDb();
+        const results: { razon_social: string; moneda: string; importe: number; rentas_actualizadas: number }[] = [];
+
+        for (const entry of entries) {
+            const { razon_social, moneda, importe } = entry;
+            if (!razon_social || !moneda || importe == null) continue;
+
+            // Buscar el cliente por razon_social (case-insensitive)
+            const cliente = await db.cliente.findFirst({
+                where: {
+                    razon_social: { contains: razon_social.trim(), mode: 'insensitive' }
+                },
+                select: { id: true, razon_social: true }
+            });
+
+            if (!cliente) {
+                results.push({ razon_social, moneda, importe, rentas_actualizadas: 0 });
+                continue;
+            }
+
+            // Obtener todas las rentas activas del cliente en la moneda indicada
+            const rentas = await db.renta.findMany({
+                where: {
+                    cliente_id: cliente.id,
+                    estado: { in: ['VIGENTE', 'IMPORTADA', 'ACTIVA', 'ACTIVO'] },
+                    detalles: { moneda: { equals: moneda.toUpperCase(), mode: 'insensitive' } }
+                },
+                include: { detalles: true },
+                orderBy: { detalles: { renta_real: 'desc' } }  // Mayor tarifa primero
+            });
+
+            if (rentas.length === 0) {
+                results.push({ razon_social: cliente.razon_social, moneda, importe, rentas_actualizadas: 0 });
+                continue;
+            }
+
+            // Poner 0 en todas, excepto la primera (mayor tarifa) que lleva el importe completo
+            let updated = 0;
+            for (let i = 0; i < rentas.length; i++) {
+                const renta = rentas[i];
+                const newImporte = i === 0 ? importe : 0;
+                if (renta.detalles) {
+                    await db.detallesRenta.update({
+                        where: { id: renta.detalles.id },
+                        data: { importe_recuperado: newImporte }
+                    });
+                    updated++;
+                }
+            }
+
+            results.push({ razon_social: cliente.razon_social, moneda, importe, rentas_actualizadas: updated });
+        }
+
+        return { success: true, procesados: results.length, detalles: results };
     }
 }
