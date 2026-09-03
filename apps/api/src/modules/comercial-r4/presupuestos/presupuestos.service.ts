@@ -295,6 +295,7 @@ export class PresupuestosService {
         const currentMonthOrders = allOrders.filter(o => currentPeriodStrs.includes(o.periodo));
         const consolidatedOrdersMap = new Map<string, {
             cliente: string;
+            cuenta: string;
             po: string;
             sitio: string;
             pedido_totvs: string;
