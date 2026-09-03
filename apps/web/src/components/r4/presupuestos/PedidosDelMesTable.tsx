@@ -5,6 +5,22 @@ import TooltipInfo from '@/components/ui/TooltipInfo';
 import { MapPin } from 'lucide-react';
 
 export default function PedidosDelMesTable({ data = [], title, moneda }: { data: any[], title: string, moneda: string }) {
+    const sortedData = React.useMemo(() => {
+        return [...data].sort((a, b) => {
+            const clientA = (a.cliente || '').trim();
+            const clientB = (b.cliente || '').trim();
+            const comp = clientA.localeCompare(clientB, 'es', { sensitivity: 'base' });
+            if (comp !== 0) return comp;
+            const sitioA = (a.sitio || '').trim();
+            const sitioB = (b.sitio || '').trim();
+            const compSitio = sitioA.localeCompare(sitioB, 'es', { sensitivity: 'base' });
+            if (compSitio !== 0) return compSitio;
+            const poA = (a.po || '').trim();
+            const poB = (b.po || '').trim();
+            return poA.localeCompare(poB, 'es', { sensitivity: 'base' });
+        });
+    }, [data]);
+
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('es-MX', { 
             style: 'currency', 
@@ -25,7 +41,7 @@ export default function PedidosDelMesTable({ data = [], title, moneda }: { data:
                     <TooltipInfo text={tooltipText} />
                 </CardTitle>
                 <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                    {data.length} órdenes consolidadas
+                    {sortedData.length} órdenes consolidadas
                 </span>
             </CardHeader>
             <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
@@ -41,14 +57,14 @@ export default function PedidosDelMesTable({ data = [], title, moneda }: { data:
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {data.length === 0 ? (
+                            {sortedData.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={5} className="text-center text-slate-400 py-12">
                                         No hay pedidos registrados en este periodo
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                data.map((row, idx) => (
+                                sortedData.map((row, idx) => (
                                     <TableRow key={idx} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100/60">
                                         <TableCell className="py-2.5 px-4 font-medium text-slate-800 whitespace-nowrap max-w-[150px] truncate" title={row.cliente}>
                                             {row.cliente}

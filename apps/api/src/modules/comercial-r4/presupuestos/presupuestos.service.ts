@@ -70,7 +70,7 @@ function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: s
 }
 
 const dashboardCache = new Map<string, { timestamp: number, data: any }>();
-const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+const CACHE_TTL_MS = 1 * 1000; // 1 second
 
 export function clearPresupuestosCache() {
     dashboardCache.clear();
@@ -303,6 +303,12 @@ export class PresupuestosService {
             cantidad_equipos: number;
         }>();
 
+function hasValidPO(po: string | null | undefined): boolean {
+    if (!po) return false;
+    const clean = po.trim().toUpperCase();
+    return clean !== '' && clean !== '-' && clean !== 'PENDIENTE' && clean !== 'NULL' && clean !== 'UNDEFINED' && clean !== 'SIN OC' && clean !== 'SIN PO';
+}
+
         for (const o of currentMonthOrders) {
             // Check filters
             if (sitio_id && o.renta?.sitio_id !== sitio_id) continue;
@@ -317,6 +323,10 @@ export class PresupuestosService {
 
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
+
+            // Solo sumar como "Enviado" si la orden tiene OC válida registrada o ya está facturada
+            const hasPo = hasValidPO(o.po) || o.estado === 'FACTURADA';
+            if (!hasPo) continue;
 
             const currencyStat = stats[oMoneda as keyof typeof stats];
             if (currencyStat) {
@@ -346,13 +356,16 @@ export class PresupuestosService {
 
                 const condicionesObj = (o.condiciones as any) || {};
                 const poNum = (o.po || '-').trim();
+                const rawCuenta = o.renta?.cuenta || o.activo?.cuenta || o.renta?.sitio?.cuenta || o.activo?.sitio?.cuenta || o.renta?.sitio?.nombre || o.activo?.sitio?.nombre || '';
+                const cuentaNombre = (rawCuenta && rawCuenta.trim() !== '' && rawCuenta.trim() !== '-') ? rawCuenta.trim() : '-';
                 const sitioNombre = (o.renta?.sitio?.nombre || o.activo?.sitio?.nombre || o.renta?.activo?.sitio?.nombre || (o.renta?.sitio as any)?.ciudad || (o.activo?.sitio as any)?.ciudad || '-').trim();
                 const totvsNum = (condicionesObj.pedido_totvs || condicionesObj.pedido || condicionesObj.pedido_tovts || o.renta?.no_registro_totvs || '-').trim();
 
-                const groupKey = `${clientName}___${poNum}___${sitioNombre}___${oMoneda}`;
+                const groupKey = `${clientName}___${cuentaNombre}___${poNum}___${sitioNombre}___${oMoneda}`;
                 if (!consolidatedOrdersMap.has(groupKey)) {
                     consolidatedOrdersMap.set(groupKey, {
                         cliente: clientName,
+                        cuenta: cuentaNombre,
                         po: poNum,
                         sitio: sitioNombre,
                         pedido_totvs: totvsNum,
@@ -370,10 +383,12 @@ export class PresupuestosService {
             }
         }
 
-        // Sort: Items with positive amount first (descending), zeros at the end
+        // Sort: Alphabetical by client name, then secondary by sitio
         const pedidos_del_mes = Array.from(consolidatedOrdersMap.values()).sort((a, b) => {
-            if (a.importe > 0 && b.importe === 0) return -1;
-            if (a.importe === 0 && b.importe > 0) return 1;
+            const comp = (a.cliente || '').localeCompare(b.cliente || '', 'es', { sensitivity: 'base' });
+            if (comp !== 0) return comp;
+            const compSitio = (a.sitio || '').localeCompare(b.sitio || '', 'es', { sensitivity: 'base' });
+            if (compSitio !== 0) return compSitio;
             return b.importe - a.importe;
         });
 
@@ -519,6 +534,10 @@ export class PresupuestosService {
             if (sitio_id && o.renta?.sitio_id !== sitio_id) continue;
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
+
+            // Solo sumar a Enviado si la orden tiene OC válida registrada o ya está facturada
+            const hasPo = hasValidPO(o.po) || o.estado === 'FACTURADA';
+            if (!hasPo) continue;
 
             const rawAdc = o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc;
             const adcName = rawAdc?.trim() || 'Sin ADC';
