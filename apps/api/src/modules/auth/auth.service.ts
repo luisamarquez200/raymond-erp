@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
 import { AuthRepository } from './auth.repository';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
@@ -15,6 +16,14 @@ import { AuthResponse } from './interfaces/auth-response.interface';
 @Injectable()
 export class AuthService {
     private readonly logger = new Logger(AuthService.name);
+    private static directPrismaInstance: PrismaClient | null = null;
+
+    private get directPrisma(): PrismaClient {
+        if (!AuthService.directPrismaInstance) {
+            AuthService.directPrismaInstance = new PrismaClient();
+        }
+        return AuthService.directPrismaInstance;
+    }
 
     constructor(
         private readonly authRepository: AuthRepository,
@@ -378,25 +387,24 @@ export class AuthService {
             // Ensure UserContext is set to bypass tenant filtering
             const { UserContext } = await import('../../common/context/user.context');
             const { TenantContext } = await import('../../common/context/tenant.context');
-            
+
             UserContext.setUser({
                 id: user.id,
                 roles: user.roles.name,
                 isSuperadmin: true,
             });
-            
+
             // Temporarily clear tenant context to allow querying all organizations
             const originalTenant = TenantContext.getTenantId();
             TenantContext.setTenantId(undefined as any);
-            
+
             this.logger.log(`[getUserOrganizations] SUPERADMIN querying all organizations (tenant cleared)`);
-            
+
             try {
                 // For SUPERADMIN, query all organizations directly
                 // Bypass tenant filtering by using PrismaClient without extension
-                const { PrismaClient } = await import('@prisma/client');
-                const directPrisma = new PrismaClient();
-                
+                const directPrisma = this.directPrisma;
+
                 const organizations = await directPrisma.organizations.findMany({
                     select: {
                         id: true,
@@ -410,9 +418,7 @@ export class AuthService {
                         name: 'asc',
                     },
                 });
-                
-                await directPrisma.$disconnect();
-                
+
                 this.logger.log(`[getUserOrganizations] SUPERADMIN found ${organizations.length} organizations: ${organizations.map(o => o.name).join(', ')}`);
                 return organizations;
             } finally {
@@ -449,7 +455,7 @@ export class AuthService {
      */
     async switchOrganization(user_id: string, dto: SwitchOrganizationDto) {
         this.logger.log(`[switchOrganization] User ${user_id} switching to org ${dto.organization_id}`);
-        
+
         // Verify user exists
         const user = await this.authRepository.findUserById(user_id);
         if (!user) {
@@ -463,17 +469,10 @@ export class AuthService {
         // For SUPERADMIN, use direct PrismaClient to bypass tenant filtering
         let targetOrg;
         if (isSuperadmin) {
-            const { PrismaClient } = await import('@prisma/client');
-            const directPrisma = new PrismaClient();
-            try {
-                targetOrg = await directPrisma.organizations.findUnique({
-                    where: { id: dto.organization_id },
-                });
-                await directPrisma.$disconnect();
-            } catch (error) {
-                await directPrisma.$disconnect();
-                throw error;
-            }
+            const directPrisma = this.directPrisma;
+            targetOrg = await directPrisma.organizations.findUnique({
+                where: { id: dto.organization_id },
+            });
         } else {
             // Verify target organization exists and is active
             targetOrg = await this.prisma.organizations.findUnique({
@@ -503,14 +502,27 @@ export class AuthService {
         let role;
         if (isSuperadmin) {
             // For SUPERADMIN, use direct PrismaClient to bypass tenant filtering
-            const { PrismaClient } = await import('@prisma/client');
-            const directPrisma = new PrismaClient();
-            try {
-                // Try to find Superadmin role in target organization
+            const directPrisma = this.directPrisma;
+            // Try to find Superadmin role in target organization
+            role = await directPrisma.roles.findFirst({
+                where: {
+                    name: 'Superadmin',
+                    organization_id: dto.organization_id,
+                },
+                include: {
+                    role_permissions: {
+                        include: {
+                            permissions: true,
+                        },
+                    },
+                },
+            });
+
+            // If no Superadmin role in target org, use user's current role (they're still SUPERADMIN)
+            if (!role) {
                 role = await directPrisma.roles.findFirst({
                     where: {
-                        name: 'Superadmin',
-                        organization_id: dto.organization_id,
+                        id: user.role_id,
                     },
                     include: {
                         role_permissions: {
@@ -520,26 +532,6 @@ export class AuthService {
                         },
                     },
                 });
-                
-                // If no Superadmin role in target org, use user's current role (they're still SUPERADMIN)
-                if (!role) {
-                    role = await directPrisma.roles.findFirst({
-                        where: {
-                            id: user.role_id,
-                        },
-                        include: {
-                            role_permissions: {
-                                include: {
-                                    permissions: true,
-                                },
-                            },
-                        },
-                    });
-                }
-                await directPrisma.$disconnect();
-            } catch (error) {
-                await directPrisma.$disconnect();
-                throw error;
             }
         } else {
             role = await this.prisma.roles.findFirst({
@@ -575,7 +567,7 @@ export class AuthService {
                     },
                 });
             }
-            
+
             if (!role) {
                 throw new ForbiddenException('User does not have a role in this organization');
             }

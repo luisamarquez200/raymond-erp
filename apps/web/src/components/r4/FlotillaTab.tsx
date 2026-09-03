@@ -34,6 +34,119 @@ const formatFilterText = (str: string) => {
   return str.toUpperCase();
 };
 
+const TableHeaderDateRangeFilter = ({
+  title,
+  startDate,
+  endDate,
+  onChange,
+  currentColor,
+}: {
+  title: string;
+  startDate: string;
+  endDate: string;
+  onChange: (start: string, end: string) => void;
+  currentColor?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [localStart, setLocalStart] = useState(startDate || '');
+  const [localEnd, setLocalEnd] = useState(endDate || '');
+
+  useEffect(() => {
+    setLocalStart(startDate || '');
+    setLocalEnd(endDate || '');
+  }, [startDate, endDate]);
+
+  const hasActiveFilter = !!startDate || !!endDate;
+
+  const handleApply = () => {
+    onChange(localStart, localEnd);
+    setOpen(false);
+  };
+
+  const handleClear = () => {
+    setLocalStart('');
+    setLocalEnd('');
+    onChange('', '');
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="flex items-center gap-1.5 cursor-pointer select-none group hover:bg-slate-100/50 p-1 -m-1 rounded-lg transition-colors">
+          <span className={hasActiveFilter ? "text-red-600 font-bold" : "text-slate-500 font-bold"}>
+            {title}
+          </span>
+          <div className={`p-1 rounded-md transition-colors ${hasActiveFilter ? 'bg-red-50 text-red-600' : 'text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-700'}`}>
+            <Calendar className="w-3.5 h-3.5" />
+          </div>
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-[260px] p-3.5 shadow-lg border border-slate-200 rounded-xl bg-white" align="start" sideOffset={6}>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+            <span className="text-xs font-semibold text-slate-700">
+              Rango de fechas
+            </span>
+            {hasActiveFilter && (
+              <button 
+                type="button" 
+                onClick={handleClear} 
+                className="text-[11px] font-medium text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+
+          {/* Custom Date Range Inputs */}
+          <div className="space-y-2.5 pt-0.5">
+            <div>
+              <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                Desde
+              </label>
+              <input
+                type="date"
+                value={localStart}
+                onChange={(e) => setLocalStart(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-normal text-slate-700 focus:outline-none focus:border-slate-400 focus:bg-white transition-all"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                Hasta
+              </label>
+              <input
+                type="date"
+                value={localEnd}
+                onChange={(e) => setLocalEnd(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-normal text-slate-700 focus:outline-none focus:border-slate-400 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-medium transition-colors cursor-pointer border border-slate-200"
+            >
+              Limpiar
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              className="flex-1 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-medium transition-colors shadow-xs cursor-pointer"
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 const TableHeaderFilter = ({ 
   label, title, value, onChange, options, open, setOpen, search, setSearch, currentColor 
 }: {
@@ -191,11 +304,15 @@ export default function FlotillaTab({
   const [openFilters, setOpenFilters] = useState<Record<string, boolean>>({});
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
   const [searchPropietario, setSearchPropietario] = useState('');
+  const [dateFilterFechaIngreso, setDateFilterFechaIngreso] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [dateFilterFechaVencimiento, setDateFilterFechaVencimiento] = useState<{ start: string; end: string }>({ start: '', end: '' });
 
-  const hasActiveFilters = Object.values(activeFilters).some(arr => arr && arr.length > 0 && !arr.includes('Todos')) || searchTerm !== '';
+  const hasActiveFilters = Object.values(activeFilters).some(arr => arr && arr.length > 0 && !arr.includes('Todos')) || searchTerm !== '' || !!dateFilterFechaIngreso.start || !!dateFilterFechaIngreso.end || !!dateFilterFechaVencimiento.start || !!dateFilterFechaVencimiento.end;
 
   const clearFilters = () => {
     setActiveFilters({});
+    setDateFilterFechaIngreso({ start: '', end: '' });
+    setDateFilterFechaVencimiento({ start: '', end: '' });
     setSearchTerm('');
     setCurrentPage(1);
   };
@@ -865,6 +982,28 @@ export default function FlotillaTab({
     const term = searchTerm ? searchTerm.toLowerCase().trim() : '';
 
     return normalizedAssets.filter((asset: any) => {
+      // Date range filter for fechaIngreso
+      if (dateFilterFechaIngreso.start || dateFilterFechaIngreso.end) {
+        const raw = asset.fechaIngreso || asset.fecha_entrega || asset.fecha_inicio;
+        if (!raw) return false;
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return false;
+        const dStr = d.toISOString().split('T')[0];
+        if (dateFilterFechaIngreso.start && dStr < dateFilterFechaIngreso.start) return false;
+        if (dateFilterFechaIngreso.end && dStr > dateFilterFechaIngreso.end) return false;
+      }
+
+      // Date range filter for fechaVencimiento
+      if (dateFilterFechaVencimiento.start || dateFilterFechaVencimiento.end) {
+        const raw = asset.fechaVencimiento || asset.fecha_vencimiento || asset.fecha_fin;
+        if (!raw) return false;
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return false;
+        const dStr = d.toISOString().split('T')[0];
+        if (dateFilterFechaVencimiento.start && dStr < dateFilterFechaVencimiento.start) return false;
+        if (dateFilterFechaVencimiento.end && dStr > dateFilterFechaVencimiento.end) return false;
+      }
+
       if (hasActive) {
         for (const [key, selected] of Object.entries(activeFilters)) {
           if (!selected || selected.length === 0 || selected.includes('Todos')) continue;
@@ -890,7 +1029,7 @@ export default function FlotillaTab({
         asset.tipo_poliza?.toLowerCase().includes(term)
       );
     });
-  }, [normalizedAssets, activeFilters, searchTerm]);
+  }, [normalizedAssets, activeFilters, searchTerm, dateFilterFechaIngreso, dateFilterFechaVencimiento]);
 
   const getUnique = useCallback((key: string) => {
     const skipFilterName = key;
@@ -934,13 +1073,41 @@ export default function FlotillaTab({
     });
   }, [filteredAssets]);
 
-  // Totales financieros calculados dinámicamente con los filtros activos
-  const totalRentaPrecio = useMemo(() => {
-    return filteredAssets.reduce((acc: number, asset: any) => acc + (Number(asset.renta_precio) || 0), 0);
-  }, [filteredAssets]);
+  // Totales financieros calculados dinámicamente con desglose exacto por moneda (MXN / USD)
+  const financialTotals = useMemo(() => {
+    let rentaMXN = 0;
+    let rentaUSD = 0;
+    let costoMXN = 0;
+    let costoUSD = 0;
 
-  const totalCostoServicios = useMemo(() => {
-    return filteredAssets.reduce((acc: number, asset: any) => acc + (Number(asset.costo_poliza_distribuidor) || 0), 0);
+    for (const asset of filteredAssets) {
+      const rentaVal = Number(asset.renta_precio) || 0;
+      const rMoneda = (asset.moneda || 'MXN').toUpperCase().trim();
+      if (rMoneda === 'USD') {
+        rentaUSD += rentaVal;
+      } else {
+        rentaMXN += rentaVal;
+      }
+
+      const costoVal = Number(asset.costo_poliza_distribuidor) || 0;
+      const cMoneda = (asset.moneda_pago_distribuidor || asset.moneda || 'MXN').toUpperCase().trim();
+      if (cMoneda === 'USD') {
+        costoUSD += costoVal;
+      } else {
+        costoMXN += costoVal;
+      }
+    }
+
+    return {
+      rentaMXN,
+      rentaUSD,
+      costoMXN,
+      costoUSD,
+      hasRentaUSD: rentaUSD > 0,
+      hasRentaMXN: rentaMXN > 0,
+      hasCostoUSD: costoUSD > 0,
+      hasCostoMXN: costoMXN > 0,
+    };
   }, [filteredAssets]);
 
   const totalPages = Math.ceil(sortedAssets.length / itemsPerPage);
@@ -1053,11 +1220,19 @@ export default function FlotillaTab({
         'FECHA ENTREGADO': '',
         'PLAZO (MESES)': '',
         'FECHA VENCIMIENTO': '',
-        'PRECIO RENTA CLIENTE': totalRentaPrecio,
-        'MONEDA': 'MXN',
+        'PRECIO RENTA CLIENTE': financialTotals.hasRentaUSD && !financialTotals.hasRentaMXN 
+          ? financialTotals.rentaUSD 
+          : financialTotals.hasRentaMXN && !financialTotals.hasRentaUSD 
+            ? financialTotals.rentaMXN 
+            : `MXN: ${financialTotals.rentaMXN} | USD: ${financialTotals.rentaUSD}`,
+        'MONEDA': financialTotals.hasRentaUSD && !financialTotals.hasRentaMXN ? 'USD' : financialTotals.hasRentaMXN && !financialTotals.hasRentaUSD ? 'MXN' : 'MIXTO',
         'CFPM / SMP': '',
-        'COSTO SERVICIO DEALER': totalCostoServicios,
-        'MONEDA SERVICIO': 'MXN',
+        'COSTO SERVICIO DEALER': financialTotals.hasCostoUSD && !financialTotals.hasCostoMXN 
+          ? financialTotals.costoUSD 
+          : financialTotals.hasCostoMXN && !financialTotals.hasCostoUSD 
+            ? financialTotals.costoMXN 
+            : `MXN: ${financialTotals.costoMXN} | USD: ${financialTotals.costoUSD}`,
+        'MONEDA SERVICIO': financialTotals.hasCostoUSD && !financialTotals.hasCostoMXN ? 'USD' : financialTotals.hasCostoMXN && !financialTotals.hasCostoUSD ? 'MXN' : 'MIXTO',
       } as any);
 
       const ws = XLSX.utils.json_to_sheet(rows);
@@ -1468,9 +1643,31 @@ export default function FlotillaTab({
                   <th className="px-4 py-3.5">{renderFilter('oach', 'OACH', 'OACH')}</th>
                   <th className="px-4 py-3.5">{renderFilter('altura', 'Altura', 'ALTURA')}</th>
                   <th className="px-4 py-3.5">{renderFilter('bc', 'BC', 'BC')}</th>
-                  <th className="px-4 py-3.5">{renderFilter('fechaIngreso', 'F. Entregado', 'F. ENTREGADO')}</th>
+                  <th className="px-4 py-3.5">
+                    <TableHeaderDateRangeFilter
+                      title="F. ENTREGADO"
+                      startDate={dateFilterFechaIngreso.start}
+                      endDate={dateFilterFechaIngreso.end}
+                      onChange={(start, end) => {
+                        setDateFilterFechaIngreso({ start, end });
+                        setCurrentPage(1);
+                      }}
+                      currentColor={currentColor}
+                    />
+                  </th>
                   <th className="px-4 py-3.5">{renderFilter('plazo', 'Plazo (meses)', 'PLAZO')}</th>
-                  <th className="px-4 py-3.5">{renderFilter('fechaVencimiento', 'F. Vencimiento', 'VENCIMIENTO')}</th>
+                  <th className="px-4 py-3.5">
+                    <TableHeaderDateRangeFilter
+                      title="VENCIMIENTO"
+                      startDate={dateFilterFechaVencimiento.start}
+                      endDate={dateFilterFechaVencimiento.end}
+                      onChange={(start, end) => {
+                        setDateFilterFechaVencimiento({ start, end });
+                        setCurrentPage(1);
+                      }}
+                      currentColor={currentColor}
+                    />
+                  </th>
                   <th className="px-4 py-3.5 text-right">{renderFilter('renta_precio', 'Precio Renta', 'PRECIO')}</th>
                   <th className="px-4 py-3.5">{renderFilter('renta_moneda', 'Moneda', 'MONEDA')}</th>
                   <th className="px-4 py-3.5">{renderFilter('tipo_poliza', 'Tipo Póliza', 'PÓLIZA')}</th>
@@ -1552,18 +1749,36 @@ export default function FlotillaTab({
                       TOTAL FILTRADO ({filteredAssets.length} {filteredAssets.length === 1 ? 'registro' : 'registros'})
                     </td>
                     <td className="px-4 py-3 text-right font-black text-slate-950 text-xs">
-                      ${totalRentaPrecio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {financialTotals.hasRentaUSD && !financialTotals.hasRentaMXN ? (
+                        <span>${financialTotals.rentaUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      ) : financialTotals.hasRentaMXN && !financialTotals.hasRentaUSD ? (
+                        <span>${financialTotals.rentaMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <div>${financialTotals.rentaMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-emerald-700 text-[11px]">${financialTotals.rentaUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-600 font-bold text-[11px]">
-                      MXN
+                      {financialTotals.hasRentaUSD && !financialTotals.hasRentaMXN ? 'USD' : financialTotals.hasRentaMXN && !financialTotals.hasRentaUSD ? 'MXN' : 'MIXTO'}
                     </td>
                     <td className="px-4 py-3 text-slate-400 font-normal text-[11px]">-</td>
                     <td className="px-4 py-3 text-slate-400 font-normal text-[11px]">-</td>
                     <td className="px-4 py-3 text-right font-black text-slate-950 text-xs">
-                      ${totalCostoServicios.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {financialTotals.hasCostoUSD && !financialTotals.hasCostoMXN ? (
+                        <span>${financialTotals.costoUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      ) : financialTotals.hasCostoMXN && !financialTotals.hasCostoUSD ? (
+                        <span>${financialTotals.costoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <div>${financialTotals.costoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-blue-700 text-[11px]">${financialTotals.costoUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-600 font-bold text-[11px]">
-                      MXN
+                      {financialTotals.hasCostoUSD && !financialTotals.hasCostoMXN ? 'USD' : financialTotals.hasCostoMXN && !financialTotals.hasCostoUSD ? 'MXN' : 'MIXTO'}
                     </td>
                     <td colSpan={isAdc ? 3 : 4} className="px-4 py-3"></td>
                   </tr>
@@ -1579,9 +1794,24 @@ export default function FlotillaTab({
               <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Suma Precio Renta (Filtrado)</span>
-                  <p className="text-lg font-black text-slate-900 tracking-tight">
-                    ${totalRentaPrecio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
-                  </p>
+                  {financialTotals.hasRentaUSD && !financialTotals.hasRentaMXN ? (
+                    <p className="text-lg font-black text-slate-900 tracking-tight">
+                      ${financialTotals.rentaUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-emerald-600 font-bold">USD</span>
+                    </p>
+                  ) : financialTotals.hasRentaMXN && !financialTotals.hasRentaUSD ? (
+                    <p className="text-lg font-black text-slate-900 tracking-tight">
+                      ${financialTotals.rentaMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
+                    </p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <p className="text-base font-black text-slate-900 tracking-tight">
+                        ${financialTotals.rentaMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
+                      </p>
+                      <p className="text-base font-black text-emerald-700 tracking-tight">
+                        ${financialTotals.rentaUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-emerald-600 font-bold">USD</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-sm">
                   $
@@ -1591,9 +1821,24 @@ export default function FlotillaTab({
               <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Suma Costo Servicios (Filtrado)</span>
-                  <p className="text-lg font-black text-slate-900 tracking-tight">
-                    ${totalCostoServicios.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
-                  </p>
+                  {financialTotals.hasCostoUSD && !financialTotals.hasCostoMXN ? (
+                    <p className="text-lg font-black text-slate-900 tracking-tight">
+                      ${financialTotals.costoUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-blue-600 font-bold">USD</span>
+                    </p>
+                  ) : financialTotals.hasCostoMXN && !financialTotals.hasCostoUSD ? (
+                    <p className="text-lg font-black text-slate-900 tracking-tight">
+                      ${financialTotals.costoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
+                    </p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <p className="text-base font-black text-slate-900 tracking-tight">
+                        ${financialTotals.costoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
+                      </p>
+                      <p className="text-base font-black text-blue-700 tracking-tight">
+                        ${financialTotals.costoUSD.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-blue-600 font-bold">USD</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm">
                   $

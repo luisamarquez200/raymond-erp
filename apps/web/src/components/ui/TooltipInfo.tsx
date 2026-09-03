@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Info } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface TooltipInfoProps {
     text: string;
@@ -10,22 +11,38 @@ interface TooltipInfoProps {
 }
 
 export default function TooltipInfo({ text, formula, className = '' }: TooltipInfoProps) {
-    const [show, setShow] = useState(false);
+    const [open, setOpen] = useState(false);
 
     return (
-        <div className={`relative inline-flex items-center ml-1 group ${className}`}>
-            <Info 
-                className="w-3.5 h-3.5 text-slate-400 hover:text-red-600 cursor-pointer transition-colors"
-                onMouseEnter={() => setShow(true)}
-                onMouseLeave={() => setShow(false)}
-                onClick={() => setShow(!show)}
-            />
-            {show && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900/95 text-white text-[11px] font-medium leading-relaxed rounded-2xl shadow-2xl z-50 pointer-events-none transition-all border border-slate-700/80 backdrop-blur-md">
-                    <p className="text-slate-200 font-semibold">{text}</p>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-                </div>
-            )}
-        </div>
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    onMouseEnter={() => setOpen(true)}
+                    onMouseLeave={() => setOpen(false)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setOpen(!open);
+                    }}
+                    className={`inline-flex items-center justify-center p-0.5 rounded-full text-slate-400 hover:text-red-600 hover:bg-slate-100 transition-colors focus:outline-none cursor-pointer align-middle ml-1 ${className}`}
+                    aria-label="Información adicional"
+                >
+                    <Info className="w-3.5 h-3.5" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                side="top"
+                align="center"
+                sideOffset={6}
+                className="w-64 sm:w-72 p-3 bg-white text-slate-700 text-xs font-normal leading-relaxed rounded-xl shadow-xl border border-slate-200 pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-150"
+            >
+                <p className="text-slate-800 font-medium">{text}</p>
+                {formula && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500 font-mono bg-slate-50 px-2 py-1 rounded-md border border-slate-200/60">
+                        {formula}
+                    </div>
+                )}
+            </PopoverContent>
+        </Popover>
     );
 }
