@@ -3,6 +3,38 @@ import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 import { MinioService } from '../minio/minio.service';
 import { CreateRentaDto } from './dto/create-renta.dto';
 import { UpdateRentaDto, UpdateDetallesRentaDto } from './dto/update-renta.dto';
+import { clearPresupuestosCache } from '../presupuestos/presupuestos.service';
+
+const rentasCache = new Map<string, { timestamp: number; data: any[] }>();
+const RENTAS_CACHE_TTL_MS = 20 * 1000; // 20 segundos de cache
+
+export function clearRentasCache() {
+    rentasCache.clear();
+}
+
+function parseExcelOrIsoDate(raw: any): string | null {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(s.toUpperCase())) {
+        return null;
+    }
+    const num = Number(raw);
+    if (!isNaN(num) && num > 30000 && num < 80000) {
+        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+        const jsDate = new Date(excelEpoch.getTime() + num * 86400000);
+        return jsDate.toISOString().split('T')[0];
+    }
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+        if (d.getFullYear() > 3000 && d.getFullYear() < 80000) {
+            const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+            const jsDate = new Date(excelEpoch.getTime() + d.getFullYear() * 86400000);
+            return jsDate.toISOString().split('T')[0];
+        }
+        return d.toISOString().split('T')[0];
+    }
+    return s;
+}
 
 @Injectable()
 export class RentasService {
@@ -38,11 +70,13 @@ export class RentasService {
                 id: renta.cliente.id,
                 razonSocial: renta.cliente.razon_social,
                 rfc: renta.cliente.rfc,
+                datos_comerciales: renta.cliente.datos_comerciales,
             } : null,
             sitio: renta.sitio ? {
                 id: renta.sitio.id,
                 nombre: renta.sitio.nombre,
                 ciudad: renta.sitio.ciudad,
+                adc: renta.sitio.adc,
             } : null,
             activo: renta.activo ? {
                 id: renta.activo.id,
@@ -55,6 +89,7 @@ export class RentasService {
                 altura: renta.activo.altura,
                 bc: renta.activo.bc,
                 propietario: renta.activo.propietario,
+                adc: renta.activo.adc,
                 accesorios: renta.activo.accesorios ? renta.activo.accesorios.map((a: any) => ({
                     id: a.accesorio_id,
                     tipo_relacion: a.tipo_relacion,
@@ -70,7 +105,7 @@ export class RentasService {
             distribuidor: renta.distribuidor,
             no_registro_totvs: renta.no_registro_totvs,
             fecha_recepcion: renta.fecha_recepcion,
-            fecha_pedido_totvs: renta.fecha_pedido_totvs,
+            fecha_pedido_totvs: parseExcelOrIsoDate(renta.fecha_pedido_totvs),
             fecha_inicio: renta.fecha_inicio,
             fecha_fin: renta.fecha_fin,
             tarifa: renta.tarifa,
@@ -84,9 +119,7 @@ export class RentasService {
                     rawTotvs = null;
                 }
                 let rawFecha = cond.fecha_pedido_totvs || cond.fecha_ped || renta.fecha_pedido_totvs || null;
-                if (rawFecha && ['NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(String(rawFecha).toUpperCase().trim())) {
-                    rawFecha = null;
-                }
+                const normalizedFecha = parseExcelOrIsoDate(rawFecha);
                 return {
                     id: o.id,
                     periodo: o.periodo,
@@ -96,7 +129,7 @@ export class RentasService {
                     estado: o.estado,
                     condiciones: o.condiciones,
                     pedido_totvs: rawTotvs,
-                    fecha_pedido_totvs: rawFecha,
+                    fecha_pedido_totvs: normalizedFecha,
                     created_at: o.created_at
                 };
             }),
@@ -105,25 +138,85 @@ export class RentasService {
 
     async obtenerRentas(user?: any) {
         try {
-            const db = this.getDb();
-            const rentas = await db.renta.findMany({
-                include: { 
-                    cliente: true, 
-                    sitio: true, 
-                    activo: {
-                        include: {
-                            accesorios: { include: { accesorio: true } }
+            let mapped: any[];
+            const cached = rentasCache.get('all_rentas');
+
+            if (cached && (Date.now() - cached.timestamp < RENTAS_CACHE_TTL_MS)) {
+                mapped = cached.data;
+            } else {
+                const db = this.getDb();
+                const rentas = await db.renta.findMany({
+                    include: { 
+                        cliente: {
+                            select: {
+                                id: true,
+                                razon_social: true,
+                                rfc: true,
+                                datos_comerciales: true,
+                            }
+                        }, 
+                        sitio: {
+                            select: {
+                                id: true,
+                                nombre: true,
+                                ciudad: true,
+                                adc: true,
+                                cuenta: true,
+                                distribuidor: true,
+                            }
+                        }, 
+                        activo: {
+                            select: {
+                                id: true,
+                                serie: true,
+                                clase: true,
+                                modelo: true,
+                                tipo: true,
+                                estatus: true,
+                                oach: true,
+                                altura: true,
+                                bc: true,
+                                propietario: true,
+                                adc: true,
+                                accesorios: {
+                                    select: {
+                                        accesorio_id: true,
+                                        tipo_relacion: true,
+                                        cantidad: true,
+                                        notas: true,
+                                        accesorio: {
+                                            select: {
+                                                id: true,
+                                                serie: true,
+                                                modelo: true,
+                                                tipo: true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }, 
+                        detalles: true,
+                        ordenes: {
+                            select: {
+                                id: true,
+                                periodo: true,
+                                po: true,
+                                tarifa: true,
+                                moneda: true,
+                                estado: true,
+                                condiciones: true,
+                                created_at: true,
+                            },
+                            orderBy: { periodo: 'desc' }
                         }
-                    }, 
-                    detalles: true,
-                    ordenes: {
-                        orderBy: { periodo: 'desc' }
-                    }
-                },
-                orderBy: { created_at: 'desc' },
-            });
-            
-            let mapped = rentas.map(r => this.mapRenta(r));
+                    },
+                    orderBy: { created_at: 'desc' },
+                });
+                
+                mapped = rentas.map(r => this.mapRenta(r));
+                rentasCache.set('all_rentas', { timestamp: Date.now(), data: mapped });
+            }
 
             const roleStr = String(user?.roles || user?.role || '').toLowerCase();
             const isAdministrator = ['administrador', 'admin', 'superadmin', 'gerente', 'coordinacion', 'coordinador'].some(r => roleStr.includes(r));
@@ -134,7 +227,7 @@ export class RentasService {
                 const adcKeywords = rawTarget.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
                 const firstName = (user?.first_name || user?.firstName || '').toLowerCase().trim();
 
-                mapped = mapped.filter(r => {
+                return mapped.filter(r => {
                     const rAdc = (r.adc || '').toLowerCase();
                     const clientComercial = (r.cliente?.datos_comerciales as any) || {};
                     const clientAdc = (clientComercial.adc || '').toLowerCase();
@@ -285,6 +378,8 @@ export class RentasService {
         }
 
         this.logger.log(`Renta creada: ${renta.id} para activo ${activo.serie}`);
+        clearRentasCache();
+        clearPresupuestosCache();
         return { ...renta, detalles };
     }
 
@@ -293,7 +388,7 @@ export class RentasService {
         const existente = await db.renta.findUnique({ where: { id } });
         if (!existente) throw new NotFoundException(`Renta ${id} no encontrada`);
 
-        return db.renta.update({
+        const updated = await db.renta.update({
             where: { id },
             data: {
                 ...(dto.cuenta !== undefined && { cuenta: dto.cuenta }),
@@ -307,6 +402,10 @@ export class RentasService {
                 ...(dto.estado && { estado: dto.estado }),
             },
         });
+
+        clearRentasCache();
+        clearPresupuestosCache();
+        return updated;
     }
 
     async actualizarDetalles(rentaId: string, dto: UpdateDetallesRentaDto) {
@@ -343,11 +442,16 @@ export class RentasService {
             });
         }
 
+        let res;
         if (existente) {
-            return db.detallesRenta.update({ where: { renta_id: rentaId }, data });
+            res = await db.detallesRenta.update({ where: { renta_id: rentaId }, data });
+        } else {
+            res = await db.detallesRenta.create({ data: { renta_id: rentaId, ...data } });
         }
 
-        return db.detallesRenta.create({ data: { renta_id: rentaId, ...data } });
+        clearRentasCache();
+        clearPresupuestosCache();
+        return res;
     }
 
     async cancelarRenta(id: string) {
@@ -362,6 +466,8 @@ export class RentasService {
             await tx.renta.delete({ where: { id } });
         });
 
+        clearRentasCache();
+        clearPresupuestosCache();
         return { success: true, message: 'Renta eliminada correctamente' };
     }
 

@@ -4,10 +4,9 @@ import {
   Search, Receipt, Calendar, CalendarDays, Plus, Filter, Download, X, Pencil, Check, ChevronsUpDown, FileText, Building2, MapPin, Truck, FileSpreadsheet, Eye, BatteryCharging, FilePlus, ChevronLeft, ChevronRight, Sparkles, Layers, CheckCircle2, Trash2
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, Fragment, useRef } from "react";
 import api from "@/lib/api";
+import { useState, useEffect, useMemo, useCallback, Fragment, useRef } from "react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth.store";
 import { useConfigStore } from "@/store/config.store";
@@ -21,6 +20,152 @@ import CopiarMesAnteriorModal from "@/components/r4/ordenes/CopiarMesAnteriorMod
 const formatFilterText = (str: string) => {
   if (!str) return '-';
   return str.toUpperCase();
+};
+
+const formatFechaTotvs = (val: any): string => {
+  if (!val) return '-';
+  const str = String(val).trim();
+  if (['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(str.toUpperCase())) {
+    return '-';
+  }
+
+  // Handle Excel serial date numbers (e.g. 45000 to 55000)
+  const num = Number(val);
+  if (!isNaN(num) && num > 30000 && num < 80000) {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const jsDate = new Date(excelEpoch.getTime() + num * 86400000);
+    return jsDate.toLocaleDateString('es-ES', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  // Handle standard date strings
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) {
+    if (d.getFullYear() > 3000) {
+      const yearNum = d.getFullYear();
+      if (yearNum > 30000 && yearNum < 80000) {
+        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+        const jsDate = new Date(excelEpoch.getTime() + yearNum * 86400000);
+        return jsDate.toLocaleDateString('es-ES', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      return '-';
+    }
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  return str;
+};
+
+const TableHeaderDateRangeFilter = ({
+  title,
+  startDate,
+  endDate,
+  onChange,
+  currentColor,
+}: {
+  title: string;
+  startDate: string;
+  endDate: string;
+  onChange: (start: string, end: string) => void;
+  currentColor?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [localStart, setLocalStart] = useState(startDate || '');
+  const [localEnd, setLocalEnd] = useState(endDate || '');
+
+  useEffect(() => {
+    setLocalStart(startDate || '');
+    setLocalEnd(endDate || '');
+  }, [startDate, endDate]);
+
+  const hasActiveFilter = !!startDate || !!endDate;
+
+  const handleApply = () => {
+    onChange(localStart, localEnd);
+    setOpen(false);
+  };
+
+  const handleClear = () => {
+    setLocalStart('');
+    setLocalEnd('');
+    onChange('', '');
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="flex items-center gap-1.5 cursor-pointer select-none group hover:bg-slate-100/50 p-1 -m-1 rounded-lg transition-colors">
+          <span className={hasActiveFilter ? "text-red-600 font-bold" : "text-slate-500 font-bold"}>
+            {title}
+          </span>
+          <div className={`p-1 rounded-md transition-colors ${hasActiveFilter ? 'bg-red-50 text-red-600' : 'text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-700'}`}>
+            <Calendar className="w-3.5 h-3.5" />
+          </div>
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-[260px] p-3.5 shadow-lg border border-slate-200 rounded-xl bg-white" align="start" sideOffset={6}>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+            <span className="text-xs font-semibold text-slate-700">
+              Rango de fechas
+            </span>
+            {hasActiveFilter && (
+              <button 
+                type="button" 
+                onClick={handleClear} 
+                className="text-[11px] font-medium text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+
+          {/* Custom Date Range Inputs */}
+          <div className="space-y-2.5 pt-0.5">
+            <div>
+              <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                Desde
+              </label>
+              <input
+                type="date"
+                value={localStart}
+                onChange={(e) => setLocalStart(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-normal text-slate-700 focus:outline-none focus:border-slate-400 focus:bg-white transition-all"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                Hasta
+              </label>
+              <input
+                type="date"
+                value={localEnd}
+                onChange={(e) => setLocalEnd(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-normal text-slate-700 focus:outline-none focus:border-slate-400 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-medium transition-colors cursor-pointer border border-slate-200"
+            >
+              Limpiar
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              className="flex-1 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-medium transition-colors shadow-xs cursor-pointer"
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 };
 
 const TableHeaderFilter = ({ 
@@ -265,6 +410,8 @@ export default function RentasTab({
   const [selectedFilterFEntregado, setSelectedFilterFEntregado] = useState<string[]>([]);
   const [selectedFilterPlazo, setSelectedFilterPlazo] = useState<string[]>([]);
   const [selectedFilterFVencimiento, setSelectedFilterFVencimiento] = useState<string[]>([]);
+  const [dateFilterFEntregado, setDateFilterFEntregado] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [dateFilterFVencimiento, setDateFilterFVencimiento] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [selectedFilterPropietario, setSelectedFilterPropietario] = useState<string[]>([]);
   const [selectedFilterPrecioRenta, setSelectedFilterPrecioRenta] = useState<string[]>([]);
   const [selectedFilterMoneda, setSelectedFilterMoneda] = useState<string[]>([]);
@@ -579,10 +726,9 @@ export default function RentasTab({
   const fetchRentasYClientes = async () => {
     try {
       setLoading(true);
-      const [resRentas, resClientes, resFlotilla] = await Promise.all([
+      const [resRentas, resClientes] = await Promise.all([
         api.get('/r4/rentas'),
         api.get('/r4/clientes'),
-        api.get('/r4/flotilla')
       ]);
       const dataArray = resRentas.data?.data || resRentas.data || [];
       const mappedRentas = (Array.isArray(dataArray) ? dataArray : []).map((r: any) => ({
@@ -599,7 +745,18 @@ export default function RentasTab({
 
       const clientesArray = resClientes.data?.data || resClientes.data || [];
       setClientesDisponibles(Array.isArray(clientesArray) ? clientesArray : []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Error al cargar datos');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const fetchEquiposDisponibles = async () => {
+    if (equiposDisponibles.length > 0) return;
+    try {
+      const resFlotilla = await api.get('/r4/flotilla');
       const equiposArray = resFlotilla.data?.data || resFlotilla.data || [];
       const mappedEquipos = (Array.isArray(equiposArray) ? equiposArray : []).map((e: any) => ({
         ...e,
@@ -609,16 +766,19 @@ export default function RentasTab({
       }));
       setEquiposDisponibles(mappedEquipos);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar datos');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching flotilla:', error);
     }
   };
 
   useEffect(() => {
     fetchRentasYClientes();
   }, []);
+
+  useEffect(() => {
+    if (isNewRentaModalOpen || isFichaOcModalOpen) {
+      fetchEquiposDisponibles();
+    }
+  }, [isNewRentaModalOpen, isFichaOcModalOpen]);
 
   // Auto-select single client in Ficha OC modal
   useEffect(() => {
@@ -1074,52 +1234,89 @@ export default function RentasTab({
   };
 
   // ADC Visual Filtering Logic
-  let baseRentas = rentas;
-  if (isAdc) {
-    const adcKeywords = loggedInAdcName
-      .split(',')
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-    const userFirstName = (user?.firstName || '').toLowerCase().trim();
-    const userLastName = (user?.lastName || '').toLowerCase().trim();
-    const userFullName = `${userFirstName} ${userLastName}`.trim();
-
-    baseRentas = rentas.filter(r => {
-        const rAdc = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '';
-        if (!rAdc) return false;
-        return adcKeywords.some((kw: string) => isSameAdc(rAdc, kw)) ||
-               (userFullName && isSameAdc(rAdc, userFullName));
-    });
-  } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
-    let assignedAdcKeywords: string[] = [];
-    if (rawAdcAsociado && rawAdcAsociado !== 'ninguno') {
-      assignedAdcKeywords = rawAdcAsociado
+  const baseRentas = useMemo(() => {
+    if (isAdc) {
+      const adcKeywords = loggedInAdcName
         .split(',')
         .map((s: string) => s.trim())
         .filter(Boolean);
-    }
+      const userFirstName = (user?.firstName || '').toLowerCase().trim();
+      const userLastName = (user?.lastName || '').toLowerCase().trim();
+      const userFullName = `${userFirstName} ${userLastName}`.trim();
 
-    if (assignedAdcKeywords.length === 0) {
-      baseRentas = [];
-    } else {
-      baseRentas = rentas.filter(r => {
-        const rAdc = r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc || '';
-        return assignedAdcKeywords.some(kw => isSameAdc(rAdc, kw));
+      return (rentas || []).filter(r => {
+        const rAdc = r?.adc || r?.sitio?.adc || (r?.cliente as any)?.datos_comerciales?.adc || '';
+        if (!rAdc) return false;
+        return adcKeywords.some((kw: string) => isSameAdc(rAdc, kw)) ||
+               (userFullName && isSameAdc(rAdc, userFullName));
       });
+    } else if (isAdministrator && adminAdcScope === 'mis_adcs') {
+      let assignedAdcKeywords: string[] = [];
+      if (rawAdcAsociado && rawAdcAsociado !== 'ninguno') {
+        assignedAdcKeywords = rawAdcAsociado
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+      }
+
+      if (assignedAdcKeywords.length === 0) {
+        return [];
+      } else {
+        return (rentas || []).filter(r => {
+          const rAdc = r?.adc || r?.sitio?.adc || (r?.cliente as any)?.datos_comerciales?.adc || '';
+          return assignedAdcKeywords.some(kw => isSameAdc(rAdc, kw));
+        });
+      }
     }
-  }
+    return rentas || [];
+  }, [rentas, isAdc, loggedInAdcName, user, isAdministrator, adminAdcScope, rawAdcAsociado]);
 
   const isMatchFilter = (filterVals: string[], valToTest: any) => {
     if (!filterVals || filterVals.length === 0 || filterVals.includes('Todos')) return true;
     return filterVals.includes(valToTest);
   };
 
-  // Helper for dynamic cascading filter options (each filter shows options based on active filters in other columns)
-  const getCascadingFilteredRentas = (excludeFilterName: string) => {
+  // Precompute unique option lists directly from baseRentas using useMemo
+  const filterUniqueCuentas = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.cuenta || r?.cliente?.razonSocial || r?.cliente?.razon_social).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueSitios = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.sitio?.nombre).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueAdcs = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.adc || r?.sitio?.adc || (r?.cliente as any)?.datos_comerciales?.adc).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueEquipos = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.tipo || (r?.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas')).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueClases = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.clase).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueModelos = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.modelo).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueSeries = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.serie).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueEstatus = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.estatus).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueOach = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.oach).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueAlturas = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.altura).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueBc = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.activo?.bc).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueFolioOc = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.orden_compra || r?.detalles?.oc_cliente).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueFEntregado = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.fecha_inicio ? new Date(r.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniquePlazos = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.condiciones?.plazo_meses ? String(r.condiciones.plazo_meses) : null).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueFVencimiento = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.fecha_fin ? new Date(r.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniquePropietarios = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.propietario || r?.activo?.propietario).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniquePreciosRenta = useMemo(() => Array.from(new Set((baseRentas || []).map(r => `$${(r?.detalles?.renta_base || r?.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueMonedas = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.detalles?.moneda || 'MXN').filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniquePolizas = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.condiciones?.tipo_poliza || r?.activo?.tipo_poliza || 'SMP').filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueDistribuidores = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.distribuidor || r?.activo?.distribuidor).filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueCostosPoliza = useMemo(() => Array.from(new Set((baseRentas || []).map(r => `$${(r?.condiciones?.costo_poliza_distribuidor || r?.activo?.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+  const filterUniqueMonedasPago = useMemo(() => Array.from(new Set((baseRentas || []).map(r => r?.condiciones?.moneda_pago_distribuidor || r?.activo?.moneda_pago_distribuidor || 'MXN').filter((v): v is string => !!v))).sort((a, b) => String(a).localeCompare(String(b))), [baseRentas]);
+
+  const filteredRentas = useMemo(() => {
     return baseRentas.filter((renta: any) => {
       const cond = renta.condiciones || {};
       const detalles = renta.detalles || {};
       const rCuenta = renta.cuenta || renta.cliente?.razonSocial || renta.cliente?.razon_social || '-';
+      const matchesSearch = !searchTerm ? true : (
+        renta.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        renta.cliente?.razonSocial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        renta.cliente?.razon_social?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        renta.cuenta?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        renta.sitio?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        renta.activo?.serie?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        renta.orden_compra?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        renta.detalles?.oc_cliente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (renta.propietario || renta.activo?.propietario)?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
       const rAdc = renta.adc || renta.sitio?.adc || (renta.cliente as any)?.datos_comerciales?.adc || '-';
       const tipoEq = renta.activo?.tipo || (renta.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas');
       const rPrecioFormatted = `$${(detalles.renta_base || renta.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -1129,161 +1326,122 @@ export default function RentasTab({
       const rPlazo = cond.plazo_meses ? String(cond.plazo_meses) : '-';
       const rFolioOc = renta.orden_compra || detalles.oc_cliente || '-';
 
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        const matchesSearch =
-          renta.id?.toLowerCase().includes(term) ||
-          renta.cliente?.razonSocial?.toLowerCase().includes(term) ||
-          renta.cliente?.razon_social?.toLowerCase().includes(term) ||
-          renta.cuenta?.toLowerCase().includes(term) ||
-          renta.sitio?.nombre?.toLowerCase().includes(term) ||
-          renta.activo?.serie?.toLowerCase().includes(term) ||
-          renta.orden_compra?.toLowerCase().includes(term) ||
-          renta.detalles?.oc_cliente?.toLowerCase().includes(term) ||
-          (renta.propietario || renta.activo?.propietario)?.toLowerCase().includes(term);
-        if (!matchesSearch) return false;
-      }
+      const matchesCuenta = isMatchFilter(selectedFilterCuenta, rCuenta);
+      const matchesSitio = isMatchFilter(selectedFilterSitio, renta.sitio?.nombre);
+      const matchesAdc = isMatchFilter(selectedFilterAdc, rAdc);
+      const matchesEquipo = isMatchFilter(selectedFilterEquipo, tipoEq);
+      const matchesClase = isMatchFilter(selectedFilterClase, renta.activo?.clase);
+      const matchesModelo = isMatchFilter(selectedFilterModelo, renta.activo?.modelo);
+      const matchesSerie = isMatchFilter(selectedFilterSerie, renta.activo?.serie);
+      const matchesEstatus = isMatchFilter(selectedFilterEstatus, renta.activo?.estatus);
+      const matchesOach = isMatchFilter(selectedFilterOach, renta.activo?.oach);
+      const matchesAltura = isMatchFilter(selectedFilterAltura, renta.activo?.altura);
+      const matchesBc = isMatchFilter(selectedFilterBc, renta.activo?.bc);
+      const matchesFolioOc = isMatchFilter(selectedFilterFolioOc, rFolioOc);
+      const matchesFEntregado = isMatchFilter(selectedFilterFEntregado, rFEntregado);
+      const matchesPlazo = isMatchFilter(selectedFilterPlazo, rPlazo);
+      const matchesFVencimiento = isMatchFilter(selectedFilterFVencimiento, rFVencimiento);
 
-      if (excludeFilterName !== 'cuenta' && !isMatchFilter(selectedFilterCuenta, rCuenta)) return false;
-      if (excludeFilterName !== 'sitio' && !isMatchFilter(selectedFilterSitio, renta.sitio?.nombre)) return false;
-      if (excludeFilterName !== 'adc' && !isMatchFilter(selectedFilterAdc, rAdc)) return false;
-      if (excludeFilterName !== 'equipo' && !isMatchFilter(selectedFilterEquipo, tipoEq)) return false;
-      if (excludeFilterName !== 'clase' && !isMatchFilter(selectedFilterClase, renta.activo?.clase)) return false;
-      if (excludeFilterName !== 'modelo' && !isMatchFilter(selectedFilterModelo, renta.activo?.modelo)) return false;
-      if (excludeFilterName !== 'serie' && !isMatchFilter(selectedFilterSerie, renta.activo?.serie)) return false;
-      if (excludeFilterName !== 'estatus' && !isMatchFilter(selectedFilterEstatus, renta.activo?.estatus)) return false;
-      if (excludeFilterName !== 'oach' && !isMatchFilter(selectedFilterOach, renta.activo?.oach)) return false;
-      if (excludeFilterName !== 'altura' && !isMatchFilter(selectedFilterAltura, renta.activo?.altura)) return false;
-      if (excludeFilterName !== 'bc' && !isMatchFilter(selectedFilterBc, renta.activo?.bc)) return false;
-      if (excludeFilterName !== 'folioOc' && !isMatchFilter(selectedFilterFolioOc, rFolioOc)) return false;
-      if (excludeFilterName !== 'fEntregado' && !isMatchFilter(selectedFilterFEntregado, rFEntregado)) return false;
-      if (excludeFilterName !== 'plazo' && !isMatchFilter(selectedFilterPlazo, rPlazo)) return false;
-      if (excludeFilterName !== 'fVencimiento' && !isMatchFilter(selectedFilterFVencimiento, rFVencimiento)) return false;
-      if (excludeFilterName !== 'propietario' && !isMatchFilter(selectedFilterPropietario, renta.propietario || renta.activo?.propietario)) return false;
-      if (excludeFilterName !== 'precioRenta' && !isMatchFilter(selectedFilterPrecioRenta, rPrecioFormatted)) return false;
-      if (excludeFilterName !== 'moneda' && !isMatchFilter(selectedFilterMoneda, detalles.moneda || 'MXN')) return false;
-      if (excludeFilterName !== 'poliza' && !isMatchFilter(selectedFilterPoliza, cond.tipo_poliza || renta.activo?.tipo_poliza || 'SMP')) return false;
-      if (excludeFilterName !== 'distribuidor' && !isMatchFilter(selectedFilterDistribuidor, renta.distribuidor || renta.activo?.distribuidor)) return false;
-      if (excludeFilterName !== 'costoPoliza' && !isMatchFilter(selectedFilterCostoPoliza, rCostoPolizaFormatted)) return false;
-      if (excludeFilterName !== 'monedaPago' && !isMatchFilter(selectedFilterMonedaPago, cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN')) return false;
+      const matchesDateFEntregado = (() => {
+        if (!dateFilterFEntregado.start && !dateFilterFEntregado.end) return true;
+        if (!renta.fecha_inicio) return false;
+        const dStr = new Date(renta.fecha_inicio).toISOString().split('T')[0];
+        if (dateFilterFEntregado.start && dStr < dateFilterFEntregado.start) return false;
+        if (dateFilterFEntregado.end && dStr > dateFilterFEntregado.end) return false;
+        return true;
+      })();
 
-      return true;
+      const matchesDateFVencimiento = (() => {
+        if (!dateFilterFVencimiento.start && !dateFilterFVencimiento.end) return true;
+        if (!renta.fecha_fin) return false;
+        const dStr = new Date(renta.fecha_fin).toISOString().split('T')[0];
+        if (dateFilterFVencimiento.start && dStr < dateFilterFVencimiento.start) return false;
+        if (dateFilterFVencimiento.end && dStr > dateFilterFVencimiento.end) return false;
+        return true;
+      })();
+
+      const matchesPropietario = isMatchFilter(selectedFilterPropietario, renta.propietario || renta.activo?.propietario);
+      const matchesPrecioRenta = isMatchFilter(selectedFilterPrecioRenta, rPrecioFormatted);
+      const matchesMoneda = isMatchFilter(selectedFilterMoneda, detalles.moneda || 'MXN');
+      const matchesPoliza = isMatchFilter(selectedFilterPoliza, cond.tipo_poliza || renta.activo?.tipo_poliza || 'SMP');
+      const matchesDistribuidor = isMatchFilter(selectedFilterDistribuidor, renta.distribuidor || renta.activo?.distribuidor);
+      const matchesCostoPoliza = isMatchFilter(selectedFilterCostoPoliza, rCostoPolizaFormatted);
+      const matchesMonedaPago = isMatchFilter(selectedFilterMonedaPago, cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN');
+
+      const matchesOcPeriodo = (() => {
+        if (selectedOcPeriodoStatus === 'TODOS' || selectedPeriodoView === 'todos') return true;
+        const estNorm = (renta.activo?.estatus || '').trim().toUpperCase();
+        const isInactiveOrBackup = estNorm.startsWith('INACTIVO') || estNorm === 'BACK UP' || estNorm === 'BACKUP' || estNorm === 'POR RETIRAR' || estNorm === 'BAJA' || estNorm === 'TALLER' || estNorm === 'COMODATO';
+        if (isInactiveOrBackup) return false;
+
+        const ord = (renta.ordenes || []).find((o: any) => o.periodo === selectedPeriodoView);
+        const hasOc = !!(ord && ord.po && ord.po.trim() !== '' && ord.po !== '-' && ord.po.toUpperCase() !== 'PENDIENTE' && ord.po.toUpperCase() !== 'SIN OC');
+        if (selectedOcPeriodoStatus === 'CON_OC') return hasOc;
+        if (selectedOcPeriodoStatus === 'SIN_OC') return !hasOc;
+        return true;
+      })();
+
+      return (
+        matchesSearch &&
+        matchesCuenta &&
+        matchesSitio &&
+        matchesAdc &&
+        matchesEquipo &&
+        matchesClase &&
+        matchesModelo &&
+        matchesSerie &&
+        matchesEstatus &&
+        matchesOach &&
+        matchesAltura &&
+        matchesBc &&
+        matchesFolioOc &&
+        matchesFEntregado &&
+        matchesDateFEntregado &&
+        matchesPlazo &&
+        matchesFVencimiento &&
+        matchesDateFVencimiento &&
+        matchesPropietario &&
+        matchesPrecioRenta &&
+        matchesMoneda &&
+        matchesPoliza &&
+        matchesDistribuidor &&
+        matchesCostoPoliza &&
+        matchesMonedaPago &&
+        matchesOcPeriodo
+      );
     });
-  };
+  }, [
+    baseRentas,
+    searchTerm,
+    selectedFilterCuenta,
+    selectedFilterSitio,
+    selectedFilterAdc,
+    selectedFilterEquipo,
+    selectedFilterClase,
+    selectedFilterModelo,
+    selectedFilterSerie,
+    selectedFilterEstatus,
+    selectedFilterOach,
+    selectedFilterAltura,
+    selectedFilterBc,
+    selectedFilterFolioOc,
+    selectedFilterFEntregado,
+    dateFilterFEntregado,
+    selectedFilterPlazo,
+    selectedFilterFVencimiento,
+    dateFilterFVencimiento,
+    selectedFilterPropietario,
+    selectedFilterPrecioRenta,
+    selectedFilterMoneda,
+    selectedFilterPoliza,
+    selectedFilterDistribuidor,
+    selectedFilterCostoPoliza,
+    selectedFilterMonedaPago,
+    selectedOcPeriodoStatus,
+    selectedPeriodoView,
+  ]);
 
-  const filterUniqueCuentas = Array.from(new Set(getCascadingFilteredRentas('cuenta').map(r => r.cuenta || r.cliente?.razonSocial || r.cliente?.razon_social).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueSitios = Array.from(new Set(getCascadingFilteredRentas('sitio').map(r => r.sitio?.nombre).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueAdcs = Array.from(new Set(getCascadingFilteredRentas('adc').map(r => r.adc || r.sitio?.adc || (r.cliente as any)?.datos_comerciales?.adc).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueEquipos = Array.from(new Set(getCascadingFilteredRentas('equipo').map(r => r.activo?.tipo || (r.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas')).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueClases = Array.from(new Set(getCascadingFilteredRentas('clase').map(r => r.activo?.clase).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueModelos = Array.from(new Set(getCascadingFilteredRentas('modelo').map(r => r.activo?.modelo).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueSeries = Array.from(new Set(getCascadingFilteredRentas('serie').map(r => r.activo?.serie).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueEstatus = Array.from(new Set(getCascadingFilteredRentas('estatus').map(r => r.activo?.estatus).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueOach = Array.from(new Set(getCascadingFilteredRentas('oach').map(r => r.activo?.oach).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueAlturas = Array.from(new Set(getCascadingFilteredRentas('altura').map(r => r.activo?.altura).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueBc = Array.from(new Set(getCascadingFilteredRentas('bc').map(r => r.activo?.bc).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueFolioOc = Array.from(new Set(getCascadingFilteredRentas('folioOc').map(r => r.orden_compra || r.detalles?.oc_cliente).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueFEntregado = Array.from(new Set(getCascadingFilteredRentas('fEntregado').map(r => r.fecha_inicio ? new Date(r.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniquePlazos = Array.from(new Set(getCascadingFilteredRentas('plazo').map(r => r.condiciones?.plazo_meses ? String(r.condiciones.plazo_meses) : null).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueFVencimiento = Array.from(new Set(getCascadingFilteredRentas('fVencimiento').map(r => r.fecha_fin ? new Date(r.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniquePropietarios = Array.from(new Set(getCascadingFilteredRentas('propietario').map(r => r.propietario || r.activo?.propietario).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniquePreciosRenta = Array.from(new Set(getCascadingFilteredRentas('precioRenta').map(r => `$${(r.detalles?.renta_base || r.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueMonedas = Array.from(new Set(getCascadingFilteredRentas('moneda').map(r => r.detalles?.moneda || 'MXN').filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniquePolizas = Array.from(new Set(getCascadingFilteredRentas('poliza').map(r => r.condiciones?.tipo_poliza || r.activo?.tipo_poliza || 'SMP').filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueDistribuidores = Array.from(new Set(getCascadingFilteredRentas('distribuidor').map(r => r.distribuidor || r.activo?.distribuidor).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueCostosPoliza = Array.from(new Set(getCascadingFilteredRentas('costoPoliza').map(r => `$${(r.condiciones?.costo_poliza_distribuidor || r.activo?.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`))).sort((a, b) => a.localeCompare(b));
-  const filterUniqueMonedasPago = Array.from(new Set(getCascadingFilteredRentas('monedaPago').map(r => r.condiciones?.moneda_pago_distribuidor || r.activo?.moneda_pago_distribuidor || 'MXN').filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
-
-  const filteredRentas = baseRentas.filter((renta: any) => {
-    const cond = renta.condiciones || {};
-    const detalles = renta.detalles || {};
-    const rCuenta = renta.cuenta || renta.cliente?.razonSocial || renta.cliente?.razon_social || '-';
-    const matchesSearch = !searchTerm ? true : (
-      renta.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      renta.cliente?.razonSocial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      renta.cliente?.razon_social?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      renta.cuenta?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      renta.sitio?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      renta.activo?.serie?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      renta.orden_compra?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      renta.detalles?.oc_cliente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (renta.propietario || renta.activo?.propietario)?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const rAdc = renta.adc || renta.sitio?.adc || (renta.cliente as any)?.datos_comerciales?.adc || '-';
-    const tipoEq = renta.activo?.tipo || (renta.activo?.clase?.includes('III') ? 'Patín' : 'Montacargas');
-    const rPrecioFormatted = `$${(detalles.renta_base || renta.tarifa || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-    const rCostoPolizaFormatted = `$${(cond.costo_poliza_distribuidor || renta.activo?.costo_poliza_distribuidor || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-    const rFEntregado = renta.fecha_inicio ? new Date(renta.fecha_inicio).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-    const rFVencimiento = renta.fecha_fin ? new Date(renta.fecha_fin).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-    const rPlazo = cond.plazo_meses ? String(cond.plazo_meses) : '-';
-    const rFolioOc = renta.orden_compra || detalles.oc_cliente || '-';
-
-    const matchesCuenta = isMatchFilter(selectedFilterCuenta, rCuenta);
-    const matchesSitio = isMatchFilter(selectedFilterSitio, renta.sitio?.nombre);
-    const matchesAdc = isMatchFilter(selectedFilterAdc, rAdc);
-    const matchesEquipo = isMatchFilter(selectedFilterEquipo, tipoEq);
-    const matchesClase = isMatchFilter(selectedFilterClase, renta.activo?.clase);
-    const matchesModelo = isMatchFilter(selectedFilterModelo, renta.activo?.modelo);
-    const matchesSerie = isMatchFilter(selectedFilterSerie, renta.activo?.serie);
-    const matchesEstatus = isMatchFilter(selectedFilterEstatus, renta.activo?.estatus);
-    const matchesOach = isMatchFilter(selectedFilterOach, renta.activo?.oach);
-    const matchesAltura = isMatchFilter(selectedFilterAltura, renta.activo?.altura);
-    const matchesBc = isMatchFilter(selectedFilterBc, renta.activo?.bc);
-    const matchesFolioOc = isMatchFilter(selectedFilterFolioOc, rFolioOc);
-    const matchesFEntregado = isMatchFilter(selectedFilterFEntregado, rFEntregado);
-    const matchesPlazo = isMatchFilter(selectedFilterPlazo, rPlazo);
-    const matchesFVencimiento = isMatchFilter(selectedFilterFVencimiento, rFVencimiento);
-    const matchesPropietario = isMatchFilter(selectedFilterPropietario, renta.propietario || renta.activo?.propietario);
-    const matchesPrecioRenta = isMatchFilter(selectedFilterPrecioRenta, rPrecioFormatted);
-    const matchesMoneda = isMatchFilter(selectedFilterMoneda, detalles.moneda || 'MXN');
-    const matchesPoliza = isMatchFilter(selectedFilterPoliza, cond.tipo_poliza || renta.activo?.tipo_poliza || 'SMP');
-    const matchesDistribuidor = isMatchFilter(selectedFilterDistribuidor, renta.distribuidor || renta.activo?.distribuidor);
-    const matchesCostoPoliza = isMatchFilter(selectedFilterCostoPoliza, rCostoPolizaFormatted);
-    const matchesMonedaPago = isMatchFilter(selectedFilterMonedaPago, cond.moneda_pago_distribuidor || renta.activo?.moneda_pago_distribuidor || 'MXN');
-
-    const matchesOcPeriodo = (() => {
-      if (selectedOcPeriodoStatus === 'TODOS' || selectedPeriodoView === 'todos') return true;
-      const estNorm = (renta.activo?.estatus || '').trim().toUpperCase();
-      const isInactiveOrBackup = estNorm.startsWith('INACTIVO') || estNorm === 'BACK UP' || estNorm === 'BACKUP' || estNorm === 'POR RETIRAR' || estNorm === 'BAJA' || estNorm === 'TALLER' || estNorm === 'COMODATO';
-      if (isInactiveOrBackup) return false;
-
-      const ord = (renta.ordenes || []).find((o: any) => o.periodo === selectedPeriodoView);
-      const hasOc = !!(ord && ord.po && ord.po.trim() !== '' && ord.po !== '-' && ord.po.toUpperCase() !== 'PENDIENTE' && ord.po.toUpperCase() !== 'SIN OC');
-      if (selectedOcPeriodoStatus === 'CON_OC') return hasOc;
-      if (selectedOcPeriodoStatus === 'SIN_OC') return !hasOc;
-      return true;
-    })();
-
-    return (
-      matchesSearch &&
-      matchesCuenta &&
-      matchesSitio &&
-      matchesAdc &&
-      matchesEquipo &&
-      matchesClase &&
-      matchesModelo &&
-      matchesSerie &&
-      matchesEstatus &&
-      matchesOach &&
-      matchesAltura &&
-      matchesBc &&
-      matchesFolioOc &&
-      matchesFEntregado &&
-      matchesPlazo &&
-      matchesFVencimiento &&
-      matchesPropietario &&
-      matchesPrecioRenta &&
-      matchesMoneda &&
-      matchesPoliza &&
-      matchesDistribuidor &&
-      matchesCostoPoliza &&
-      matchesMonedaPago &&
-      matchesOcPeriodo
-    );
-  });
-
-  const periodOcStats = (() => {
+  const periodOcStats = useMemo(() => {
     if (!selectedPeriodoView || selectedPeriodoView === 'todos') {
       return { total: baseRentas.length, conOc: 0, sinOc: 0 };
     }
@@ -1301,10 +1459,10 @@ export default function RentasTab({
       else sinOc++;
     }
     return { total, conOc, sinOc };
-  })();
+  }, [baseRentas, selectedPeriodoView]);
 
   const totalRentas = filteredRentas.length;
-  const activas = filteredRentas.filter(r => {
+  const activas = useMemo(() => filteredRentas.filter(r => {
     const estadoRenta = r.estado?.toUpperCase() || '';
     const estadoActivo = r.activo?.estatus?.toUpperCase() || '';
     
@@ -1317,13 +1475,16 @@ export default function RentasTab({
       estadoRenta === 'RENOVADA' ||
       estadoRenta === 'ACTIVO'
     );
-  }).length;
+  }).length, [filteredRentas]);
 
-  const hoy = new Date();
-  const en30Dias = new Date();
-  en30Dias.setDate(hoy.getDate() + 30);
+  const hoy = useMemo(() => new Date(), []);
+  const en30Dias = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d;
+  }, []);
 
-  const porVencer = filteredRentas.filter(r => {
+  const porVencer = useMemo(() => filteredRentas.filter(r => {
     if (!r.fecha_fin) return false;
     const fechaFin = new Date(r.fecha_fin);
     const estadoRenta = r.estado?.toUpperCase() || '';
@@ -1333,106 +1494,115 @@ export default function RentasTab({
     if (estadoRenta.includes('INACTIV') || estadoActivo.includes('INACTIV') || estadoActivo === 'BACK UP' || estadoActivo === 'BACKUP' || estadoActivo === 'POR RETIRAR' || estadoActivo === 'COMODATO' || estadoActivo === 'BAJA' || estadoActivo === 'TALLER') return false;
     
     return fechaFin > hoy && fechaFin <= en30Dias && estadoRenta !== 'CANCELADA';
-  }).length;
+  }).length, [filteredRentas, hoy, en30Dias]);
 
   // Apply pagination
   const totalItems = filteredRentas.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
   
-  const importeMXN = filteredRentas.reduce((sum, r) => {
+  const importeMXN = useMemo(() => filteredRentas.reduce((sum, r) => {
     const estadoRenta = r.estado?.toUpperCase() || '';
     const estadoActivo = r.activo?.estatus?.toUpperCase() || '';
     if (estadoRenta.includes('INACTIV') || estadoActivo.includes('INACTIV') || estadoActivo === 'BACK UP' || estadoActivo === 'BACKUP' || estadoActivo === 'POR RETIRAR' || estadoActivo === 'COMODATO' || estadoActivo === 'BAJA' || estadoActivo === 'TALLER') return sum;
     
     const isUSD = (r.detalles?.moneda || 'MXN') === 'USD';
     return isUSD ? sum : sum + (r.detalles?.renta_base || r.tarifa || 0);
-  }, 0);
+  }, 0), [filteredRentas]);
   
-  const importeUSD = filteredRentas.reduce((sum, r) => {
+  const importeUSD = useMemo(() => filteredRentas.reduce((sum, r) => {
     const estadoRenta = r.estado?.toUpperCase() || '';
     const estadoActivo = r.activo?.estatus?.toUpperCase() || '';
     if (estadoRenta.includes('INACTIV') || estadoActivo.includes('INACTIV') || estadoActivo === 'BACK UP' || estadoActivo === 'BACKUP' || estadoActivo === 'POR RETIRAR' || estadoActivo === 'COMODATO' || estadoActivo === 'BAJA' || estadoActivo === 'TALLER') return sum;
     
     const isUSD = (r.detalles?.moneda || 'MXN') === 'USD';
     return isUSD ? sum + (r.detalles?.renta_base || r.tarifa || 0) : sum;
-  }, 0);
-  const paginatedRentas = filteredRentas.slice(
+  }, 0), [filteredRentas]);
+
+  const paginatedRentas = useMemo(() => filteredRentas.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
-  );
+  ), [filteredRentas, currentPage, itemsPerPage]);
 
   // Group by client
-  const groupedRentas: Record<string, any[]> = {};
-  paginatedRentas.forEach(renta => {
-    const clienteNombre = renta.cliente?.razonSocial || 'Sin Cliente';
-    if (!groupedRentas[clienteNombre]) {
-      groupedRentas[clienteNombre] = [];
-    }
-    groupedRentas[clienteNombre].push(renta);
-  });
+  const groupedRentas: Record<string, any[]> = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    paginatedRentas.forEach(renta => {
+      const clienteNombre = renta.cliente?.razonSocial || 'Sin Cliente';
+      if (!groups[clienteNombre]) {
+        groups[clienteNombre] = [];
+      }
+      groups[clienteNombre].push(renta);
+    });
+    return groups;
+  }, [paginatedRentas]);
 
   // Calculate chart data based on filteredRentas
-  const adcMap = new Map<string, { name: string; mxn: number; usd: number }>();
-  const distribuidorMap = new Map<string, number>();
-  const equipoTipoMap = new Map<string, number>();
-  
-  filteredRentas.forEach(r => {
-    const estadoRenta = r.estado?.toUpperCase() || '';
-    const estadoActivo = r.activo?.estatus?.toUpperCase() || '';
-    if (estadoRenta.includes('INACTIV') || estadoActivo.includes('INACTIV')) return;
+  const { adcChartData, distribuidorChartData, equipoChartData } = useMemo(() => {
+    const adcMap = new Map<string, { name: string; mxn: number; usd: number }>();
+    const distribuidorMap = new Map<string, number>();
+    const equipoTipoMap = new Map<string, number>();
     
-    const amount = Number(r.detalles?.renta_base || r.tarifa || 0);
-    const currency = (r.detalles?.moneda || r.moneda || 'MXN').toUpperCase();
-    const adc = r.adc || r.cliente?.datos_comerciales?.adc || 'Sin ADC';
+    filteredRentas.forEach(r => {
+      const estadoRenta = r.estado?.toUpperCase() || '';
+      const estadoActivo = r.activo?.estatus?.toUpperCase() || '';
+      if (estadoRenta.includes('INACTIV') || estadoActivo.includes('INACTIV')) return;
+      
+      const amount = Number(r.detalles?.renta_base || r.tarifa || 0);
+      const currency = (r.detalles?.moneda || r.moneda || 'MXN').toUpperCase();
+      const adc = r.adc || r.cliente?.datos_comerciales?.adc || 'Sin ADC';
 
-    // ADC Budget (Separated MXN & USD)
-    if (!adcMap.has(adc)) {
-      adcMap.set(adc, { name: adc, mxn: 0, usd: 0 });
-    }
-    const adcEntry = adcMap.get(adc)!;
-    if (currency === 'USD') {
-      adcEntry.usd += amount;
-    } else {
-      adcEntry.mxn += amount;
-    }
+      // ADC Budget (Separated MXN & USD)
+      if (!adcMap.has(adc)) {
+        adcMap.set(adc, { name: adc, mxn: 0, usd: 0 });
+      }
+      const adcEntry = adcMap.get(adc)!;
+      if (currency === 'USD') {
+        adcEntry.usd += amount;
+      } else {
+        adcEntry.mxn += amount;
+      }
 
-    // Distribuidor Distribution
-    const dist = r.distribuidor || r.activo?.distribuidor || 'Sin Distribuidor';
-    distribuidorMap.set(dist, (distribuidorMap.get(dist) || 0) + 1);
+      // Distribuidor Distribution
+      const dist = r.distribuidor || r.activo?.distribuidor || 'Sin Distribuidor';
+      distribuidorMap.set(dist, (distribuidorMap.get(dist) || 0) + 1);
 
-    // Tipo de Equipo Distribution
-    const tipo = r.activo?.tipo || r.tipo || r.activo?.clase || 'Sin Especificar';
-    equipoTipoMap.set(tipo, (equipoTipoMap.get(tipo) || 0) + 1);
-  });
-  
-  const totalMxn = Array.from(adcMap.values()).reduce((sum, item) => sum + item.mxn, 0);
-  const totalUsd = Array.from(adcMap.values()).reduce((sum, item) => sum + item.usd, 0);
+      // Tipo de Equipo Distribution
+      const tipo = r.activo?.tipo || r.tipo || r.activo?.clase || 'Sin Especificar';
+      equipoTipoMap.set(tipo, (equipoTipoMap.get(tipo) || 0) + 1);
+    });
+    
+    const totalMxn = Array.from(adcMap.values()).reduce((sum, item) => sum + item.mxn, 0);
+    const totalUsd = Array.from(adcMap.values()).reduce((sum, item) => sum + item.usd, 0);
 
-  const adcChartData = Array.from(adcMap.values())
-    .map(item => ({
-      ...item,
-      mxnPercent: totalMxn > 0 ? (item.mxn / totalMxn) * 100 : 0,
-      usdPercent: totalUsd > 0 ? (item.usd / totalUsd) * 100 : 0,
-    }))
-    .sort((a, b) => (b.mxn + b.usd) - (a.mxn + a.usd));
+    const adcCharts = Array.from(adcMap.values())
+      .map(item => ({
+        ...item,
+        mxnPercent: totalMxn > 0 ? (item.mxn / totalMxn) * 100 : 0,
+        usdPercent: totalUsd > 0 ? (item.usd / totalUsd) * 100 : 0,
+      }))
+      .sort((a, b) => (b.mxn + b.usd) - (a.mxn + a.usd));
 
-  const buildTop5ChartData = (mapData: Map<string, number>) => {
-    const sorted = Array.from(mapData.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    const buildTop5ChartData = (mapData: Map<string, number>) => {
+      const sorted = Array.from(mapData.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
 
-    if (sorted.length <= 5) return sorted;
+      if (sorted.length <= 5) return sorted;
 
-    const top5 = sorted.slice(0, 5);
-    const othersCount = sorted.slice(5).reduce((acc, curr) => acc + curr.value, 0);
-    if (othersCount > 0) {
-      top5.push({ name: 'Otros', value: othersCount });
-    }
-    return top5;
-  };
+      const top5 = sorted.slice(0, 5);
+      const othersCount = sorted.slice(5).reduce((acc, curr) => acc + curr.value, 0);
+      if (othersCount > 0) {
+        top5.push({ name: 'Otros', value: othersCount });
+      }
+      return top5;
+    };
 
-  const distribuidorChartData = buildTop5ChartData(distribuidorMap);
-  const equipoChartData = buildTop5ChartData(equipoTipoMap);
+    return {
+      adcChartData: adcCharts,
+      distribuidorChartData: buildTop5ChartData(distribuidorMap),
+      equipoChartData: buildTop5ChartData(equipoTipoMap),
+    };
+  }, [filteredRentas]);
     
   const PIE_COLORS = ['#E5222D', '#334155', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
   const PIE_COLORS_EQUIPOS = ['#8b5cf6', '#10b981', '#f59e0b', '#E5222D', '#3b82f6', '#64748b'];
@@ -1657,6 +1827,8 @@ export default function RentasTab({
                 setSelectedFilterFEntregado([]);
                 setSelectedFilterPlazo([]);
                 setSelectedFilterFVencimiento([]);
+                setDateFilterFEntregado({ start: '', end: '' });
+                setDateFilterFVencimiento({ start: '', end: '' });
                 setSelectedFilterPropietario([]);
                 setSelectedFilterPrecioRenta([]);
                 setSelectedFilterMoneda([]);
@@ -1859,13 +2031,31 @@ export default function RentasTab({
                   <TableHeaderFilter label="Folio OC" title="FOLIO OC" value={selectedFilterFolioOc} onChange={(val) => { setSelectedFilterFolioOc(val); setCurrentPage(1); }} options={filterUniqueFolioOc} open={openFilterFolioOc} setOpen={setOpenFilterFolioOc} search={searchFolioOc} setSearch={setSearchFolioOc} currentColor={currentColor} />
                 </th>
                 <th className="px-4 py-4">
-                  <TableHeaderFilter label="F. Entregado" title="F. ENTREGADO" value={selectedFilterFEntregado} onChange={(val) => { setSelectedFilterFEntregado(val); setCurrentPage(1); }} options={filterUniqueFEntregado} open={openFilterFEntregado} setOpen={setOpenFilterFEntregado} search={searchFEntregado} setSearch={setSearchFEntregado} currentColor={currentColor} />
+                  <TableHeaderDateRangeFilter
+                    title="F. ENTREGADO"
+                    startDate={dateFilterFEntregado.start}
+                    endDate={dateFilterFEntregado.end}
+                    onChange={(start, end) => {
+                      setDateFilterFEntregado({ start, end });
+                      setCurrentPage(1);
+                    }}
+                    currentColor={currentColor}
+                  />
                 </th>
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Plazo" title="PLAZO (MESES)" value={selectedFilterPlazo} onChange={(val) => { setSelectedFilterPlazo(val); setCurrentPage(1); }} options={filterUniquePlazos} open={openFilterPlazo} setOpen={setOpenFilterPlazo} search={searchPlazo} setSearch={setSearchPlazo} currentColor={currentColor} />
                 </th>
                 <th className="px-4 py-4">
-                  <TableHeaderFilter label="F. Vencimiento" title="F. VENCIMIENTO" value={selectedFilterFVencimiento} onChange={(val) => { setSelectedFilterFVencimiento(val); setCurrentPage(1); }} options={filterUniqueFVencimiento} open={openFilterFVencimiento} setOpen={setOpenFilterFVencimiento} search={searchFVencimiento} setSearch={setSearchFVencimiento} currentColor={currentColor} />
+                  <TableHeaderDateRangeFilter
+                    title="F. VENCIMIENTO"
+                    startDate={dateFilterFVencimiento.start}
+                    endDate={dateFilterFVencimiento.end}
+                    onChange={(start, end) => {
+                      setDateFilterFVencimiento({ start, end });
+                      setCurrentPage(1);
+                    }}
+                    currentColor={currentColor}
+                  />
                 </th>
                 <th className="px-4 py-4">
                   <TableHeaderFilter label="Propietario" title="PROPIETARIO" value={selectedFilterPropietario} onChange={(val) => { setSelectedFilterPropietario(val); setCurrentPage(1); }} options={filterUniquePropietarios} open={openFilterPropietario} setOpen={setOpenFilterPropietario} search={searchPropietario} setSearch={setSearchPropietario} currentColor={currentColor} />
@@ -3924,7 +4114,7 @@ export default function RentasTab({
                                     viewRentaConfig.renta.ordenes?.[0]?.fecha_pedido_totvs || 
                                     (viewRentaConfig.renta.ordenes?.[0]?.condiciones as any)?.fecha_pedido_totvs || 
                                     (viewRentaConfig.renta.ordenes?.[0]?.condiciones as any)?.fecha_ped;
-                          return d ? new Date(d).toLocaleDateString('es-ES') : '-';
+                          return formatFechaTotvs(d);
                         })()}
                         {viewRentaConfig.renta.detalles?.mes_cobro ? ` (${viewRentaConfig.renta.detalles.mes_cobro})` : ''}
                       </p>
@@ -4059,13 +4249,7 @@ export default function RentasTab({
                                     )}
                                   </td>
                                   <td className="p-3.5 text-slate-500">
-                                    {(() => {
-                                      if (!fTotvs) return '-';
-                                      const s = String(fTotvs).trim();
-                                      if (['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(s.toUpperCase())) return '-';
-                                      const d = new Date(fTotvs);
-                                      return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
-                                    })()}
+                                    {formatFechaTotvs(fTotvs)}
                                   </td>
                                   <td className="p-3.5 text-right font-black text-slate-900">
                                     ${(Number(ord.tarifa) || Number(viewRentaConfig.renta.detalles?.renta_base) || Number(viewRentaConfig.renta.tarifa) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {

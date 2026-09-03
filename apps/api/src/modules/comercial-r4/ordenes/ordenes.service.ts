@@ -1,6 +1,38 @@
 import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaDynamicService } from '../../../database/prisma-dynamic.service';
 import { clearPresupuestosCache } from '../presupuestos/presupuestos.service';
+import { clearRentasCache } from '../rentas/rentas.service';
+
+const ordenesCache = new Map<string, { timestamp: number; data: any[] }>();
+const ORDENES_CACHE_TTL_MS = 20 * 1000; // 20 segundos de cache
+
+export function clearOrdenesCache() {
+    ordenesCache.clear();
+}
+
+function parseExcelOrIsoDate(raw: any): string | null {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (['USD', 'MXN', 'NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(s.toUpperCase())) {
+        return null;
+    }
+    const num = Number(raw);
+    if (!isNaN(num) && num > 30000 && num < 80000) {
+        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+        const jsDate = new Date(excelEpoch.getTime() + num * 86400000);
+        return jsDate.toISOString().split('T')[0];
+    }
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+        if (d.getFullYear() > 3000 && d.getFullYear() < 80000) {
+            const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+            const jsDate = new Date(excelEpoch.getTime() + d.getFullYear() * 86400000);
+            return jsDate.toISOString().split('T')[0];
+        }
+        return d.toISOString().split('T')[0];
+    }
+    return s;
+}
 
 const ADC_ALIASES: Record<string, string[]> = {
     'daniel': ['daniel', 'daniel romero', 'romero'],
@@ -95,6 +127,12 @@ export class OrdenesService {
     }
 
     async obtenerOrdenes(adc?: string) {
+        const cacheKey = adc ? adc.trim().toLowerCase() : '__all__';
+        const cached = ordenesCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < ORDENES_CACHE_TTL_MS)) {
+            return cached.data;
+        }
+
         const db = this.getDb();
         try {
             const adcKeywords = adc ? adc.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
@@ -103,20 +141,64 @@ export class OrdenesService {
                 where: {
                     activo_id: { not: null }
                 },
-                include: { 
-                    cliente: true, 
+                select: {
+                    id: true,
+                    periodo: true,
+                    po: true,
+                    tarifa: true,
+                    moneda: true,
+                    estado: true,
+                    condiciones: true,
+                    activo_id: true,
+                    renta_id: true,
+                    cliente: {
+                        select: {
+                            id: true,
+                            razon_social: true,
+                            datos_comerciales: true,
+                        }
+                    },
                     renta: {
-                        include: {
-                            sitio: true
+                        select: {
+                            id: true,
+                            adc: true,
+                            no_registro_totvs: true,
+                            fecha_pedido_totvs: true,
+                            detalles: {
+                                select: {
+                                    moneda: true
+                                }
+                            },
+                            sitio: {
+                                select: {
+                                    id: true,
+                                    adc: true,
+                                }
+                            }
                         }
                     },
                     activo: {
-                        include: {
+                        select: {
+                            id: true,
+                            serie: true,
+                            modelo: true,
+                            adc: true,
                             accesorios: {
-                                include: { accesorio: true }
+                                select: {
+                                    id: true,
+                                    tipo_relacion: true,
+                                    cantidad: true,
+                                    accesorio: {
+                                        select: {
+                                            id: true,
+                                            serie: true,
+                                            modelo: true
+                                        }
+                                    }
+                                }
                             }
                         }
-                    }, 
+                    },
                 },
                 orderBy: { periodo: 'desc' },
             });
@@ -133,7 +215,7 @@ export class OrdenesService {
                 return matchAdcKeywords(candidates, adcKeywords);
             });
 
-            return filtered.map((o: any) => {
+            const result = filtered.map((o: any) => {
                 const adcName = o.renta?.adc || o.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc || 'Sin ADC';
                 const cond = (o.condiciones as any) || {};
                 let rawTotvs = cond.pedido_totvs || cond.pedido || cond.pedido_tovts || (o.renta as any)?.no_registro_totvs || null;
@@ -141,9 +223,7 @@ export class OrdenesService {
                     rawTotvs = null;
                 }
                 let rawFecha = cond.fecha_pedido_totvs || cond.fecha_ped || (o.renta as any)?.fecha_pedido_totvs || null;
-                if (rawFecha && ['NA', 'N/A', 'NO', '-', 'NULL', 'UNDEFINED', 'INVALID DATE'].includes(String(rawFecha).toUpperCase().trim())) {
-                    rawFecha = null;
-                }
+                const normalizedFecha = parseExcelOrIsoDate(rawFecha);
                 const mon = (o.moneda && !['NA', 'N/A', 'NO', '-'].includes(String(o.moneda).toUpperCase().trim())) ? o.moneda : (o.renta?.detalles?.moneda || 'MXN');
 
                 return {
@@ -155,7 +235,7 @@ export class OrdenesService {
                     estado: o.estado,
                     condiciones: o.condiciones,
                     pedido_totvs: rawTotvs,
-                    fecha_pedido_totvs: rawFecha,
+                    fecha_pedido_totvs: normalizedFecha,
                     cliente: o.cliente?.razon_social || 'Desconocido',
                     activo: o.activo?.serie || o.activo_id,
                     activo_modelo: o.activo?.modelo || '-',
@@ -170,6 +250,9 @@ export class OrdenesService {
                     renta_id: o.renta_id
                 };
             });
+
+            ordenesCache.set(cacheKey, { timestamp: Date.now(), data: result });
+            return result;
         } catch (error: any) {
             this.logger.error(`Error en obtenerOrdenes: ${error.message}`);
             throw error;
@@ -246,6 +329,8 @@ export class OrdenesService {
             });
 
             clearPresupuestosCache();
+            clearOrdenesCache();
+            clearRentasCache();
             return nuevaOrden;
         } catch (error: any) {
             this.logger.error(`Error en registrarOrdenManual: ${error.message}`);
@@ -333,6 +418,8 @@ export class OrdenesService {
             ]);
 
             clearPresupuestosCache();
+            clearOrdenesCache();
+            clearRentasCache();
 
             return {
                 success: true,
@@ -520,6 +607,8 @@ export class OrdenesService {
             }
 
             clearPresupuestosCache();
+            clearOrdenesCache();
+            clearRentasCache();
 
             return {
                 success: true,
@@ -581,7 +670,7 @@ export class OrdenesService {
                             where: { id: r.id },
                             data: {
                                 ...(itemTotvs ? { no_registro_totvs: itemTotvs } : {}),
-                                ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {}),
+                                ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {})
                             }
                         })
                     );
@@ -633,7 +722,7 @@ export class OrdenesService {
                                 where: { id: existingActive.id },
                                 data: {
                                     ...(itemTotvs ? { no_registro_totvs: itemTotvs } : {}),
-                                    ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {}),
+                                    ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {})
                                 }
                             })
                         );
@@ -766,6 +855,8 @@ export class OrdenesService {
             ]);
 
             clearPresupuestosCache();
+            clearOrdenesCache();
+            clearRentasCache();
 
             return {
                 message: `Se registró con éxito la OC ${dto.po} para ${dto.items.length} series en ${dto.periodos.length} periodo(s).`,

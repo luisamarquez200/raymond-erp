@@ -9,13 +9,21 @@ import { seedEnterprisePermissions } from '../../database/seeds/enterprise-permi
 @Injectable()
 export class SuperadminService {
     private readonly logger = new Logger(SuperadminService.name);
+    private static directPrismaInstance: PrismaClient | null = null;
+
+    private get directPrisma(): PrismaClient {
+        if (!SuperadminService.directPrismaInstance) {
+            SuperadminService.directPrismaInstance = new PrismaClient();
+        }
+        return SuperadminService.directPrismaInstance;
+    }
 
     /**
      * Get all organizations in the system
      * CRITICAL: Uses direct PrismaClient to bypass tenant filtering
      */
     async getAllOrganizations() {
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
         try {
             this.logger.log('[getAllOrganizations] Fetching all organizations (bypassing tenant filter)');
 
@@ -78,8 +86,9 @@ export class SuperadminService {
 
             this.logger.log(`[getAllOrganizations] Found ${organizationsWithCounts.length} organizations`);
             return organizationsWithCounts;
-        } finally {
-            await directPrisma.$disconnect();
+        } catch (error: any) {
+            this.logger.error(`[getAllOrganizations] Error:`, error);
+            throw error;
         }
     }
 
@@ -87,7 +96,7 @@ export class SuperadminService {
      * Get detailed information about a specific organization
      */
     async getOrganizationDetails(organizationId: string) {
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
         try {
             this.logger.log(`[getOrganizationDetails] Fetching details for org: ${organizationId}`);
 
@@ -165,8 +174,9 @@ export class SuperadminService {
                     accounts_receivable: accountsReceivableCount,
                 },
             };
-        } finally {
-            await directPrisma.$disconnect();
+        } catch (error: any) {
+            this.logger.error(`[getOrganizationDetails] Error:`, error);
+            throw error;
         }
     }
 
@@ -175,7 +185,7 @@ export class SuperadminService {
      * This is a transactional operation
      */
     async createOrganization(dto: CreateOrganizationDto) {
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
         try {
             this.logger.log(`[createOrganization] Creating new organization: ${dto.name}`);
 
@@ -394,8 +404,6 @@ export class SuperadminService {
             const errorMessage = error?.message || 'Unknown error occurred while creating organization';
             this.logger.error(`[createOrganization] Unexpected error: ${errorMessage}`, error?.stack);
             throw new Error(`Failed to create organization: ${errorMessage}`);
-        } finally {
-            await directPrisma.$disconnect();
         }
     }
 
@@ -403,7 +411,7 @@ export class SuperadminService {
      * Update an organization
      */
     async updateOrganization(organizationId: string, dto: UpdateOrganizationDto) {
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
         try {
             this.logger.log(`[updateOrganization] Updating organization: ${organizationId}`);
 
@@ -428,8 +436,9 @@ export class SuperadminService {
 
             this.logger.log(`[updateOrganization] Successfully updated organization: ${organizationId}`);
             return organization;
-        } finally {
-            await directPrisma.$disconnect();
+        } catch (error: any) {
+            this.logger.error(`[updateOrganization] Error:`, error);
+            throw error;
         }
     }
 
@@ -438,7 +447,7 @@ export class SuperadminService {
      * CRITICAL: This operation is irreversible
      */
     async deleteOrganization(organizationId: string) {
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
         try {
             this.logger.log(`[deleteOrganization] Deleting organization: ${organizationId}`);
 
@@ -484,8 +493,6 @@ export class SuperadminService {
         } catch (error: any) {
             this.logger.error(`[deleteOrganization] Error deleting organization:`, error);
             throw error;
-        } finally {
-            await directPrisma.$disconnect();
         }
     }
 
@@ -493,7 +500,7 @@ export class SuperadminService {
      * Delete organizations by name or slug (for cleanup scripts)
      */
     async deleteOrganizationsByNames(namesOrSlugs: string[]) {
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
         try {
             this.logger.log(`[deleteOrganizationsByNames] Deleting organizations: ${namesOrSlugs.join(', ')}`);
 
@@ -531,8 +538,9 @@ export class SuperadminService {
                 notFound,
                 message: `Deleted ${deleted.length} organization(s). ${notFound.length} not found or failed.`,
             };
-        } finally {
-            await directPrisma.$disconnect();
+        } catch (error: any) {
+            this.logger.error(`[deleteOrganizationsByNames] Error:`, error);
+            throw error;
         }
     }
 
@@ -540,7 +548,7 @@ export class SuperadminService {
      * Get global system analytics
      */
     async getGlobalAnalytics() {
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
         try {
             this.logger.log('[getGlobalAnalytics] Fetching global system stats');
 
@@ -571,8 +579,9 @@ export class SuperadminService {
                 tasks: totalTasks,
                 clients: totalClients,
             };
-        } finally {
-            await directPrisma.$disconnect();
+        } catch (error: any) {
+            this.logger.error(`[getGlobalAnalytics] Error:`, error);
+            throw error;
         }
     }
 
@@ -582,7 +591,7 @@ export class SuperadminService {
      */
     async separateOrganizationData(targetOrgId: string, options: { createTestData?: boolean; reassignSharedData?: boolean } = {}) {
         const { createTestData = false, reassignSharedData = true } = options;
-        const directPrisma = new PrismaClient();
+        const directPrisma = this.directPrisma;
 
         try {
             this.logger.log(`[separateOrganizationData] Separating data for organization: ${targetOrgId}`);
@@ -830,8 +839,9 @@ export class SuperadminService {
                 organization: targetOrg,
                 stats,
             };
-        } finally {
-            await directPrisma.$disconnect();
+        } catch (error: any) {
+            this.logger.error(`[separateOrganizationData] Error:`, error);
+            throw error;
         }
     }
 }

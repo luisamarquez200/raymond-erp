@@ -54,19 +54,126 @@ export function isSameAdc(adcCandidate: string | null | undefined, targetAdc: st
     return false;
 }
 
-function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: string[]): boolean {
-    if (!keywords || keywords.length === 0) return true;
+export function getEffectiveAdc(r: any): string {
+    if (!r) return 'Sin ADC';
+    const raw = r.adc || r.activo?.adc || r.sitio?.adc || r.cliente?.adc || (r.cliente as any)?.datos_comerciales?.adc;
+    return raw?.trim() || 'Sin ADC';
+}
 
-    for (const kw of keywords) {
-        if (!kw) continue;
-        for (const cand of candidates) {
-            if (!cand) continue;
-            if (isSameAdc(cand, kw)) {
-                return true;
-            }
+export function getEffectiveOrderAdc(o: any): string {
+    if (!o) return 'Sin ADC';
+    const raw = o.renta?.adc || o.activo?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || o.cliente?.adc || (o.cliente as any)?.datos_comerciales?.adc;
+    return raw?.trim() || 'Sin ADC';
+}
+
+function matchAdcKeywords(entity: any, keywords: string[]): boolean {
+    if (!keywords || keywords.length === 0) return true;
+    const effective = typeof entity === 'string'
+        ? entity
+        : (entity && (entity.renta !== undefined || entity.activo !== undefined && entity.periodo !== undefined)
+            ? getEffectiveOrderAdc(entity)
+            : getEffectiveAdc(entity));
+    return keywords.some(kw => isSameAdc(effective, kw));
+}
+
+export function isBackupOrInactive(r: {
+    estado?: string | null;
+    activo?: { estatus?: string | null; estatus_operativo?: string | null; situacion?: string | null } | null;
+    condiciones?: any;
+    detalles?: { moneda?: string | null } | null;
+}): boolean {
+    if (!r) return true;
+
+    // Si la moneda es "NA", no es una renta monetaria presupuestable
+    const moneda = (r.detalles?.moneda || '').toUpperCase().trim();
+    if (moneda === 'NA' || moneda === 'N/A') return true;
+
+    const estadoRenta = (r.estado || '').toUpperCase().trim();
+    if (
+        estadoRenta.includes('INACTIV') ||
+        estadoRenta.includes('BACK') ||
+        estadoRenta.includes('COMODATO') ||
+        estadoRenta.includes('BAJA') ||
+        estadoRenta.includes('CANCELAD') ||
+        estadoRenta.includes('TALLER')
+    ) {
+        return true;
+    }
+
+    const estatusActivo = (r.activo?.estatus || '').toUpperCase().trim();
+    const estatusOp = (r.activo?.estatus_operativo || '').toUpperCase().trim();
+    const situacion = (r.activo?.situacion || '').toUpperCase().trim();
+
+    for (const st of [estatusActivo, estatusOp, situacion]) {
+        if (!st) continue;
+        if (
+            st.includes('INACTIV') ||
+            st.includes('BACK') ||
+            st.includes('COMODATO') ||
+            st.includes('BAJA') ||
+            st.includes('TALLER') ||
+            st.includes('POR RETIRAR') ||
+            st.includes('RETIRAD')
+        ) {
+            return true;
         }
     }
+
+    const cond = (r.condiciones as any) || {};
+    const condStr = JSON.stringify(cond).toUpperCase();
+    if (
+        condStr.includes('"ES_BACKUP":TRUE') ||
+        condStr.includes('"TIPO":"BACKUP"') ||
+        condStr.includes('"ESTATUS":"BACK UP"') ||
+        condStr.includes('"ESTATUS":"BACKUP"')
+    ) {
+        return true;
+    }
+
     return false;
+}
+
+export function isRentaActivaVigente(r: {
+    estado?: string | null;
+    activo?: { estatus?: string | null; estatus_operativo?: string | null; situacion?: string | null } | null;
+    condiciones?: any;
+    detalles?: { moneda?: string | null } | null;
+}): boolean {
+    if (isBackupOrInactive(r)) return false;
+    const estadoRenta = (r.estado || '').toUpperCase().trim();
+    return estadoRenta === 'VIGENTE' || estadoRenta === 'IMPORTADA' || estadoRenta === 'ACTIVA' || estadoRenta === 'ACTIVO' || estadoRenta === 'RENOVADA';
+}
+
+export function hasValidPO(po: string | null | undefined): boolean {
+    if (!po) return false;
+    const clean = String(po).trim().toUpperCase();
+    return clean !== '' && clean !== '-' && !['PENDIENTE', 'NULL', 'UNDEFINED', 'SIN OC', 'SIN PO', 'N/A', 'NA'].includes(clean);
+}
+
+export function hasValidTotvs(totvs: string | null | undefined): boolean {
+    if (!totvs) return false;
+    const clean = String(totvs).trim().toUpperCase();
+    return clean !== '' && clean !== '-' && !['PENDIENTE', 'NA', 'N/A', 'NO', 'NULL', 'UNDEFINED', 'SIN TOTVS', 'INVALID DATE'].includes(clean);
+}
+
+export function isPedidoEnviado(o: any): boolean {
+    if (!o) return false;
+    // Ignorar órdenes asociadas a equipos en Back Up o Inactivos
+    if (o.renta && isBackupOrInactive(o.renta)) return false;
+    if (o.activo) {
+        const st = (o.activo.estatus || '').toUpperCase().trim();
+        const stOp = (o.activo.estatus_operativo || '').toUpperCase().trim();
+        if (st.includes('BACK') || st.includes('INACTIV') || st.includes('COMODATO') || stOp.includes('BACK') || stOp.includes('INACTIV')) {
+            return false;
+        }
+    }
+    if (o.estado === 'FACTURADA') return true;
+    const hasPo = hasValidPO(o.po);
+    const cond = (o.condiciones as any) || {};
+    const rawTotvs = cond.pedido_totvs || cond.pedido || cond.pedido_tovts || o.renta?.no_registro_totvs;
+    const hasTotvs = hasValidTotvs(rawTotvs);
+    // Para considerarse "Pedido Enviado" debe tener OC válida y No. Registro TOTVS asignado/emitido
+    return hasPo && hasTotvs;
 }
 
 const dashboardCache = new Map<string, { timestamp: number, data: any }>();
@@ -208,8 +315,7 @@ export class PresupuestosService {
         for (const r of allRentas) {
             // Apply ADC and Sitio filters manually
             if (adcKeywords.length > 0) {
-                const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
-                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
+                if (!matchAdcKeywords(r, adcKeywords)) {
                     continue;
                 }
             }
@@ -220,35 +326,29 @@ export class PresupuestosService {
             const currencyStat = stats[rMoneda as keyof typeof stats];
             if (!currencyStat) continue;
 
-            // Monthly Budget Contribution: Estatus = Activo
-            const estadoNorm = (r.estado || '').toUpperCase().trim();
-            const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
+            // Monthly Budget Contribution: Estatus = Activo (excluye Back Up e Inactivos)
+            if (!isRentaActivaVigente(r)) continue;
+
             const estatusNorm = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
-            const isActivo = estatusNorm === 'ACTIVO' || estatusNorm === 'OPERATIVO' || estatusNorm === 'DISPONIBLE' || estatusNorm === 'VIGENTE';
             const isDetenido = estatusNorm.includes('DETENIDO');
-            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'BACKUP' || estatusNorm === 'COMODATO' || estatusNorm === 'POR RETIRAR' || estatusNorm === 'BAJA' || estatusNorm === 'TALLER';
+            const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
 
-            if (isRentaActiva && !isInactive) {
-                const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
-
-                if (isDetenido) {
-                    currencyStat.equipos_detenidos += budgetAmount * months.length;
-                } else if (isActivo || !isDetenido) {
-                    currencyStat.presupuesto_mes += budgetAmount * months.length;
-                    // ADC Compliance tracking
-                    const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
-                    const adcName = rawAdc?.trim() || 'Sin ADC';
-                    const clientName = r.cliente.razon_social;
-                    const adcKey = `${adcName}___${clientName}___${rMoneda}`;
-                    if (!adcsMap.has(adcKey)) {
-                        adcsMap.set(adcKey, { adc: adcName, cliente: clientName, moneda: rMoneda, budget: 0, sentPOs: 0 });
-                    }
-                    adcsMap.get(adcKey)!.budget += budgetAmount;
-
-                    // Client Total Tracking
-                    if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
-                    clientTotals.get(clientName)!.presupuesto += budgetAmount * months.length;
+            if (isDetenido) {
+                currencyStat.equipos_detenidos += budgetAmount * months.length;
+            } else {
+                currencyStat.presupuesto_mes += budgetAmount * months.length;
+                // ADC Compliance tracking
+                const adcName = getEffectiveAdc(r);
+                const clientName = r.cliente.razon_social;
+                const adcKey = `${adcName}___${clientName}___${rMoneda}`;
+                if (!adcsMap.has(adcKey)) {
+                    adcsMap.set(adcKey, { adc: adcName, cliente: clientName, moneda: rMoneda, budget: 0, sentPOs: 0 });
                 }
+                adcsMap.get(adcKey)!.budget += budgetAmount;
+
+                // Client Total Tracking
+                if (!clientTotals.has(clientName)) clientTotals.set(clientName, { presupuesto: 0, pendiente: 0 });
+                clientTotals.get(clientName)!.presupuesto += budgetAmount * months.length;
             }
         }
 
@@ -257,8 +357,7 @@ export class PresupuestosService {
         // Si no tiene importe_recuperado registrado, el pendiente acumulado es 0 (-).
         for (const r of allRentas) {
             if (adcKeywords.length > 0) {
-                const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
-                if (!matchAdcKeywords(adcCandidates, adcKeywords)) continue;
+                if (!matchAdcKeywords(r, adcKeywords)) continue;
             }
 
             const rMoneda = (r.detalles?.moneda || 'MXN').toUpperCase();
@@ -274,8 +373,7 @@ export class PresupuestosService {
             if (importeRecuperado <= 0) continue;
 
             const clientName = r.cliente.razon_social;
-            const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
-            const adcName = rawAdc?.trim() || 'Sin ADC';
+            const adcName = getEffectiveAdc(r);
 
             currencyStat.acumulado += importeRecuperado;
 
@@ -295,7 +393,7 @@ export class PresupuestosService {
         const currentMonthOrders = allOrders.filter(o => currentPeriodStrs.includes(o.periodo));
         const consolidatedOrdersMap = new Map<string, {
             cliente: string;
-            cuenta: string;
+            cuenta?: string;
             po: string;
             sitio: string;
             pedido_totvs: string;
@@ -304,20 +402,13 @@ export class PresupuestosService {
             cantidad_equipos: number;
         }>();
 
-function hasValidPO(po: string | null | undefined): boolean {
-    if (!po) return false;
-    const clean = po.trim().toUpperCase();
-    return clean !== '' && clean !== '-' && clean !== 'PENDIENTE' && clean !== 'NULL' && clean !== 'UNDEFINED' && clean !== 'SIN OC' && clean !== 'SIN PO';
-}
-
         for (const o of currentMonthOrders) {
             // Check filters
             if (sitio_id && o.renta?.sitio_id !== sitio_id) continue;
 
-            const rawAdc = o.renta?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.datos_comerciales?.adc;
-            const adcName = rawAdc?.trim() || 'Sin ADC';
+            const adcName = getEffectiveOrderAdc(o);
             if (adcKeywords.length > 0) {
-                if (!matchAdcKeywords([adcName, o.renta?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc], adcKeywords)) {
+                if (!matchAdcKeywords(o, adcKeywords)) {
                     continue;
                 }
             }
@@ -325,9 +416,9 @@ function hasValidPO(po: string | null | undefined): boolean {
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
 
-            // Solo sumar como "Enviado" si la orden tiene OC válida registrada o ya está facturada
-            const hasPo = hasValidPO(o.po) || o.estado === 'FACTURADA';
-            if (!hasPo) continue;
+            // Solo sumar como "Enviado" si la orden tiene OC válida Y No. Registro TOTVS emitido (o ya está facturada)
+            const isValidSent = isPedidoEnviado(o);
+            if (!isValidSent) continue;
 
             const currencyStat = stats[oMoneda as keyof typeof stats];
             if (currencyStat) {
@@ -477,17 +568,17 @@ function hasValidPO(po: string | null | undefined): boolean {
         }
 
         for (const r of allRentas) {
+            if (!isRentaActivaVigente(r)) continue;
+
             if (adcKeywords.length > 0) {
-                const adcCandidates = [r.adc, r.activo?.adc, r.sitio?.adc, (r.cliente as any)?.adc, (r.cliente as any)?.datos_comerciales?.adc];
-                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
+                if (!matchAdcKeywords(r, adcKeywords)) {
                     continue;
                 }
             }
             const rMoneda = r.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== rMoneda) continue;
 
-            const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
-            const adcName = rawAdc?.trim() || 'Sin ADC';
+            const adcName = getEffectiveAdc(r);
             const clientName = r.cliente.razon_social;
             const key = `${adcName}___${clientName}___${rMoneda}`;
 
@@ -504,30 +595,21 @@ function hasValidPO(po: string | null | undefined): boolean {
             }
 
             const item = masterMap.get(key)!;
+            const estatusNorm = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
+            const isDetenido = estatusNorm.includes('DETENIDO');
             const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
 
-            const estadoNorm = (r.estado || '').toUpperCase().trim();
-            const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
-            const estatusNorm = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
-            const isActivo = estatusNorm === 'ACTIVO' || estatusNorm === 'OPERATIVO' || estatusNorm === 'DISPONIBLE' || estatusNorm === 'VIGENTE';
-            const isDetenido = estatusNorm.includes('DETENIDO');
-            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'BACKUP' || estatusNorm === 'COMODATO' || estatusNorm === 'POR RETIRAR' || estatusNorm === 'BAJA' || estatusNorm === 'TALLER';
-
-            if (isRentaActiva && !isInactive) {
-                if (isDetenido) {
-                    item.equipos_detenidos += budgetAmount;
-                } else if (isActivo || !isDetenido) {
-                    item.presupuesto += budgetAmount;
-                }
+            if (isDetenido) {
+                item.equipos_detenidos += budgetAmount;
+            } else {
+                item.presupuesto += budgetAmount;
             }
 
             // Pendiente Acumulado al Mes Anterior (tabla maestra):
             // Fuente: importe_recuperado en DetallesRenta (aplica a la cuenta del cliente)
-            if (isRentaActiva) {
-                const totalPendiente = Number(r.detalles?.importe_recuperado || 0);
-                if (totalPendiente > 0) {
-                    item.pendiente_acumulado += totalPendiente;
-                }
+            const totalPendiente = Number(r.detalles?.importe_recuperado || 0);
+            if (totalPendiente > 0) {
+                item.pendiente_acumulado += totalPendiente;
             }
         }
 
@@ -536,15 +618,13 @@ function hasValidPO(po: string | null | undefined): boolean {
             const oMoneda = o.moneda?.toUpperCase() || o.renta?.detalles?.moneda?.toUpperCase() || 'MXN';
             if (moneda && moneda !== oMoneda) continue;
 
-            // Solo sumar a Enviado si la orden tiene OC válida registrada o ya está facturada
-            const hasPo = hasValidPO(o.po) || o.estado === 'FACTURADA';
-            if (!hasPo) continue;
+            // Solo sumar a Enviado si la orden tiene OC válida Y No. Registro TOTVS emitido (o ya está facturada)
+            const isValidSent = isPedidoEnviado(o);
+            if (!isValidSent) continue;
 
-            const rawAdc = o.renta?.adc || o.renta?.activo?.adc || o.renta?.sitio?.adc || (o.cliente as any)?.adc || (o.cliente as any)?.datos_comerciales?.adc;
-            const adcName = rawAdc?.trim() || 'Sin ADC';
+            const adcName = getEffectiveOrderAdc(o);
             if (adcKeywords.length > 0) {
-                const adcCandidates = [adcName, o.renta?.adc, o.renta?.activo?.adc, o.renta?.sitio?.adc, (o.cliente as any)?.datos_comerciales?.adc];
-                if (!matchAdcKeywords(adcCandidates, adcKeywords)) {
+                if (!matchAdcKeywords(o, adcKeywords)) {
                     continue;
                 }
             }
@@ -559,7 +639,11 @@ function hasValidPO(po: string | null | undefined): boolean {
             } else {
                 let found = false;
                 for (const item of masterMap.values()) {
-                    if (item.moneda === oMoneda && item.cliente.trim().toUpperCase() === clientName.trim().toUpperCase()) {
+                    if (
+                        item.moneda === oMoneda &&
+                        item.cliente.trim().toUpperCase() === clientName.trim().toUpperCase() &&
+                        isSameAdc(item.adc, adcName)
+                    ) {
                         item.enviado += orderAmount;
                         found = true;
                         break;
@@ -600,8 +684,9 @@ function hasValidPO(po: string | null | undefined): boolean {
 
         // Dynamically compute Egresos & SMP based on the scoped rentas for this ADC / filter
         const scopedRentas = allRentas.filter(r => {
+            if (isBackupOrInactive(r)) return false;
             if (adcKeywords.length > 0) {
-                return matchAdcKeywords([r.adc, r.sitio?.adc, (r.cliente as any)?.datos_comerciales?.adc], adcKeywords);
+                return matchAdcKeywords(r, adcKeywords);
             }
             return true;
         });
