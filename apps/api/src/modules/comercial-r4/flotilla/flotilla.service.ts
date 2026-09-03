@@ -210,6 +210,7 @@ export class FlotillaService {
                     cliente: true,
                     sitio: true,
                     rentas: {
+                        orderBy: { created_at: 'desc' },
                         include: {
                             detalles: true
                         }
@@ -244,6 +245,10 @@ export class FlotillaService {
 
             const result = mappedActivos.map(activo => {
                 const renta = activo.rentas?.[0];
+                const rawPrecio = renta?.detalles?.renta_base ?? renta?.tarifa;
+                const renta_precio = typeof rawPrecio === 'number' ? rawPrecio : (rawPrecio ? parseFloat(String(rawPrecio)) || 0 : 0);
+                const rawCosto = (renta?.condiciones as any)?.costo_poliza_distribuidor;
+                const costo_poliza_distribuidor = typeof rawCosto === 'number' ? rawCosto : (rawCosto ? parseFloat(String(rawCosto)) || 0 : 0);
 
                 return {
                     id: activo.id,
@@ -276,10 +281,10 @@ export class FlotillaService {
                     responsable: activo.adc || '-',
 
                     // Campos adicionales de Póliza y Excel
-                    renta_precio: renta?.detalles?.renta_base ?? renta?.tarifa ?? 0,
+                    renta_precio,
                     renta_moneda: renta?.detalles?.moneda ?? 'MXN',
                     tipo_poliza: (renta?.condiciones as any)?.tipo_poliza || 'SMP',
-                    costo_poliza_distribuidor: (renta?.condiciones as any)?.costo_poliza_distribuidor ?? 0,
+                    costo_poliza_distribuidor,
                     moneda_pago_distribuidor: (renta?.condiciones as any)?.moneda_pago_distribuidor ?? 'MXN',
                     
                     accesorios: activo.accesorios?.map((acc: any) => ({

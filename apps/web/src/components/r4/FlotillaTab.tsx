@@ -191,14 +191,12 @@ export default function FlotillaTab({
   const [openFilters, setOpenFilters] = useState<Record<string, boolean>>({});
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
   const [searchPropietario, setSearchPropietario] = useState('');
-  const [filterRentaTerceros, setFilterRentaTerceros] = useState(false);
 
-  const hasActiveFilters = Object.values(activeFilters).some(arr => arr && arr.length > 0 && !arr.includes('Todos')) || searchTerm !== '' || filterRentaTerceros;
+  const hasActiveFilters = Object.values(activeFilters).some(arr => arr && arr.length > 0 && !arr.includes('Todos')) || searchTerm !== '';
 
   const clearFilters = () => {
     setActiveFilters({});
     setSearchTerm('');
-    setFilterRentaTerceros(false);
     setCurrentPage(1);
   };
 
@@ -850,11 +848,16 @@ export default function FlotillaTab({
     });
   }, [baseAssets]);
 
-  const getValidString = (val: any) => typeof val === 'string' && val !== '[object Object]' ? val : null;
+  const getValidString = (val: any) => {
+    if (val === null || val === undefined || val === '[object Object]') return null;
+    const str = String(val).trim();
+    return str.length > 0 ? str : null;
+  };
   
   const isMatchFilter = (filterVals: string[], valToTest: any) => {
     if (!filterVals || filterVals.length === 0 || filterVals.includes('Todos')) return true;
-    return filterVals.includes(valToTest);
+    const testStr = String(valToTest ?? '').trim().toLowerCase();
+    return filterVals.some(f => String(f).trim().toLowerCase() === testStr);
   };
 
   const filteredAssets = useMemo(() => {
@@ -862,16 +865,9 @@ export default function FlotillaTab({
     const term = searchTerm ? searchTerm.toLowerCase().trim() : '';
 
     return normalizedAssets.filter((asset: any) => {
-      if (filterRentaTerceros) {
-        const p = (asset.propietario || '').toUpperCase();
-        const d = (asset.distribuidor || '').trim().toUpperCase();
-        const costo = Number(asset.costo_poliza_distribuidor || 0);
-        const isTerceros = p.includes('TERCERO') || (d && d !== '-' && d !== 'RAYMOND') || costo > 0;
-        if (!isTerceros) return false;
-      }
-
       if (hasActive) {
         for (const [key, selected] of Object.entries(activeFilters)) {
+          if (!selected || selected.length === 0 || selected.includes('Todos')) continue;
           const val = asset[key];
           if (!isMatchFilter(selected, val)) return false;
         }
@@ -881,16 +877,27 @@ export default function FlotillaTab({
       return (
         asset.serie?.toLowerCase().includes(term) ||
         asset.cliente?.toLowerCase().includes(term) ||
-        asset.modelo?.toLowerCase().includes(term)
+        asset.cuenta?.toLowerCase().includes(term) ||
+        asset.site?.toLowerCase().includes(term) ||
+        asset.modelo?.toLowerCase().includes(term) ||
+        asset.adc?.toLowerCase().includes(term) ||
+        asset.distribuidor?.toLowerCase().includes(term) ||
+        asset.tipo?.toLowerCase().includes(term) ||
+        asset.clase?.toLowerCase().includes(term) ||
+        asset.estatus?.toLowerCase().includes(term) ||
+        asset.propietario?.toLowerCase().includes(term) ||
+        asset.iwarehouse?.toLowerCase().includes(term) ||
+        asset.tipo_poliza?.toLowerCase().includes(term)
       );
     });
-  }, [normalizedAssets, activeFilters, searchTerm, filterRentaTerceros]);
+  }, [normalizedAssets, activeFilters, searchTerm]);
 
   const getUnique = useCallback((key: string) => {
     const skipFilterName = key;
     const items = normalizedAssets.filter((asset: any) => {
       for (const [fKey, selected] of Object.entries(activeFilters)) {
         if (fKey === skipFilterName) continue;
+        if (!selected || selected.length === 0 || selected.includes('Todos')) continue;
         const val = asset[fKey];
         if (!isMatchFilter(selected, val)) return false;
       }
@@ -925,6 +932,15 @@ export default function FlotillaTab({
       const serieB = (b.serie || '').toString().trim();
       return serieA.localeCompare(serieB, 'es', { sensitivity: 'base' });
     });
+  }, [filteredAssets]);
+
+  // Totales financieros calculados dinámicamente con los filtros activos
+  const totalRentaPrecio = useMemo(() => {
+    return filteredAssets.reduce((acc: number, asset: any) => acc + (Number(asset.renta_precio) || 0), 0);
+  }, [filteredAssets]);
+
+  const totalCostoServicios = useMemo(() => {
+    return filteredAssets.reduce((acc: number, asset: any) => acc + (Number(asset.costo_poliza_distribuidor) || 0), 0);
   }, [filteredAssets]);
 
   const totalPages = Math.ceil(sortedAssets.length / itemsPerPage);
@@ -986,20 +1002,12 @@ export default function FlotillaTab({
     // Row 2: Indicadores para Accesorios
     accesoriosActivos: getEstatusCount(['Activo', 'Activa', 'En Renta', 'Vigente', 'Comodato', 'Asignado'], 'accesorios'),
     accesoriosInactivos: getEstatusCount(['Inactivo', 'Inactivo con Cliente'], 'accesorios'),
-
-    // Renta con Terceros (Subarrendados o costo dealer)
-    rentaTerceros: baseAssets.filter((a: any) => {
-      const p = (a.propietario || '').toUpperCase();
-      const d = (a.distribuidor || '').trim().toUpperCase();
-      const costo = Number(a.costo_poliza_distribuidor || 0);
-      return p.includes('TERCERO') || (d && d !== '-' && d !== 'RAYMOND') || costo > 0;
-    }).length,
   };
 
   const handleDownloadExcel = async () => {
     try {
       toast.info('Generando Excel con registros filtrados...');
-      const rows = filteredAssets.map((asset: any) => ({
+      const rows = sortedAssets.map((asset: any) => ({
         'CLIENTE': asset.cliente || '',
         'CUENTA': asset.cuenta || '',
         'SITE': asset.site || '',
@@ -1016,16 +1024,71 @@ export default function FlotillaTab({
         'PROPIETARIO': asset.propietario || '',
         'ESTATUS': asset.estatus || '',
         'FECHA ENTREGADO': asset.fechaIngreso || '',
-        'PLAZO (MESES)': asset.plazo || '',
+        'PLAZO (MESES)': asset.plazo && asset.plazo !== '-' ? (Number(asset.plazo) || asset.plazo) : '',
         'FECHA VENCIMIENTO': asset.fechaVencimiento || '',
-        'PRECIO RENTA CLIENTE': asset.renta_precio || '',
-        'MONEDA': asset.renta_moneda || '',
-        'CFPM / SMP': asset.tipo_poliza || '',
-        'COSTO SERVICIO DEALER': asset.costo_poliza_distribuidor || '',
-        'MONEDA SERVICIO': asset.moneda_pago_distribuidor || '',
+        'PRECIO RENTA CLIENTE': typeof asset.renta_precio === 'number' ? asset.renta_precio : (Number(asset.renta_precio) || 0),
+        'MONEDA': asset.renta_moneda || 'MXN',
+        'CFPM / SMP': asset.tipo_poliza || 'SMP',
+        'COSTO SERVICIO DEALER': typeof asset.costo_poliza_distribuidor === 'number' ? asset.costo_poliza_distribuidor : (Number(asset.costo_poliza_distribuidor) || 0),
+        'MONEDA SERVICIO': asset.moneda_pago_distribuidor || 'MXN',
       }));
 
+      // Append Total Summary Row in Excel
+      rows.push({
+        'CLIENTE': 'TOTAL GENERAL',
+        'CUENTA': '',
+        'SITE': '',
+        'ADC': '',
+        'DISTRIBUIDOR': '',
+        'TIPO': '',
+        'CLASE': '',
+        'MODELO': '',
+        'SERIE': `${sortedAssets.length} EQUIPOS`,
+        'IWAREHOUSE': '',
+        'OACH': '',
+        'ALTURA': '',
+        'BC': '',
+        'PROPIETARIO': '',
+        'ESTATUS': '',
+        'FECHA ENTREGADO': '',
+        'PLAZO (MESES)': '',
+        'FECHA VENCIMIENTO': '',
+        'PRECIO RENTA CLIENTE': totalRentaPrecio,
+        'MONEDA': 'MXN',
+        'CFPM / SMP': '',
+        'COSTO SERVICIO DEALER': totalCostoServicios,
+        'MONEDA SERVICIO': 'MXN',
+      } as any);
+
       const ws = XLSX.utils.json_to_sheet(rows);
+
+      // Auto-fit column widths
+      ws['!cols'] = [
+        { wch: 26 }, // CLIENTE
+        { wch: 16 }, // CUENTA
+        { wch: 20 }, // SITE
+        { wch: 20 }, // ADC
+        { wch: 18 }, // DISTRIBUIDOR
+        { wch: 18 }, // TIPO
+        { wch: 10 }, // CLASE
+        { wch: 18 }, // MODELO
+        { wch: 20 }, // SERIE
+        { wch: 14 }, // IWAREHOUSE
+        { wch: 10 }, // OACH
+        { wch: 10 }, // ALTURA
+        { wch: 10 }, // BC
+        { wch: 16 }, // PROPIETARIO
+        { wch: 16 }, // ESTATUS
+        { wch: 16 }, // FECHA ENTREGADO
+        { wch: 14 }, // PLAZO (MESES)
+        { wch: 18 }, // FECHA VENCIMIENTO
+        { wch: 22 }, // PRECIO RENTA CLIENTE
+        { wch: 10 }, // MONEDA
+        { wch: 14 }, // CFPM / SMP
+        { wch: 22 }, // COSTO SERVICIO DEALER
+        { wch: 16 }, // MONEDA SERVICIO
+      ];
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Flotilla");
       XLSX.writeFile(wb, `Flotilla_${new Date().getTime()}.xlsx`);
@@ -1349,28 +1412,10 @@ export default function FlotillaTab({
             )}
           </div>
 
-          {/* Botón Filtro Renta con Terceros */}
-          <button
-            type="button"
-            onClick={() => {
-              setFilterRentaTerceros(prev => !prev);
-              setCurrentPage(1);
-            }}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border-2 text-xs font-black uppercase tracking-wider transition-all shadow-xs shrink-0 ${
-              filterRentaTerceros
-                ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-102'
-                : 'bg-amber-50/70 hover:bg-amber-100 text-amber-800 border-amber-200'
-            }`}
-            title="Filtrar equipos subarrendados o en renta con terceros"
-          >
-            <Layers className={`w-3.5 h-3.5 ${filterRentaTerceros ? 'text-white' : 'text-amber-600'}`} />
-            <span>Renta Terceros ({statusCounts.rentaTerceros})</span>
-          </button>
-
           {hasActiveFilters && (
             <button 
               onClick={clearFilters} 
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border-2 border-red-200 text-xs font-bold transition-all shadow-sm shrink-0" 
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border-2 border-red-200 text-xs font-bold transition-all shadow-sm shrink-0 cursor-pointer" 
               title="Limpiar todos los filtros"
             >
               <X className="w-3.5 h-3.5" />
@@ -1500,13 +1545,66 @@ export default function FlotillaTab({
                   );
                 })}
               </tbody>
+              {sortedAssets.length > 0 && (
+                <tfoot className="sticky bottom-0 z-20 bg-slate-100 font-extrabold text-slate-900 border-t-2 border-slate-300 shadow-md">
+                  <tr>
+                    <td colSpan={14} className="px-4 py-3 text-slate-700 uppercase tracking-wider text-[11px] font-black">
+                      TOTAL FILTRADO ({filteredAssets.length} {filteredAssets.length === 1 ? 'registro' : 'registros'})
+                    </td>
+                    <td className="px-4 py-3 text-right font-black text-slate-950 text-xs">
+                      ${totalRentaPrecio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 font-bold text-[11px]">
+                      MXN
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 font-normal text-[11px]">-</td>
+                    <td className="px-4 py-3 text-slate-400 font-normal text-[11px]">-</td>
+                    <td className="px-4 py-3 text-right font-black text-slate-950 text-xs">
+                      ${totalCostoServicios.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 font-bold text-[11px]">
+                      MXN
+                    </td>
+                    <td colSpan={isAdc ? 3 : 4} className="px-4 py-3"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
             )}
           </div>
+
+          {/* Bottom Financial Metrics Summary Bar */}
+          {sortedAssets.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50/90 border-t-2 border-slate-200/80">
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Suma Precio Renta (Filtrado)</span>
+                  <p className="text-lg font-black text-slate-900 tracking-tight">
+                    ${totalRentaPrecio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
+                  </p>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-sm">
+                  $
+                </div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Suma Costo Servicios (Filtrado)</span>
+                  <p className="text-lg font-black text-slate-900 tracking-tight">
+                    ${totalCostoServicios.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-slate-500 font-bold">MXN</span>
+                  </p>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm">
+                  $
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Table Pagination */}
           {sortedAssets.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t-2 border-slate-50 bg-slate-50/50 gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t-2 border-slate-100 bg-slate-50/50 gap-4">
               <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
                 <span>
                   Mostrando <strong className="text-slate-900 font-bold">{((currentPage - 1) * itemsPerPage) + 1}</strong> a <strong className="text-slate-900 font-bold">{Math.min(currentPage * itemsPerPage, sortedAssets.length)}</strong> de <strong className="text-slate-900 font-bold">{sortedAssets.length}</strong> registros
