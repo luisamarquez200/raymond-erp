@@ -247,8 +247,8 @@ export default function SummaryCards({ stats, moneda, tipoCambio, canEditFactura
                     <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider truncate flex items-center justify-between">
                         Faltante
                         <TooltipInfo 
-                            text="Brecha pendiente para alcanzar la meta a facturar." 
-                            formula="Total a Facturar - Pedidos Enviados"
+                            text="Brecha pendiente para alcanzar la meta del presupuesto del mes." 
+                            formula="max(0, Presupuesto Periodo - Pedidos Enviados)"
                         />
                     </div>
                     <div className="text-sm font-bold text-red-500 mt-1 tabular-nums truncate" title={formatCurrency(stats.faltante)}>
@@ -275,8 +275,8 @@ export default function SummaryCards({ stats, moneda, tipoCambio, canEditFactura
                     <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider truncate flex items-center justify-between">
                         Cumplimiento
                         <TooltipInfo 
-                            text="Porcentaje general alcanzado respecto a la meta." 
-                            formula="(Facturado ÷ Total a Facturar) × 100"
+                            text="Porcentaje de alcance de la meta presupuestal del periodo." 
+                            formula="(Pedidos Enviados ÷ Presupuesto Periodo) × 100"
                         />
                     </div>
                     <div className="flex items-center justify-between mt-1">

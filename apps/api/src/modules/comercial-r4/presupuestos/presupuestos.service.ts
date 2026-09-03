@@ -225,14 +225,15 @@ export class PresupuestosService {
             const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
             const estatusNorm = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
             const isActivo = estatusNorm === 'ACTIVO' || estatusNorm === 'OPERATIVO' || estatusNorm === 'DISPONIBLE' || estatusNorm === 'VIGENTE';
-            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'POR RETIRAR';
+            const isDetenido = estatusNorm.includes('DETENIDO');
+            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'BACKUP' || estatusNorm === 'COMODATO' || estatusNorm === 'POR RETIRAR' || estatusNorm === 'BAJA' || estatusNorm === 'TALLER';
 
-            if (isRentaActiva) {
+            if (isRentaActiva && !isInactive) {
                 const budgetAmount = Number(r.detalles?.renta_real || r.detalles?.renta_base || r.tarifa || 0);
 
-                if (isInactive) {
+                if (isDetenido) {
                     currencyStat.equipos_detenidos += budgetAmount * months.length;
-                } else if (isActivo || !isInactive) {
+                } else if (isActivo || !isDetenido) {
                     currencyStat.presupuesto_mes += budgetAmount * months.length;
                     // ADC Compliance tracking
                     const rawAdc = r.adc || r.activo?.adc || r.sitio?.adc || (r.cliente as any)?.adc || (r.cliente as any)?.datos_comerciales?.adc;
@@ -379,16 +380,16 @@ export class PresupuestosService {
         const isAdcFiltered = adcKeywords.length > 0;
         for (const key of ['MXN', 'USD'] as const) {
             const s = stats[key];
-            s.total_a_facturar = (s.presupuesto_mes - s.equipos_detenidos) + s.acumulado;
+            s.total_a_facturar = s.presupuesto_mes + s.acumulado;
             // Use manually entered facturado value from Gerente when not filtered by ADC; fallback to pedidos_enviados
             s.facturado = (!isAdcFiltered && facturadoByMoneda[key] > 0) ? facturadoByMoneda[key] : s.pedidos_enviados;
-            // Faltante puede ser negativo (sobrecumplimiento/excedente)
-            s.faltante = s.total_a_facturar - s.pedidos_enviados;
-            s.cumplimiento_general = s.total_a_facturar > 0 ? (s.pedidos_enviados / s.total_a_facturar) * 100 : (s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0);
+            // Faltante measures the remaining gap to meet the month's budget goal
+            s.faltante = Math.max(0, s.presupuesto_mes - s.pedidos_enviados);
+            // Cumplimiento General measures month's goal achievement (Pedidos Enviados / Presupuesto Mes)
+            s.cumplimiento_general = s.presupuesto_mes > 0 ? (s.pedidos_enviados / s.presupuesto_mes) * 100 : 0;
         }
 
         const adcs = Array.from(adcsMap.values()).map((data) => {
-            const totalFacturar = data.budget; // Base budget for this ADC
             return {
                 adc: data.adc,
                 cliente: data.cliente,
@@ -493,12 +494,13 @@ export class PresupuestosService {
             const isRentaActiva = estadoNorm === 'VIGENTE' || estadoNorm === 'IMPORTADA' || estadoNorm === 'ACTIVA' || estadoNorm === 'ACTIVO';
             const estatusNorm = (r.activo?.estatus || r.activo?.estatus_operativo || '').trim().toUpperCase();
             const isActivo = estatusNorm === 'ACTIVO' || estatusNorm === 'OPERATIVO' || estatusNorm === 'DISPONIBLE' || estatusNorm === 'VIGENTE';
-            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'POR RETIRAR';
+            const isDetenido = estatusNorm.includes('DETENIDO');
+            const isInactive = estatusNorm.startsWith('INACTIVO') || estatusNorm === 'BACK UP' || estatusNorm === 'BACKUP' || estatusNorm === 'COMODATO' || estatusNorm === 'POR RETIRAR' || estatusNorm === 'BAJA' || estatusNorm === 'TALLER';
 
-            if (isRentaActiva) {
-                if (isInactive) {
+            if (isRentaActiva && !isInactive) {
+                if (isDetenido) {
                     item.equipos_detenidos += budgetAmount;
-                } else if (isActivo || !isInactive) {
+                } else if (isActivo || !isDetenido) {
                     item.presupuesto += budgetAmount;
                 }
             }
@@ -558,15 +560,13 @@ export class PresupuestosService {
         }
 
         const tabla_maestra = Array.from(masterMap.values()).map(item => {
-            // Fórmula Excel: Total a Facturar = (Presupuesto - Equipos Detenidos) + Pendiente Acumulado
-            // La diferencia (presupuesto - equipos_detenidos) nunca puede ser negativa:
-            // si todos los equipos están detenidos, la base es 0 y el total = solo el acumulado.
             const baseFacturar = Math.max(0, item.presupuesto - item.equipos_detenidos);
             const total_facturar = baseFacturar + item.pendiente_acumulado;
-            // % Cumplimiento contra el Total a Facturar neto
-            const cumplimiento = total_facturar > 0
-                ? (item.enviado / total_facturar) * 100
-                : (item.presupuesto > 0 ? (item.enviado / item.presupuesto) * 100 : 0);
+            // % Cumplimiento del presupuesto del periodo
+            const metaPresupuesto = baseFacturar > 0 ? baseFacturar : item.presupuesto;
+            const cumplimiento = metaPresupuesto > 0
+                ? (item.enviado / metaPresupuesto) * 100
+                : (item.enviado > 0 ? 100 : 0);
             return {
                 ...item,
                 cumplimiento,

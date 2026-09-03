@@ -1,5 +1,6 @@
-import { Controller, Get, UseGuards, Post, Body, Query } from '@nestjs/common';
-import { OrdenesService } from './ordenes.service';
+import { Controller, Get, UseGuards, Post, Body, Query, Res, HttpStatus } from '@nestjs/common';
+import { Response } from 'express';
+import { OrdenesService, RegistrarBatchFichaOcDto } from './ordenes.service';
 
 @Controller(['r4/ordenes-mensuales', 'r4/ordenes'])
 export class OrdenesController {
@@ -32,5 +33,19 @@ export class OrdenesController {
     @Post('copiar-mes-anterior')
     async copiarMesAnterior(@Body() dto: { periodo_origen: string, periodo_destino: string, cliente_id?: string, adc?: string }) {
         return await this.ordenesService.copiarMesAnterior(dto);
+    }
+
+    @Post('batch-ficha-oc')
+    async registrarBatchFichaOc(
+        @Body() body: RegistrarBatchFichaOcDto,
+        @Res() res: Response
+    ) {
+        try {
+            const result = await this.ordenesService.registrarBatchFichaOc(body);
+            return res.status(HttpStatus.CREATED).json({ success: true, ...result });
+        } catch (error: any) {
+            const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            return res.status(status).json({ success: false, message: error.message });
+        }
     }
 }

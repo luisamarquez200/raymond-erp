@@ -61,6 +61,29 @@ function matchAdcKeywords(candidates: (string | null | undefined)[], keywords: s
     return false;
 }
 
+export interface FichaOcItemDto {
+    assetId: string;
+    rentaId?: string;
+    sitioId?: string;
+    cuenta?: string;
+    renta_base: number;
+    dias_caidos?: number;
+    descuento?: number;
+    renta_final: number;
+    pedido_totvs?: string;
+}
+
+export interface RegistrarBatchFichaOcDto {
+    cliente_id: string;
+    sitio_id?: string;
+    cuenta?: string;
+    po: string;
+    pedido_totvs?: string;
+    fecha_pedido_totvs?: string;
+    periodos: string[];
+    items: FichaOcItemDto[];
+}
+
 @Injectable()
 export class OrdenesService {
     private readonly logger = new Logger(OrdenesService.name);
@@ -508,6 +531,250 @@ export class OrdenesService {
             };
         } catch (error: any) {
             this.logger.error(`Error en copiarMesAnterior: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async registrarBatchFichaOc(dto: RegistrarBatchFichaOcDto) {
+        const db = this.getDb();
+        try {
+            if (!dto.cliente_id) throw new Error('cliente_id es requerido');
+            if (!dto.po || !dto.po.trim()) throw new Error('Folio OC Cliente es requerido');
+            if (!dto.periodos || dto.periodos.length === 0) throw new Error('Debe especificar al menos un periodo');
+            if (!dto.items || dto.items.length === 0) throw new Error('Debe seleccionar al menos una serie');
+
+            const cliente = await db.cliente.findUnique({
+                where: { id: dto.cliente_id },
+                include: { sitios: true }
+            });
+            if (!cliente) throw new NotFoundException('Cliente no encontrado');
+
+            const defaultSitioId = dto.sitio_id || cliente.sitios[0]?.id;
+
+            // 1. Identify existing rentas vs new rentas to create
+            const processedRentaIds: string[] = [];
+            const activoToRentaMap = new Map<string, { id: string; contrato_id?: string | null; moneda?: string }>();
+
+            const existingRentaIds = dto.items.map(i => i.rentaId).filter(Boolean) as string[];
+            const existingRentas = existingRentaIds.length > 0 
+                ? await db.renta.findMany({
+                    where: { id: { in: existingRentaIds } },
+                    include: { detalles: true }
+                })
+                : [];
+            const existingRentasMap = new Map<string, any>(existingRentas.map(r => [r.id, r]));
+
+            const rentaUpdates: Promise<any>[] = [];
+
+            for (const item of dto.items) {
+                const itemTotvs = item.pedido_totvs?.trim() || dto.pedido_totvs?.trim() || undefined;
+                const targetSitioId = item.sitioId || dto.sitio_id || defaultSitioId;
+                const targetCuenta = item.cuenta || dto.cuenta || undefined;
+
+                if (item.rentaId && existingRentasMap.has(item.rentaId)) {
+                    const r = existingRentasMap.get(item.rentaId)!;
+                    processedRentaIds.push(r.id);
+                    activoToRentaMap.set(item.assetId, { id: r.id, contrato_id: r.contrato_id, moneda: r.detalles?.moneda || 'MXN' });
+
+                    rentaUpdates.push(
+                        db.renta.update({
+                            where: { id: r.id },
+                            data: {
+                                ...(itemTotvs ? { no_registro_totvs: itemTotvs } : {}),
+                                ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {}),
+                            }
+                        })
+                    );
+
+                    if (r.detalles) {
+                        rentaUpdates.push(
+                            db.detallesRenta.update({
+                                where: { id: r.detalles.id },
+                                data: {
+                                    oc_cliente: dto.po.trim(),
+                                    mes_cobro: dto.periodos[0],
+                                    descuento_dias_caidos: item.descuento ?? 0,
+                                    renta_base: item.renta_base,
+                                    renta_real: item.renta_final
+                                }
+                            })
+                        );
+                    } else {
+                        rentaUpdates.push(
+                            db.detallesRenta.create({
+                                data: {
+                                    renta_id: r.id,
+                                    oc_cliente: dto.po.trim(),
+                                    mes_cobro: dto.periodos[0],
+                                    descuento_dias_caidos: item.descuento ?? 0,
+                                    renta_base: item.renta_base,
+                                    renta_real: item.renta_final,
+                                    moneda: 'MXN'
+                                }
+                            })
+                        );
+                    }
+                } else {
+                    const existingActive = await db.renta.findFirst({
+                        where: {
+                            activo_id: item.assetId,
+                            cliente_id: dto.cliente_id,
+                            estado: { notIn: ['CANCELADA', 'TERMINADA'] }
+                        },
+                        include: { detalles: true }
+                    });
+
+                    if (existingActive) {
+                        processedRentaIds.push(existingActive.id);
+                        activoToRentaMap.set(item.assetId, { id: existingActive.id, contrato_id: existingActive.contrato_id, moneda: existingActive.detalles?.moneda || 'MXN' });
+
+                        rentaUpdates.push(
+                            db.renta.update({
+                                where: { id: existingActive.id },
+                                data: {
+                                    ...(itemTotvs ? { no_registro_totvs: itemTotvs } : {}),
+                                    ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: new Date(dto.fecha_pedido_totvs) } : {}),
+                                }
+                            })
+                        );
+
+                        if (existingActive.detalles) {
+                            rentaUpdates.push(
+                                db.detallesRenta.update({
+                                    where: { id: existingActive.detalles.id },
+                                    data: {
+                                        oc_cliente: dto.po.trim(),
+                                        mes_cobro: dto.periodos[0],
+                                        descuento_dias_caidos: item.descuento ?? 0,
+                                        renta_base: item.renta_base,
+                                        renta_real: item.renta_final
+                                    }
+                                })
+                            );
+                        } else {
+                            rentaUpdates.push(
+                                db.detallesRenta.create({
+                                    data: {
+                                        renta_id: existingActive.id,
+                                        oc_cliente: dto.po.trim(),
+                                        mes_cobro: dto.periodos[0],
+                                        descuento_dias_caidos: item.descuento ?? 0,
+                                        renta_base: item.renta_base,
+                                        renta_real: item.renta_final,
+                                        moneda: 'MXN'
+                                    }
+                                })
+                            );
+                        }
+                    } else {
+                        const createdRenta = await db.renta.create({
+                            data: {
+                                cliente_id: dto.cliente_id,
+                                sitio_id: targetSitioId,
+                                activo_id: item.assetId,
+                                cuenta: targetCuenta,
+                                fecha_inicio: new Date(`${dto.periodos[0]}-01`),
+                                fecha_fin: dto.periodos.length > 1
+                                    ? new Date(`${dto.periodos[dto.periodos.length - 1]}-28`)
+                                    : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+                                no_registro_totvs: itemTotvs,
+                                fecha_pedido_totvs: dto.fecha_pedido_totvs ? new Date(dto.fecha_pedido_totvs) : undefined,
+                                detalles: {
+                                    create: {
+                                        oc_cliente: dto.po.trim(),
+                                        mes_cobro: dto.periodos[0],
+                                        descuento_dias_caidos: item.descuento ?? 0,
+                                        renta_base: item.renta_base,
+                                        renta_real: item.renta_final,
+                                        moneda: 'MXN'
+                                    }
+                                }
+                            }
+                        });
+                        processedRentaIds.push(createdRenta.id);
+                        activoToRentaMap.set(item.assetId, { id: createdRenta.id, contrato_id: null, moneda: 'MXN' });
+                    }
+                }
+            }
+
+            await Promise.all(rentaUpdates);
+
+            // 2. Batch process ordenesMensuales for all periodos
+            const assetIds = dto.items.map(i => i.assetId);
+            const existingOrders = await db.ordenMensual.findMany({
+                where: {
+                    activo_id: { in: assetIds },
+                    periodo: { in: dto.periodos }
+                }
+            });
+            const existingOrdersMap = new Map<string, any>(
+                existingOrders.map(o => [`${o.activo_id}___${o.periodo}`, o])
+            );
+
+            const ordersToCreate: any[] = [];
+            const ordersToUpdate: Promise<any>[] = [];
+
+            for (const item of dto.items) {
+                const rentaInfo = activoToRentaMap.get(item.assetId);
+                const itemTotvs = item.pedido_totvs?.trim() || dto.pedido_totvs?.trim() || undefined;
+
+                for (const periodo of dto.periodos) {
+                    const key = `${item.assetId}___${periodo}`;
+                    const existingOrder = existingOrdersMap.get(key);
+
+                    const condiciones = {
+                        ...((existingOrder?.condiciones as any) || {}),
+                        ...(itemTotvs ? { pedido_totvs: itemTotvs } : {}),
+                        ...(dto.fecha_pedido_totvs ? { fecha_pedido_totvs: dto.fecha_pedido_totvs } : {})
+                    };
+
+                    if (existingOrder) {
+                        ordersToUpdate.push(
+                            db.ordenMensual.update({
+                                where: { id: existingOrder.id },
+                                data: {
+                                    po: dto.po.trim(),
+                                    tarifa: item.renta_final,
+                                    moneda: rentaInfo?.moneda || 'MXN',
+                                    estado: 'GENERADA',
+                                    condiciones
+                                }
+                            })
+                        );
+                    } else {
+                        ordersToCreate.push({
+                            cliente_id: dto.cliente_id,
+                            renta_id: rentaInfo?.id || null,
+                            activo_id: item.assetId,
+                            contrato_id: rentaInfo?.contrato_id || null,
+                            periodo: periodo,
+                            po: dto.po.trim(),
+                            tarifa: item.renta_final,
+                            moneda: rentaInfo?.moneda || 'MXN',
+                            estado: 'GENERADA',
+                            condiciones
+                        });
+                    }
+                }
+            }
+
+            await Promise.all([
+                ...ordersToUpdate,
+                ordersToCreate.length > 0
+                    ? db.ordenMensual.createMany({ data: ordersToCreate, skipDuplicates: true })
+                    : Promise.resolve()
+            ]);
+
+            clearPresupuestosCache();
+
+            return {
+                message: `Se registró con éxito la OC ${dto.po} para ${dto.items.length} series en ${dto.periodos.length} periodo(s).`,
+                seriesCount: dto.items.length,
+                periodosCount: dto.periodos.length,
+                totalOrdenes: dto.items.length * dto.periodos.length
+            };
+        } catch (error: any) {
+            this.logger.error(`Error en registrarBatchFichaOc: ${error.message}`);
             throw error;
         }
     }
